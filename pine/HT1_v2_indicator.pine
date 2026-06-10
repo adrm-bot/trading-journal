@@ -1,0 +1,802 @@
+//@version=6
+indicator("HT1 v2 — Trend Pullback Engine", shorttitle="HT1v2", overlay=true, max_labels_count=500, max_lines_count=500, max_bars_back=500)
+
+// ==== HT1-CORE v2.0.0 BEGIN ====
+// 이 구간은 HT1_v2_indicator.pine / HT1_v2_strategy.pine 에서 텍스트 동일해야 한다.
+// 검증: README의 코어 diff 절차. 수정 시 양쪽 파일에 동일 반영 + 버전 갱신.
+// 명세: docs/HT1_v2_SPEC.md (시간 기준·상태기계·청산 정책), 알림: docs/alert_webhook_schema.json
+
+// ---------- enum ----------
+enum Preset
+    conservative = "보수"
+    standard = "표준"
+    aggressive = "공격"
+
+enum TrigMode
+    breakout = "눌림 고점 돌파 (기본)"
+    pattern = "패턴 추세선 돌파"
+    macd = "MACD 크로스 (레거시)"
+
+enum ConfirmMode
+    er = "Kaufman ER (기본)"
+    adx = "ADX 백분위 + DI"
+    both = "ER + ADX 둘 다"
+
+enum Tp2Mode
+    fixed = "고정 3R (기본)"
+    structure = "구조 (직전 스윙)"
+    chandelier = "샹들리에 트레일"
+
+enum Direction
+    both = "롱+숏"
+    longOnly = "롱만"
+    shortOnly = "숏만"
+
+enum HtfMode
+    auto = "자동 (차트 TF × 4)"
+    manual = "수동"
+
+enum Phase
+    idle
+    impulse
+    pullback
+    cooldown
+
+// ---------- 입력 (로직 임계값은 전부 프리셋/상수 — SPEC §13) ----------
+g1 = "[1] 엔진"
+preset       = input.enum(Preset.standard,    "프리셋",        group=g1, tooltip="풀백 품질 게이트·레짐 임계를 일괄 결정. 개별 수치 조정 불가 — 과최적화 방지.")
+trig_mode    = input.enum(TrigMode.breakout,  "진입 트리거",   group=g1, tooltip="기본: 눌림 마이너 고점 돌파 + MACD 히스토그램 동의. 패턴: 웻지/삼각수렴 상단선 돌파(미검출 시 기본으로 폴백). 레거시: v1 방식 MACD 크로스.")
+confirm_mode = input.enum(ConfirmMode.er,     "추세 강도 확인", group=g1, tooltip="임펄스→풀백 전이 시점에 캡처해 평가 (풀백 중 지표 하락으로 좋은 진입을 거부하는 위상역전 회피).")
+direction    = input.enum(Direction.both,     "방향",          group=g1)
+tp2_mode     = input.enum(Tp2Mode.fixed,      "TP2 방식",      group=g1, tooltip="검증 단계에서는 고정 3R 권장 (R 분포 안정화). 구조/샹들리에는 전략 버전 A/B 비교용.")
+
+g2 = "[2] 상위 TF"
+htf_mode   = input.enum(HtfMode.auto, "HTF 선택", group=g2)
+htf_manual = input.timeframe("60",    "HTF 수동 지정", group=g2)
+
+g3 = "[3] 사이징"
+acct_size        = input.float(10000, "계좌 크기 (USDT)",      minval=1,    group=g3)
+risk_pct         = input.float(0.5,   "트레이드당 리스크 %",   minval=0.05, maxval=5, step=0.05, group=g3)
+max_lev          = input.float(10,    "최대 허용 레버리지",    minval=1,    group=g3)
+use_grade_sizing = input.bool(true,   "등급 사이징 (A=1.0× B=0.75× C=0.5×)", group=g3, tooltip="좋은 시그널에 자본 집중 — 기간 수익 밀도 개선. qty는 참고치이며 수량의 최종 권위는 집행 서버.")
+
+g4 = "[4] 필터·정책"
+fee_pct            = input.float(0.055, "테이커 수수료 % (편도)", minval=0, step=0.005, group=g4)
+use_time_stop      = input.bool(false,  "타임스톱 (20봉 내 +1R 미도달 시 청산)", group=g4, tooltip="죽은 포지션의 자본 점유 차단 — R/일 개선. A/B 검증 대상이라 기본 OFF.")
+use_funding_filter = input.bool(true,   "펀딩 직전 진입 금지", group=g4)
+funding_interval_h = input.int(8,       "펀딩 주기 (시간)", options=[1, 4, 8], group=g4)
+fund_avoid_min     = input.int(10,      "펀딩 전 금지 (분)", minval=0, maxval=60, group=g4)
+block_weekend      = input.bool(false,  "주말 진입 금지", group=g4)
+
+// ---------- 상수 (동결 — SPEC §13) ----------
+string ENGINE_VER = "2.0.0"
+float SL_BUF_ATR   = 0.5    // SL = 풀백 극값 ∓ 0.5 ATR
+float RISK_MIN_ATR = 0.5    // valid_risk 하한
+float RISK_MAX_ATR = 3.0    // valid_risk 상한
+float TP1_RR       = 1.5
+float TP2_RR       = 3.0
+float BE_OFF_ATR   = 0.1    // BE = entry ± 0.1 ATR (수수료 보전)
+int   COOLDOWN_BARS = 10
+int   EVAL_BARS     = 60    // 만료 = MTM 종결
+int   TS_BARS       = 20    // 타임스톱
+float PB_TRIG_ATR   = 1.0   // 임펄스→풀백 전이: 고점 대비 1 ATR 되돌림
+float INVALID_DEPTH = 0.78  // 풀백 무효화 깊이
+float VOL_CIRCUIT   = 2.5   // ATR14/ATR100 서킷브레이커
+int   DEAD_PCTILE   = 10    // ATR%ile 죽은 장 하한
+int   PAT_MIN_N     = 5     // 패턴 적합 최소 봉수
+int   PAT_MAX_N     = 25
+float PAT_SLOPE     = 0.02  // 패턴 기울기 유의 임계 (ATR/봉)
+float PAT_PARALLEL  = 0.03  // 플래그 평행 판정
+float PAT_CONTRACT  = 0.7   // 수렴비
+float PAT_R2        = 0.5   // 적합 품질 하한
+float CHAND_MULT    = 3.0   // 샹들리에 ATR 배수
+
+// 프리셋 해석 (보수/표준/공격)
+bool isCons = preset == Preset.conservative
+bool isAggr = preset == Preset.aggressive
+float depthMin = isCons ? 0.38 : isAggr ? 0.25 : 0.30
+float depthMax = isCons ? 0.62 : isAggr ? 0.78 : 0.70
+int   pbMin    = isCons ? 4    : isAggr ? 2    : 3
+int   pbMax    = isCons ? 12   : isAggr ? 20   : 15
+float volMax   = isCons ? 0.70 : isAggr ? 0.90 : 0.80
+float rsiLo    = isCons ? 40.0 : isAggr ? 30.0 : 35.0
+float rsiHi    = isCons ? 55.0 : isAggr ? 58.0 : 55.0
+float slopeMin = isCons ? 0.08 : isAggr ? 0.03 : 0.05
+float erMin    = isCons ? 0.35 : isAggr ? 0.25 : 0.30
+
+// ---------- 기초 시계열 (전부 전역 — 조건부 ta.* 호출 금지) ----------
+float atrV    = ta.atr(14)
+float atrSlow = ta.atr(100)
+float emaF    = ta.ema(close, 50)
+float emaS    = ta.ema(close, 200)
+float rsiV    = ta.rsi(close, 14)
+[macdLine, signalLine, hist] = ta.macd(close, 12, 26, 9)
+bool goldenCross = ta.crossover(macdLine, signalLine)
+bool deadCross   = ta.crossunder(macdLine, signalLine)
+[diP, diM, adxV] = ta.dmi(14, 14)
+float adxPctV = ta.percentrank(adxV, 200)
+float erDen   = math.sum(math.abs(nz(ta.change(close))), 20)
+float erV     = erDen > 0 ? math.abs(close - close[20]) / erDen : 0.0
+float slopeNorm = (emaS - emaS[20]) / math.max(atrV * 20, syminfo.mintick)
+float hhClose20 = ta.highest(close, 20)
+float llClose20 = ta.lowest(close, 20)
+float llLow20   = ta.lowest(low, 20)
+float hhHigh20  = ta.highest(high, 20)
+float atrPctile = ta.percentrank(atrV / close, 200)
+float pivLo = ta.pivotlow(low, 3, 3)
+float pivHi = ta.pivothigh(high, 3, 3)
+var float lastConfPivLow  = na
+var float lastConfPivHigh = na
+if not na(pivLo)
+    lastConfPivLow := pivLo
+if not na(pivHi)
+    lastConfPivHigh := pivHi
+
+// 레짐 (SPEC §2)
+bool regimeBull = emaF > emaS and slopeNorm > slopeMin
+bool regimeBear = emaF < emaS and slopeNorm < -slopeMin
+bool deadMarket = atrPctile < DEAD_PCTILE
+
+// 모멘텀 동의
+bool histTurnL = hist > hist[1] and hist[1] <= hist[2]
+bool histTurnS = hist < hist[1] and hist[1] >= hist[2]
+
+// 캔들 확인 (스코어 전용)
+float bodyAbs = math.abs(close - open)
+bool bullEngulf = close > open and close[1] < open[1] and close >= open[1] and open <= close[1]
+bool bearEngulf = close < open and close[1] > open[1] and close <= open[1] and open >= close[1]
+bool bullPin = (math.min(open, close) - low) > 2 * bodyAbs and (high - math.max(open, close)) < bodyAbs
+bool bearPin = (high - math.max(open, close)) > 2 * bodyAbs and (math.min(open, close) - low) < bodyAbs
+bool candleBullOk = bullEngulf or bullPin
+bool candleBearOk = bearEngulf or bearPin
+
+// ---------- HTF (확정봉 고정 — SPEC §12, 비리페인트) ----------
+string htfTf = htf_mode == HtfMode.auto ? timeframe.from_seconds(timeframe.in_seconds(timeframe.period) * 4) : htf_manual
+if timeframe.in_seconds(htfTf) <= timeframe.in_seconds(timeframe.period)
+    runtime.error("HTF는 차트 TF보다 커야 합니다 (현재 HTF: " + htfTf + ")")
+[htfEmaV, htfClsV] = request.security(syminfo.tickerid, htfTf, [ta.ema(close, 200)[1], close[1]], lookahead=barmerge.lookahead_on)
+bool htfBull = htfClsV > htfEmaV
+bool htfBear = htfClsV < htfEmaV
+
+// ---------- 선물 필터 (SPEC §10) ----------
+int  fundMs    = funding_interval_h * 3600000
+bool fundingOk = not use_funding_filter or (fundMs - (time_close % fundMs)) > fund_avoid_min * 60000
+int  dowUtc    = dayofweek(time, "UTC")
+bool sessionOk = not block_weekend or (dowUtc != dayofweek.saturday and dowUtc != dayofweek.sunday)
+bool volCircuitOk = atrV / math.max(atrSlow, syminfo.mintick) < VOL_CIRCUIT
+bool allowLong  = direction != Direction.shortOnly
+bool allowShort = direction != Direction.longOnly
+
+// ---------- 유틸 ----------
+f_clamp01(float x) =>
+    math.max(0.0, math.min(1.0, x))
+
+f_grade(int s) =>
+    s >= 80 ? "A" : s >= 65 ? "B" : "C"
+
+f_gradeMult(string g) =>
+    not use_grade_sizing ? 1.0 : g == "A" ? 1.0 : g == "B" ? 0.75 : 0.5
+
+// OLS 직선 적합: 오프셋 1..n (당봉 제외 — 자기참조 차단), x: 과거→현재 오름차순
+// 반환: [봉당 기울기, 절편(x=0, 윈도 시작), R²]. 당봉 투사값 = 절편 + 기울기 × n
+f_fit(bool useHigh, int n) =>
+    float sx = 0.0
+    float sy = 0.0
+    float sxx = 0.0
+    float sxy = 0.0
+    float nf = n
+    for i = 1 to n
+        float x = n - i
+        float y = useHigh ? high[i] : low[i]
+        sx += x
+        sy += y
+        sxx += x * x
+        sxy += x * y
+    float den = nf * sxx - sx * sx
+    float slope = den != 0 ? (nf * sxy - sx * sy) / den : 0.0
+    float icept = (sy - slope * sx) / nf
+    float meanY = sy / nf
+    float ssRes = 0.0
+    float ssTot = 0.0
+    for i = 1 to n
+        float x = n - i
+        float y = useHigh ? high[i] : low[i]
+        float fitV = icept + slope * x
+        ssRes += (y - fitV) * (y - fitV)
+        ssTot += (y - meanY) * (y - meanY)
+    float r2 = ssTot > 0 ? 1.0 - ssRes / ssTot : 0.0
+    [slope, icept, r2]
+
+// =====================================================================
+// 롱 상태기계 (SPEC §3 — 동일 봉 순서: ① 상태 갱신 → ② 무효화 → ③ 트리거)
+// =====================================================================
+var Phase phL = Phase.idle
+var float impHighL = na
+var float impLowL  = na
+var float pbLowL   = na
+var float pbMinorHighL = na
+var int   pbStartL = na
+var float volImpSumL = 0.0
+var int   impBarsL   = 0
+var float volPbSumL  = 0.0
+var float rsiPbLowL  = na
+var float capErL     = na
+var float capAdxPctL = na
+var bool  capDiOkL   = false
+var bool  adxExhaustL = false
+var float adxPeakL   = na
+var int   cdStartL   = na
+
+// 트리거용: 당봉 high 반영 전의 마이너 고점 (비평 #3 — 자기참조 차단)
+float pbMinorHighPrevL = phL == Phase.pullback ? pbMinorHighL : na
+
+// ① 상태 갱신 + 전이
+if phL == Phase.idle
+    if regimeBull and close >= hhClose20
+        phL := Phase.impulse
+        impHighL := high
+        impLowL := nz(lastConfPivLow, llLow20)
+        volImpSumL := volume
+        impBarsL := 1
+        adxPeakL := adxV
+else if phL == Phase.impulse
+    impHighL := math.max(impHighL, high)
+    volImpSumL += volume
+    impBarsL += 1
+    adxPeakL := math.max(nz(adxPeakL, adxV), adxV)
+    if not regimeBull
+        phL := Phase.idle
+    else if impHighL - low >= PB_TRIG_ATR * atrV
+        // 임펄스→풀백 전이: 강도 지표 1회 캡처 (SPEC §1·§2)
+        phL := Phase.pullback
+        capErL := erV
+        capAdxPctL := adxPctV
+        capDiOkL := diP > diM
+        adxExhaustL := nz(adxPeakL, 0) >= 40 and adxV < nz(adxPeakL, 0) * 0.9
+        pbStartL := bar_index
+        pbLowL := low
+        pbMinorHighL := high
+        volPbSumL := volume
+        rsiPbLowL := rsiV
+else if phL == Phase.pullback
+    if low < pbLowL
+        pbLowL := low
+        pbMinorHighL := high      // 새 저점 봉에서 마이너 고점 리셋
+    else
+        pbMinorHighL := math.max(pbMinorHighL, high)
+    volPbSumL += volume
+    rsiPbLowL := math.min(rsiPbLowL, rsiV)
+    // ② 무효화·복귀
+    float depthNowL = (impHighL - pbLowL) / math.max(impHighL - impLowL, syminfo.mintick)
+    if high > impHighL
+        // 신고가 = 풀백 무산, 임펄스 연장 (풀백 봉들을 임펄스에 합산)
+        phL := Phase.impulse
+        impHighL := high
+        volImpSumL += volPbSumL
+        impBarsL += bar_index - pbStartL + 1
+        pbLowL := na
+        pbMinorHighL := na
+        pbStartL := na
+        volPbSumL := 0.0
+        rsiPbLowL := na
+    else if close < impLowL or (bar_index - pbStartL) > pbMax or depthNowL > INVALID_DEPTH
+        phL := Phase.idle
+else if phL == Phase.cooldown
+    if bar_index - cdStartL >= COOLDOWN_BARS
+        phL := Phase.idle
+
+// =====================================================================
+// 숏 상태기계 (완전 대칭)
+// =====================================================================
+var Phase phS = Phase.idle
+var float impLowS  = na
+var float impHighS = na
+var float pbHighS  = na
+var float pbMinorLowS = na
+var int   pbStartS = na
+var float volImpSumS = 0.0
+var int   impBarsS   = 0
+var float volPbSumS  = 0.0
+var float rsiPbHighS = na
+var float capErS     = na
+var float capAdxPctS = na
+var bool  capDiOkS   = false
+var bool  adxExhaustS = false
+var float adxPeakS   = na
+var int   cdStartS   = na
+
+float pbMinorLowPrevS = phS == Phase.pullback ? pbMinorLowS : na
+
+if phS == Phase.idle
+    if regimeBear and close <= llClose20
+        phS := Phase.impulse
+        impLowS := low
+        impHighS := nz(lastConfPivHigh, hhHigh20)
+        volImpSumS := volume
+        impBarsS := 1
+        adxPeakS := adxV
+else if phS == Phase.impulse
+    impLowS := math.min(impLowS, low)
+    volImpSumS += volume
+    impBarsS += 1
+    adxPeakS := math.max(nz(adxPeakS, adxV), adxV)
+    if not regimeBear
+        phS := Phase.idle
+    else if high - impLowS >= PB_TRIG_ATR * atrV
+        phS := Phase.pullback
+        capErS := erV
+        capAdxPctS := adxPctV
+        capDiOkS := diM > diP
+        adxExhaustS := nz(adxPeakS, 0) >= 40 and adxV < nz(adxPeakS, 0) * 0.9
+        pbStartS := bar_index
+        pbHighS := high
+        pbMinorLowS := low
+        volPbSumS := volume
+        rsiPbHighS := rsiV
+else if phS == Phase.pullback
+    if high > pbHighS
+        pbHighS := high
+        pbMinorLowS := low
+    else
+        pbMinorLowS := math.min(pbMinorLowS, low)
+    volPbSumS += volume
+    rsiPbHighS := math.max(rsiPbHighS, rsiV)
+    float depthNowS = (pbHighS - impLowS) / math.max(impHighS - impLowS, syminfo.mintick)
+    if low < impLowS
+        phS := Phase.impulse
+        impLowS := low
+        volImpSumS += volPbSumS
+        impBarsS += bar_index - pbStartS + 1
+        pbHighS := na
+        pbMinorLowS := na
+        pbStartS := na
+        volPbSumS := 0.0
+        rsiPbHighS := na
+    else if close > impHighS or (bar_index - pbStartS) > pbMax or depthNowS > INVALID_DEPTH
+        phS := Phase.idle
+else if phS == Phase.cooldown
+    if bar_index - cdStartS >= COOLDOWN_BARS
+        phS := Phase.idle
+
+// =====================================================================
+// 패턴 분류기 (SPEC §4 — 추세 지속 패턴만, 당봉 제외 적합)
+// =====================================================================
+string patL = ""
+float patUpperProjL = na
+float patLowerProjL = na
+float patUpperStartL = na
+float patLowerStartL = na
+int   patStartL = na
+if phL == Phase.pullback and not na(pbStartL)
+    int nL = math.min(bar_index - pbStartL, PAT_MAX_N)
+    if nL >= PAT_MIN_N
+        [shL, ihL, r2hL] = f_fit(true, nL)
+        [sloL, ilL, r2lL] = f_fit(false, nL)
+        float shNL = shL / math.max(atrV, syminfo.mintick)
+        float slNL = sloL / math.max(atrV, syminfo.mintick)
+        float wStartL = ihL - ilL
+        float wNowL = (ihL + shL * nL) - (ilL + sloL * nL)
+        float contractL = wStartL > 0 ? wNowL / wStartL : 1.0
+        if r2hL >= PAT_R2 and r2lL >= PAT_R2
+            if shNL < -PAT_SLOPE and slNL < -PAT_SLOPE and shNL < slNL and contractL < PAT_CONTRACT
+                patL := "falling_wedge"
+            else if shNL < -PAT_SLOPE and slNL < -PAT_SLOPE and math.abs(shNL - slNL) <= PAT_PARALLEL
+                patL := "flag"
+            else if shNL < -PAT_SLOPE and slNL > PAT_SLOPE and contractL < PAT_CONTRACT
+                patL := "triangle"
+        if patL != ""
+            patUpperProjL := ihL + shL * nL
+            patLowerProjL := ilL + sloL * nL
+            patUpperStartL := ihL
+            patLowerStartL := ilL
+            patStartL := bar_index - nL
+
+string patS = ""
+float patUpperProjS = na
+float patLowerProjS = na
+float patUpperStartS = na
+float patLowerStartS = na
+int   patStartS = na
+if phS == Phase.pullback and not na(pbStartS)
+    int nS = math.min(bar_index - pbStartS, PAT_MAX_N)
+    if nS >= PAT_MIN_N
+        [shS, ihS, r2hS] = f_fit(true, nS)
+        [sloS, ilS, r2lS] = f_fit(false, nS)
+        float shNS = shS / math.max(atrV, syminfo.mintick)
+        float slNS = sloS / math.max(atrV, syminfo.mintick)
+        float wStartS = ihS - ilS
+        float wNowS = (ihS + shS * nS) - (ilS + sloS * nS)
+        float contractS = wStartS > 0 ? wNowS / wStartS : 1.0
+        if r2hS >= PAT_R2 and r2lS >= PAT_R2
+            if shNS > PAT_SLOPE and slNS > PAT_SLOPE and slNS > shNS and contractS < PAT_CONTRACT
+                patS := "rising_wedge"
+            else if shNS > PAT_SLOPE and slNS > PAT_SLOPE and math.abs(shNS - slNS) <= PAT_PARALLEL
+                patS := "flag"
+            else if shNS < -PAT_SLOPE and slNS > PAT_SLOPE and contractS < PAT_CONTRACT
+                patS := "triangle"
+        if patS != ""
+            patUpperProjS := ihS + shS * nS
+            patLowerProjS := ilS + sloS * nS
+            patUpperStartS := ihS
+            patLowerStartS := ilS
+            patStartS := bar_index - nS
+
+// =====================================================================
+// 품질 게이트 + 강도 확인 + 트리거 + 시그널 (SPEC §3·§5·§6)
+// =====================================================================
+// ---- 롱 ----
+float depthL  = phL == Phase.pullback ? (impHighL - pbLowL) / math.max(impHighL - impLowL, syminfo.mintick) : na
+int   pbBarsL = phL == Phase.pullback and not na(pbStartL) ? bar_index - pbStartL : 0
+float volImpAvgL = impBarsL > 0 ? volImpSumL / impBarsL : na
+float volPbAvgL  = phL == Phase.pullback ? volPbSumL / (pbBarsL + 1) : na
+float volRatioL  = not na(volPbAvgL) and not na(volImpAvgL) and volImpAvgL > 0 ? volPbAvgL / volImpAvgL : na
+bool qualityL = phL == Phase.pullback and not na(depthL) and depthL >= depthMin and depthL <= depthMax and pbBarsL >= pbMin and pbBarsL <= pbMax and (na(volRatioL) or volRatioL < volMax) and not na(rsiPbLowL) and rsiPbLowL >= rsiLo and rsiPbLowL <= rsiHi
+
+bool strengthOkL = switch confirm_mode
+    ConfirmMode.er   => nz(capErL, 0) >= erMin
+    ConfirmMode.adx  => nz(capAdxPctL, 0) >= 50 and capDiOkL
+    ConfirmMode.both => nz(capErL, 0) >= erMin and nz(capAdxPctL, 0) >= 50 and capDiOkL
+
+bool trigBreakL = not na(pbMinorHighPrevL) and close > pbMinorHighPrevL and histTurnL
+bool trigL = switch trig_mode
+    TrigMode.breakout => trigBreakL
+    TrigMode.pattern  => patL != "" and not na(patUpperProjL) ? close > patUpperProjL and histTurnL : trigBreakL
+    TrigMode.macd     => goldenCross
+
+float slCandL   = not na(pbLowL) ? pbLowL - SL_BUF_ATR * atrV : na
+float riskCandL = not na(slCandL) ? close - slCandL : na
+bool validRiskL = not na(riskCandL) and riskCandL >= RISK_MIN_ATR * atrV and riskCandL <= RISK_MAX_ATR * atrV
+
+// ---- 숏 ----
+float depthS  = phS == Phase.pullback ? (pbHighS - impLowS) / math.max(impHighS - impLowS, syminfo.mintick) : na
+int   pbBarsS = phS == Phase.pullback and not na(pbStartS) ? bar_index - pbStartS : 0
+float volImpAvgS = impBarsS > 0 ? volImpSumS / impBarsS : na
+float volPbAvgS  = phS == Phase.pullback ? volPbSumS / (pbBarsS + 1) : na
+float volRatioS  = not na(volPbAvgS) and not na(volImpAvgS) and volImpAvgS > 0 ? volPbAvgS / volImpAvgS : na
+// 숏 RSI 존 = 롱 존의 100 기준 미러: 하한 (100−rsiHi) ≤ rsiPbHighS ≤ 상한 (100−rsiLo)
+bool qualityS = phS == Phase.pullback and not na(depthS) and depthS >= depthMin and depthS <= depthMax and pbBarsS >= pbMin and pbBarsS <= pbMax and (na(volRatioS) or volRatioS < volMax) and not na(rsiPbHighS) and rsiPbHighS >= (100 - rsiHi) and rsiPbHighS <= (100 - rsiLo)
+
+bool strengthOkS = switch confirm_mode
+    ConfirmMode.er   => nz(capErS, 0) >= erMin
+    ConfirmMode.adx  => nz(capAdxPctS, 0) >= 50 and capDiOkS
+    ConfirmMode.both => nz(capErS, 0) >= erMin and nz(capAdxPctS, 0) >= 50 and capDiOkS
+
+bool trigBreakS = not na(pbMinorLowPrevS) and close < pbMinorLowPrevS and histTurnS
+bool trigS = switch trig_mode
+    TrigMode.breakout => trigBreakS
+    TrigMode.pattern  => patS != "" and not na(patLowerProjS) ? close < patLowerProjS and histTurnS : trigBreakS
+    TrigMode.macd     => deadCross
+
+float slCandS   = not na(pbHighS) ? pbHighS + SL_BUF_ATR * atrV : na
+float riskCandS = not na(slCandS) ? slCandS - close : na
+bool validRiskS = not na(riskCandS) and riskCandS >= RISK_MIN_ATR * atrV and riskCandS <= RISK_MAX_ATR * atrV
+
+// ---- 스코어 (SPEC §11 — 등급화 전용, 게이트 아님) ----
+float strengthNormL = confirm_mode == ConfirmMode.er ? f_clamp01(nz(capErL) / 0.5) : confirm_mode == ConfirmMode.adx ? f_clamp01(nz(capAdxPctL) / 100) : (f_clamp01(nz(capErL) / 0.5) + f_clamp01(nz(capAdxPctL) / 100)) / 2
+float strengthNormS = confirm_mode == ConfirmMode.er ? f_clamp01(nz(capErS) / 0.5) : confirm_mode == ConfirmMode.adx ? f_clamp01(nz(capAdxPctS) / 100) : (f_clamp01(nz(capErS) / 0.5) + f_clamp01(nz(capAdxPctS) / 100)) / 2
+int scoreL = math.round(math.max(0.0, math.min(100.0, (f_clamp01(slopeNorm / 0.15) * 0.5 + strengthNormL * 0.5) * 20 + f_clamp01(1 - math.abs(nz(depthL) - 0.5) / 0.28) * 20 + (na(volRatioL) ? 7.5 : f_clamp01((1 - volRatioL) / 0.4) * 15) + ((histTurnL ? 0.5 : 0.0) + (hist < 0 ? 0.5 : 0.0)) * 15 + (htfBull ? 10 : 0) + (candleBullOk ? 5 : 0) + (patL != "" ? 15 : 0) - (adxExhaustL ? 15 : 0))))
+int scoreS = math.round(math.max(0.0, math.min(100.0, (f_clamp01(-slopeNorm / 0.15) * 0.5 + strengthNormS * 0.5) * 20 + f_clamp01(1 - math.abs(nz(depthS) - 0.5) / 0.28) * 20 + (na(volRatioS) ? 7.5 : f_clamp01((1 - volRatioS) / 0.4) * 15) + ((histTurnS ? 0.5 : 0.0) + (hist > 0 ? 0.5 : 0.0)) * 15 + (htfBear ? 10 : 0) + (candleBearOk ? 5 : 0) + (patS != "" ? 15 : 0) - (adxExhaustS ? 15 : 0))))
+
+// ---- 최종 시그널 (전부 시그널 확정 봉 — SPEC §6) ----
+bool longSignal  = phL == Phase.pullback and regimeBull and not deadMarket and qualityL and strengthOkL and trigL and htfBull and validRiskL and fundingOk and sessionOk and volCircuitOk and allowLong and barstate.isconfirmed
+bool shortSignal = phS == Phase.pullback and regimeBear and not deadMarket and qualityS and strengthOkS and trigS and htfBear and validRiskS and fundingOk and sessionOk and volCircuitOk and allowShort and barstate.isconfirmed
+
+// ---- 시그널 산출물 (진입가·SL·TP·사이징 — 시그널 봉 값으로 고정) ----
+var float sigEntry = na
+var float sigSl    = na
+var float sigTp1   = na
+var float sigTp2   = na
+var float sigBe    = na
+var float sigRisk  = na
+var float sigQty   = na
+var int   sigScore = na
+var string sigGrade = na
+var string sigPattern = na
+var int   sigDir   = na
+var float sigImpliedLev = na
+
+if longSignal
+    float entryP = math.round_to_mintick(close)
+    float slP    = math.round_to_mintick(slCandL)
+    float riskP  = math.max(entryP - slP, syminfo.mintick)  // 라운딩 후 0 방지 (사이징 0 나눗셈 가드)
+    float tp2Raw = tp2_mode == Tp2Mode.structure ? math.max(impHighL, entryP + 2.0 * riskP) : entryP + TP2_RR * riskP
+    sigEntry := entryP
+    sigSl    := slP
+    sigRisk  := riskP
+    sigTp1   := math.round_to_mintick(entryP + TP1_RR * riskP)
+    sigTp2   := math.round_to_mintick(tp2Raw)
+    sigBe    := math.round_to_mintick(entryP + BE_OFF_ATR * atrV)
+    sigScore := scoreL
+    sigGrade := f_grade(scoreL)
+    sigPattern := patL
+    sigDir   := 1
+    float qtyRaw = acct_size * risk_pct / 100 / riskP * f_gradeMult(sigGrade)
+    float qtyCap = acct_size * max_lev / entryP
+    sigQty   := math.min(qtyRaw, qtyCap)
+    sigImpliedLev := sigQty * entryP / acct_size
+    phL := Phase.cooldown
+    cdStartL := bar_index
+
+if shortSignal
+    float entryP = math.round_to_mintick(close)
+    float slP    = math.round_to_mintick(slCandS)
+    float riskP  = math.max(slP - entryP, syminfo.mintick)  // 라운딩 후 0 방지 (사이징 0 나눗셈 가드)
+    float tp2Raw = tp2_mode == Tp2Mode.structure ? math.min(impLowS, entryP - 2.0 * riskP) : entryP - TP2_RR * riskP
+    sigEntry := entryP
+    sigSl    := slP
+    sigRisk  := riskP
+    sigTp1   := math.round_to_mintick(entryP - TP1_RR * riskP)
+    sigTp2   := math.round_to_mintick(tp2Raw)
+    sigBe    := math.round_to_mintick(entryP - BE_OFF_ATR * atrV)
+    sigScore := scoreS
+    sigGrade := f_grade(scoreS)
+    sigPattern := patS
+    sigDir   := -1
+    float qtyRaw = acct_size * risk_pct / 100 / riskP * f_gradeMult(sigGrade)
+    float qtyCap = acct_size * max_lev / entryP
+    sigQty   := math.min(qtyRaw, qtyCap)
+    sigImpliedLev := sigQty * entryP / acct_size
+    phS := Phase.cooldown
+    cdStartS := bar_index
+
+// ==== HT1-CORE v2.0.0 END ====
+
+// =====================================================================
+// 지표 전용: 표시 입력
+// =====================================================================
+gU = "[5] 표시·알림"
+min_alert_grade = input.string("B", "알림 최소 등급", options=["A", "B", "C"], group=gU, tooltip="수동 운용 기본 B. 자동매매 서버 도입 후엔 C(전량 송출)로 바꾸고 서버에서 라우팅 — C등급 섀도우 평가용.")
+show_table   = input.bool(true,  "상태 테이블", group=gU)
+table_pos    = input.string("상단 우측", "테이블 위치", options=["상단 좌측", "상단 우측", "하단 좌측", "하단 우측"], group=gU)
+show_bg      = input.bool(true,  "레짐 배경색", group=gU)
+show_pattern_lines = input.bool(true, "패턴 추세선 표시", group=gU)
+show_emas    = input.bool(true,  "EMA 50/200 표시", group=gU)
+show_debug   = input.bool(false, "디버그 (상태기계 마커)", group=gU)
+
+// =====================================================================
+// 지표 전용: 성과 집계 상태기계 (SPEC §8 — 청산 정책과 1:1 대응)
+// =====================================================================
+type Trade
+    int   openBar
+    int   dir
+    float entry
+    float sl
+    float tp1
+    float tp2
+    float be
+    float risk
+    float realized = 0.0
+    int   state = 0
+    float trail = na
+    float extSince = na
+
+var array<Trade> trades = array.new<Trade>()
+var int   nClosed = 0
+var int   nPos = 0
+var int   nFull = 0
+var int   nBeOut = 0
+var int   nLoss = 0
+var int   nExp = 0
+var int   nTimeout = 0
+var int   nAmb = 0
+var int   nPartialHit = 0
+var int   nTotalSig = 0
+var float sumR = 0.0
+
+if longSignal or shortSignal
+    array.push(trades, Trade.new(openBar=bar_index, dir=sigDir, entry=sigEntry, sl=sigSl, tp1=sigTp1, tp2=sigTp2, be=sigBe, risk=sigRisk))
+    nTotalSig += 1
+
+int j = array.size(trades) - 1
+while j >= 0
+    Trade t = array.get(trades, j)
+    if bar_index > t.openBar
+        int d = t.dir
+        bool closed = false
+        float r = 0.0
+        string outcome = ""
+        float costR = 2 * (fee_pct / 100) * t.entry / t.risk
+        if t.state == 0
+            bool hitSl  = d == 1 ? low <= t.sl : high >= t.sl
+            bool hitTp1 = d == 1 ? high >= t.tp1 : low <= t.tp1
+            if hitSl and hitTp1
+                nAmb += 1
+            if hitSl
+                // 갭 체결: 시가가 SL 너머면 시가 체결 (꼬리손실 정직 기장)
+                float fillP = d == 1 ? math.min(t.sl, open) : math.max(t.sl, open)
+                r := d * (fillP - t.entry) / t.risk - costR
+                closed := true
+                outcome := "LOSS"
+            else if hitTp1
+                t.realized := 0.5 * TP1_RR
+                t.sl := t.be
+                t.state := 1
+                t.extSince := d == 1 ? high : low
+                nPartialHit += 1
+            else if use_time_stop and (bar_index - t.openBar) >= TS_BARS and (d == 1 ? high < t.entry + t.risk : low > t.entry - t.risk)
+                r := d * (close - t.entry) / t.risk - costR
+                closed := true
+                outcome := "TIMEOUT"
+            else if (bar_index - t.openBar) >= EVAL_BARS
+                r := d * (close - t.entry) / t.risk - costR
+                closed := true
+                outcome := "EXPIRED"
+        else
+            // PARTIAL: 50% 청산 완료, 손절은 BE (샹들리에 모드면 트레일 병행)
+            if tp2_mode == Tp2Mode.chandelier
+                t.extSince := d == 1 ? math.max(nz(t.extSince, high), high) : math.min(nz(t.extSince, low), low)
+                float newTrail = d == 1 ? t.extSince - CHAND_MULT * atrV : t.extSince + CHAND_MULT * atrV
+                t.trail := na(t.trail) ? newTrail : d == 1 ? math.max(t.trail, newTrail) : math.min(t.trail, newTrail)
+            float stopLvl = tp2_mode == Tp2Mode.chandelier ? (d == 1 ? math.max(t.sl, nz(t.trail, t.sl)) : math.min(t.sl, nz(t.trail, t.sl))) : t.sl
+            bool hitStop = d == 1 ? low <= stopLvl : high >= stopLvl
+            bool hitTp2  = tp2_mode != Tp2Mode.chandelier and (d == 1 ? high >= t.tp2 : low <= t.tp2)
+            if hitStop and hitTp2
+                nAmb += 1
+            if hitStop
+                float fillP = d == 1 ? math.min(stopLvl, open) : math.max(stopLvl, open)
+                r := t.realized + 0.5 * d * (fillP - t.entry) / t.risk - costR
+                closed := true
+                outcome := "BE_OUT"
+            else if hitTp2
+                r := t.realized + 0.5 * d * (t.tp2 - t.entry) / t.risk - costR
+                closed := true
+                outcome := "FULL"
+            else if (bar_index - t.openBar) >= EVAL_BARS
+                r := t.realized + 0.5 * d * (close - t.entry) / t.risk - costR
+                closed := true
+                outcome := "EXPIRED"
+        if closed
+            nClosed += 1
+            sumR += r
+            if r > 0
+                nPos += 1
+            if outcome == "FULL"
+                nFull += 1
+            if outcome == "BE_OUT"
+                nBeOut += 1
+            if outcome == "LOSS"
+                nLoss += 1
+            if outcome == "EXPIRED"
+                nExp += 1
+            if outcome == "TIMEOUT"
+                nTimeout += 1
+            array.remove(trades, j)
+    j -= 1
+
+// =====================================================================
+// 지표 전용: 시각화
+// =====================================================================
+plot(show_emas ? emaF : na, "EMA 50",  color=color.new(color.orange, 30), linewidth=1)
+plot(show_emas ? emaS : na, "EMA 200", color=regimeBull ? color.new(color.green, 0) : regimeBear ? color.new(color.red, 0) : color.new(color.gray, 30), linewidth=2)
+bgcolor(show_bg ? (regimeBull ? color.new(color.green, 94) : regimeBear ? color.new(color.red, 94) : na) : na, title="레짐 배경")
+
+// 디버그: 상태기계 마커
+plotchar(show_debug and phL == Phase.impulse,  "L 임펄스", "▲", location.belowbar, color.new(color.teal, 60), size=size.tiny)
+plotchar(show_debug and phL == Phase.pullback, "L 풀백",   "·", location.belowbar, color.new(color.teal, 0),  size=size.tiny)
+plotchar(show_debug and phS == Phase.impulse,  "S 임펄스", "▼", location.abovebar, color.new(color.maroon, 60), size=size.tiny)
+plotchar(show_debug and phS == Phase.pullback, "S 풀백",   "·", location.abovebar, color.new(color.maroon, 0),  size=size.tiny)
+
+// 알림 디버깅용 데이터 윈도우 플롯
+plot(sigEntry, "Entry", display=display.data_window)
+plot(sigSl,    "SL",    display=display.data_window)
+plot(sigTp1,   "TP1",   display=display.data_window)
+plot(sigTp2,   "TP2",   display=display.data_window)
+
+// 패턴 추세선 (풀백 중 검출 시)
+var line patHiLnL = na
+var line patLoLnL = na
+var line patHiLnS = na
+var line patLoLnS = na
+if show_pattern_lines and patL != "" and not na(patStartL)
+    line.delete(patHiLnL)
+    line.delete(patLoLnL)
+    patHiLnL := line.new(patStartL, patUpperStartL, bar_index, patUpperProjL, color=color.new(color.aqua, 20), style=line.style_dashed)
+    patLoLnL := line.new(patStartL, patLowerStartL, bar_index, patLowerProjL, color=color.new(color.aqua, 20), style=line.style_dashed)
+if phL != Phase.pullback
+    line.delete(patHiLnL)
+    line.delete(patLoLnL)
+if show_pattern_lines and patS != "" and not na(patStartS)
+    line.delete(patHiLnS)
+    line.delete(patLoLnS)
+    patHiLnS := line.new(patStartS, patUpperStartS, bar_index, patUpperProjS, color=color.new(color.fuchsia, 20), style=line.style_dashed)
+    patLoLnS := line.new(patStartS, patLowerStartS, bar_index, patLowerProjS, color=color.new(color.fuchsia, 20), style=line.style_dashed)
+if phS != Phase.pullback
+    line.delete(patHiLnS)
+    line.delete(patLoLnS)
+
+// 시그널 라벨 + ENTRY/SL/TP 라인 (최근 1건 유지)
+var line  lnEntry = na
+var line  lnSl = na
+var line  lnTp1 = na
+var line  lnTp2 = na
+var label lbSig = na
+if longSignal or shortSignal
+    line.delete(lnEntry)
+    line.delete(lnSl)
+    line.delete(lnTp1)
+    line.delete(lnTp2)
+    lnEntry := line.new(bar_index, sigEntry, bar_index + 1, sigEntry, extend=extend.right, color=color.new(color.white, 20), width=1)
+    lnSl    := line.new(bar_index, sigSl,    bar_index + 1, sigSl,    extend=extend.right, color=color.new(color.red, 10),   width=1, style=line.style_dashed)
+    lnTp1   := line.new(bar_index, sigTp1,   bar_index + 1, sigTp1,   extend=extend.right, color=color.new(color.lime, 30),  width=1, style=line.style_dashed)
+    lnTp2   := line.new(bar_index, sigTp2,   bar_index + 1, sigTp2,   extend=extend.right, color=color.new(color.green, 10), width=1)
+    string patTag = sigPattern != "" ? " ◆" : ""
+    string lbTxt = (sigDir == 1 ? "L " : "S ") + str.tostring(sigScore) + " " + sigGrade + patTag
+    lbSig := label.new(bar_index, na, lbTxt, yloc=sigDir == 1 ? yloc.belowbar : yloc.abovebar, style=sigDir == 1 ? label.style_label_up : label.style_label_down, color=sigDir == 1 ? color.new(color.green, 0) : color.new(color.red, 0), textcolor=color.white, size=size.small)
+
+// =====================================================================
+// 지표 전용: 알림 (alert() JSON 단일 경로 — 정본: docs/alert_webhook_schema.json)
+// =====================================================================
+f_numOrNull(float x, string fmt) =>
+    na(x) ? "null" : str.tostring(x, fmt)
+
+f_gradeRank(string g) =>
+    g == "A" ? 3 : g == "B" ? 2 : 1
+
+f_alertJson(string side, bool htfOkDir, float capEr, float capAdxPct, bool adxExh, float depthV, int pbBarsV, float volRatioV, string patV) =>
+    string idStr = syminfo.tickerid + "|" + timeframe.period + "|" + str.tostring(time) + "|" + side
+    string ctx = '{"slope_norm":' + str.tostring(slopeNorm, "#.####") + ',"cap_er":' + f_numOrNull(capEr, "#.####") + ',"cap_adx_pct":' + f_numOrNull(capAdxPct, "#.#") + ',"adx_exhaust":' + (adxExh ? "true" : "false") + ',"depth":' + f_numOrNull(depthV, "#.###") + ',"pb_bars":' + str.tostring(pbBarsV) + ',"vol_ratio":' + f_numOrNull(volRatioV, "#.###") + ',"htf_bull":' + (htfOkDir ? "true" : "false") + ',"pattern":' + (patV != "" ? '"' + patV + '"' : "null") + ',"score":' + str.tostring(sigScore) + ',"grade":"' + sigGrade + '"}'
+    '{"schema":"ht1.v2","engine":"' + ENGINE_VER + '","id":"' + idStr + '","ts":' + str.tostring(time) + ',"exchange":"' + syminfo.prefix + '","symbol":"' + syminfo.ticker + '","tf":"' + timeframe.period + '","side":"' + side + '","event":"entry","entry":' + str.tostring(sigEntry, format.mintick) + ',"sl":' + str.tostring(sigSl, format.mintick) + ',"tp1":' + str.tostring(sigTp1, format.mintick) + ',"tp2":' + str.tostring(sigTp2, format.mintick) + ',"risk_atr":' + str.tostring(sigRisk / math.max(atrV, syminfo.mintick), "#.##") + ',"qty_hint":' + str.tostring(sigQty, "#.######") + ',"ctx":' + ctx + '}'
+
+if longSignal and f_gradeRank(sigGrade) >= f_gradeRank(min_alert_grade)
+    alert(f_alertJson("long", htfBull, capErL, capAdxPctL, adxExhaustL, depthL, pbBarsL, volRatioL, patL), alert.freq_once_per_bar_close)
+if shortSignal and f_gradeRank(sigGrade) >= f_gradeRank(min_alert_grade)
+    alert(f_alertJson("short", htfBear, capErS, capAdxPctS, adxExhaustS, depthS, pbBarsS, volRatioS, patS), alert.freq_once_per_bar_close)
+
+// =====================================================================
+// 지표 전용: 상태 테이블
+// =====================================================================
+f_pos(string s) =>
+    switch s
+        "상단 좌측" => position.top_left
+        "상단 우측" => position.top_right
+        "하단 좌측" => position.bottom_left
+        "하단 우측" => position.bottom_right
+        => position.top_right
+
+f_phaseTxt(Phase p) =>
+    switch p
+        Phase.idle     => "대기"
+        Phase.impulse  => "임펄스"
+        Phase.pullback => "풀백"
+        Phase.cooldown => "쿨다운"
+
+f_pct(int a, int b) =>
+    b == 0 ? "—" : str.tostring(100.0 * a / b, "#.#") + "%"
+
+var table tbl = table.new(f_pos(table_pos), 2, 12, border_width=1)
+if show_table and barstate.islast
+    color bgH = color.new(color.black, 75)
+    color fg = color.white
+    string regTxt = regimeBull ? "상승" : regimeBear ? "하락" : "중립"
+    color regCol = regimeBull ? color.new(color.green, 30) : regimeBear ? color.new(color.red, 30) : color.new(color.gray, 30)
+    table.cell(tbl, 0, 0, "레짐 (slope " + str.tostring(slopeNorm, "#.###") + ")", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 0, regTxt + (deadMarket ? " · 죽은장" : "") + (volCircuitOk ? "" : " · 서킷"), bgcolor=regCol, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 1, "상태기계 L / S", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 1, f_phaseTxt(phL) + " / " + f_phaseTxt(phS), bgcolor=bgH, text_color=fg, text_size=size.small)
+    string strengthTxt = (na(capErL) ? "" : "L er:" + str.tostring(capErL, "#.##") + (na(capAdxPctL) ? "" : " adx%:" + str.tostring(capAdxPctL, "#")) + " ") + (na(capErS) ? "" : "S er:" + str.tostring(capErS, "#.##"))
+    table.cell(tbl, 0, 2, "강도 캡처", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 2, strengthTxt == "" ? "—" : strengthTxt, bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 3, "HTF (" + htfTf + ")", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 3, htfBull ? "상승" : htfBear ? "하락" : "중립", bgcolor=bgH, text_color=fg, text_size=size.small)
+    string patNow = phL == Phase.pullback and patL != "" ? "L:" + patL : phS == Phase.pullback and patS != "" ? "S:" + patS : "—"
+    table.cell(tbl, 0, 4, "풀백 패턴", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 4, patNow, bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 5, "최근 시그널", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 5, na(sigDir) ? "—" : (sigDir == 1 ? "L " : "S ") + str.tostring(sigScore) + " " + sigGrade + " · qty " + str.tostring(sigQty, "#.####") + " · " + str.tostring(sigImpliedLev, "#.#") + "x", bgcolor=bgH, text_color=fg, text_size=size.small)
+    // 성과 (청산 정책: TP1 50% + BE — SPEC §8)
+    float eR = nClosed > 0 ? sumR / nClosed : na
+    color eRCol = na(eR) ? color.new(color.gray, 40) : eR > 0 ? color.new(color.green, 30) : color.new(color.red, 30)
+    table.cell(tbl, 0, 6, "E[R] (수수료 반영)", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 6, na(eR) ? "—" : str.tostring(eR, "+#.00;-#.00") + "R · " + str.tostring(nClosed) + "건 종결 · " + str.tostring(array.size(trades)) + "건 진행", bgcolor=eRCol, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 7, "승률 / TP1 도달", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 7, f_pct(nPos, nClosed) + " / " + f_pct(nPartialHit, nTotalSig), bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 8, "FULL/BE/LOSS", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 8, str.tostring(nFull) + " / " + str.tostring(nBeOut) + " / " + str.tostring(nLoss), bgcolor=bgH, text_color=fg, text_size=size.small)
+    string expWarn = nClosed > 0 and nExp * 100 / math.max(nClosed, 1) > 30 ? " ⚠" : ""
+    string ambWarn = nClosed > 0 and nAmb * 100 / math.max(nClosed, 1) > 10 ? " ⚠TF과대" : ""
+    table.cell(tbl, 0, 9, "만료율 / 모호율", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 9, f_pct(nExp, nClosed) + expWarn + " / " + f_pct(nAmb, nClosed) + ambWarn, bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 10, "타임스톱", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 10, use_time_stop ? str.tostring(nTimeout) + "건" : "OFF", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 0, 11, "라벨 표시/누적", bgcolor=bgH, text_color=fg, text_size=size.small)
+    table.cell(tbl, 1, 11, "최대 500 / " + str.tostring(nTotalSig), bgcolor=bgH, text_color=fg, text_size=size.small)

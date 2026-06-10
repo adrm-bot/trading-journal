@@ -1,0 +1,565 @@
+//@version=6
+indicator("HT1_By_Gunner(Claude)", shorttitle="HT1_By_Gunner(Claude)", overlay=true, max_labels_count=500, max_lines_count=500)
+
+// =====================================================================
+// 입력 파라미터 (md 플랜 충실)
+// =====================================================================
+
+// -------- [1] 추세 판단 --------
+g_trend = "[1] 추세 판단"
+ema1_length          = input.int(50,  "EMA 단기 (기본 50)",  minval=1, group=g_trend)
+ema2_length          = input.int(100, "EMA 중기 (기본 100)", minval=1, group=g_trend)
+ema3_length          = input.int(200, "EMA 장기 (기본 200)", minval=1, group=g_trend)
+ema_alignment_option = input.string("50·100·200 전부", "EMA 정배열 조건", options=["50·100", "50·200", "100·200", "50·100·200 전부"], group=g_trend)
+slope_lookback       = input.int(5,   "200EMA 기울기 확인 기간 (봉 수)", minval=1, group=g_trend)
+use_adx              = input.bool(true, "ADX 추세강도 필터 사용", group=g_trend)
+adx_length           = input.int(14,  "ADX 기간", minval=1, group=g_trend)
+adx_threshold        = input.float(20, "ADX 최소 임계값", minval=0, step=1, group=g_trend)
+
+// -------- [2] 풀백(되돌림) 조건 --------
+g_pullback = "[2] 풀백(되돌림) 조건"
+atr_length        = input.int(14,   "ATR 기간", minval=1, group=g_pullback)
+pullback_ref_ema  = input.string("EMA 중기 (100)", "풀백 기준 EMA", options=["EMA 단기 (50)", "EMA 중기 (100)", "EMA 장기 (200)"], group=g_pullback, tooltip="풀백 판정 기준 이동평균선. 강추세에서 200EMA는 멀어 터치가 드뭄. 100EMA 기본, 50EMA는 민감(얕은 풀백도 잡음), 200EMA는 엄격(깊은 풀백만).")
+distance_mult     = input.float(2.0, "기준 EMA 최대 이격 (ATR 배수)", minval=0.0, step=0.1, group=g_pullback, tooltip="|최근 저가 - 기준EMA| ≤ 이 값 × ATR 이내까지 터치/근접 인정. 강추세에서 풀백이 얕으면 값을 올려 완화.")
+pullback_lookback = input.int(30,   "되돌림 확인 기간 (최근 N봉 내 기준 EMA 터치)", minval=1, group=g_pullback)
+bypass_touch      = input.bool(false, "거리 제한 해제 (풀백 터치 조건 우회)", group=g_pullback, tooltip="ON이면 기준 EMA와의 거리·터치 조건을 완전히 무시. 강추세에서 가격이 EMA로부터 멀리 떨어져 있어도 정렬·기울기·MACD 조건만 맞으면 시그널 발생. OFF면 기존처럼 N봉 내 기준 EMA 터치 필요.")
+
+// -------- [3] MACD 모멘텀 --------
+g_macd = "[3] MACD 모멘텀"
+macd_fast_length    = input.int(12, "MACD 단기(Fast)", minval=1, group=g_macd)
+macd_slow_length    = input.int(26, "MACD 장기(Slow)", minval=1, group=g_macd)
+macd_signal_length  = input.int(9,  "MACD 시그널", minval=1, group=g_macd)
+require_zero_line   = input.bool(false, "제로라인 조건 사용 (롱=아래 골든, 숏=위 데드)", group=g_macd, tooltip="LONG: 크로스 시점 macdLine < 0 AND signalLine < 0. SHORT: 둘 다 > 0. 크로스 봉의 값으로 고정 판정. 강추세의 얕은 풀백은 MACD가 0 아래까지 안 가므로 기본 OFF.")
+macd_cross_window   = input.int(10, "MACD 크로스 유효 기간 (봉)", minval=1, group=g_macd, tooltip="크로스 발생 후 이 봉 수 이내에 강도·정렬·터치 등 모든 조건을 충족하면 시그널. 크로스 봉은 |히스토그램|이 기계적으로 0에 가까우므로 대기 기간 필요.")
+use_cluster_dedup   = input.bool(true, "크로스 클러스터 중복 억제 (첫 크로스 기준)", group=g_macd, tooltip="같은 방향 크로스가 아래 '클러스터 간격' 이내에 연속 발생 시 첫 크로스만 시그널 후보로. 꾸불꾸불 진동 구간에서 중복 시그널 방지. 첫 크로스 기준 = 조기 진입(R:R 유리).")
+cluster_gap_bars    = input.int(10, "클러스터 간격 기준 (봉)", minval=1, group=g_macd, tooltip="연속 크로스 사이 간격이 이 값 이하면 '한 묶음'으로 간주. 초과하면 새 클러스터. 유효 기간과 독립적으로 작동.")
+macd_strength_mult  = input.float(0.05, "MACD 크로스 최소 강도 (ATR 배수)", minval=0.0, step=0.05, group=g_macd, tooltip="|MACD - 시그널| / ATR 의 최소값. 노이즈 많으면 0.1~0.2, 적으면 0.05 이하. 크로스 직후 봉은 값이 작으므로 위 '크로스 유효 기간'과 함께 작동.")
+
+// -------- [4] 확정 필터 --------
+g_confirm = "[4] 확정 필터"
+use_close_filter  = input.bool(true, "200EMA 위/아래 종가 마감 필터", group=g_confirm, tooltip="롱은 close > 200EMA, 숏은 close < 200EMA.")
+cooldown_bars     = input.int(10,   "시그널 쿨다운 (봉 수)", minval=0, group=g_confirm)
+confirm_bar_only  = input.bool(true, "확정봉에서만 시그널 (repaint 방지)", group=g_confirm)
+
+// -------- [5] 진입·SL·TP 라인 --------
+g_entry = "[5] 진입·SL·TP 라인"
+show_entry_line      = input.bool(true, "진입 가격 라인 표시", group=g_entry)
+show_entry_label     = input.bool(true, "진입 가격 라벨 표시", group=g_entry)
+show_sl_line         = input.bool(true, "SL 라인 표시", group=g_entry)
+show_tp_lines        = input.bool(true, "TP1 / TP2 라인 표시", group=g_entry)
+sl_method            = input.string("EMA 고정 오프셋 (일관)", "SL 산출 방식", options=["EMA 고정 오프셋 (일관)", "스마트 (EMA / 스윙로우 자동)"], group=g_entry, tooltip="EMA 고정: 200EMA에서 ATR × 버퍼만큼만 떨어뜨려 일관된 SL. 스마트: 시그널 봉이 200EMA를 뚫었으면 스윙로우 기준, 아니면 EMA 기준.")
+pierce_threshold_atr = input.float(0.3, "피어스 판정 임계값 (ATR 배수, 스마트 모드 전용)", minval=0.0, step=0.1, group=g_entry)
+sl_buffer_atr        = input.float(0.5, "SL 버퍼 (ATR 배수)", minval=0.0, step=0.05, group=g_entry)
+swing_lookback       = input.int(10, "스윙로우/하이 탐색 기간 (봉, 스마트 모드 전용)", minval=2, group=g_entry)
+use_manual_sl        = input.bool(false, "200EMA 기준 SL 수동 지정", group=g_entry, tooltip="ON이면 SL을 '시그널 봉의 200EMA ± 오프셋(ATR 배수)'로 직접 산출. 스마트/EMA 버퍼/스윙로우 로직 우회. OFF면 위의 자동 SL 방식 그대로.")
+sl_offset_atr        = input.float(0.0, "200EMA 기준 SL 오프셋 (ATR 배수, + 여유↑ / − 타이트)", step=0.1, group=g_entry, tooltip="시그널 봉의 200EMA를 원점으로 SL을 조정. 양수: 200EMA에서 더 멀리 (롱은 아래/숏은 위, 여유↑). 음수: 200EMA 쪽으로 더 가깝게 (타이트). 0이면 SL이 200EMA에 정확히 위치.")
+tp1_rr               = input.float(1.5, "TP1 손익비 (1:N)", minval=0.1, step=0.1, group=g_entry)
+tp2_rr               = input.float(3.0, "TP2 손익비 (1:N)", minval=0.1, step=0.1, group=g_entry)
+label_offset_bars    = input.int(5, "라벨 우측 오프셋 (봉)", minval=0, group=g_entry, tooltip="ENTRY/SL/TP 라벨을 현재 봉의 N봉 오른쪽에 고정 표시.")
+
+// -------- [6] 상위 TF 추세 정렬 (선택) --------
+g_htf = "[6] 상위 TF 추세 정렬 (선택)"
+use_htf = input.bool(false, "상위 TF 추세 일치 필터 사용", group=g_htf, tooltip="상위 TF 200EMA 기준: 롱은 close > HTF 200EMA, 숏은 반대.")
+htf_tf  = input.timeframe("240", "상위 TF (60=1H, 240=4H, D=1D)", group=g_htf)
+
+// -------- [7] 후행 성과 집계 --------
+g_perf = "[7] 후행 성과 집계"
+use_performance = input.bool(false, "시그널 후행 승률 집계 사용", group=g_perf, tooltip="각 시그널을 SL vs TP 레이스로 추적. TP1/TP2 도달률, SL 히트율, R 기댓값을 상태 테이블에 표시.")
+eval_bars       = input.int(30,  "평가 기간 (봉 수)", minval=1, group=g_perf, tooltip="이 봉 수 안에 SL/TP 둘 다 미터치면 '만료'로 분류.")
+perf_split_ls   = input.bool(true, "롱/숏 분리 표시", group=g_perf)
+
+// -------- [8] 화면 표시 --------
+g_ui = "[8] 화면 표시"
+show_emas        = input.bool(false, "EMA 3선 표시", group=g_ui, tooltip="이 지표에서 EMA를 다시 그립니다. 다른 MA 지표 쓰고 있으면 OFF.")
+show_bg          = input.bool(true, "배경색 표시 (상승=녹/하락=적/횡보=회)", group=g_ui)
+show_table       = input.bool(true, "상태 테이블 표시", group=g_ui)
+status_pos       = input.string("상단 우측", "상태 테이블 위치",
+     options=["상단 좌측", "상단 우측", "중단 좌측", "중단 우측", "하단 좌측", "하단 우측"], group=g_ui)
+show_labels      = input.bool(true, "시그널 라벨 표시", group=g_ui)
+long_label_text  = input.string("B", "롱 라벨 텍스트", group=g_ui)
+short_label_text = input.string("S", "숏 라벨 텍스트", group=g_ui)
+
+// =====================================================================
+// 유틸 함수
+// =====================================================================
+
+f_pos(s) =>
+    switch s
+        "상단 좌측" => position.top_left
+        "상단 우측" => position.top_right
+        "중단 좌측" => position.middle_left
+        "중단 우측" => position.middle_right
+        "하단 좌측" => position.bottom_left
+        "하단 우측" => position.bottom_right
+        => position.top_right
+
+f_pct(a, b) => b == 0 ? "—" : str.tostring(100.0 * a / b, "#.#") + "%"
+
+f_isBullish(option, e1, e2, e3) =>
+    switch option
+        "50·100"         => e1 > e2
+        "50·200"         => e1 > e3
+        "100·200"        => e2 > e3
+        "50·100·200 전부" => e1 > e2 and e2 > e3
+        => false
+
+f_isBearish(option, e1, e2, e3) =>
+    switch option
+        "50·100"         => e1 < e2
+        "50·200"         => e1 < e3
+        "100·200"        => e2 < e3
+        "50·100·200 전부" => e1 < e2 and e2 < e3
+        => false
+
+// =====================================================================
+// 계산 (md 플랜 의사코드 그대로)
+// =====================================================================
+
+ema1 = ta.ema(close, ema1_length)
+ema2 = ta.ema(close, ema2_length)
+ema3 = ta.ema(close, ema3_length)
+atr  = ta.atr(atr_length)
+
+slope200 = ema3 - ema3[slope_lookback]
+[diPlus, diMinus, adxVal] = ta.dmi(adx_length, adx_length)
+
+alignBull = f_isBullish(ema_alignment_option, ema1, ema2, ema3)
+alignBear = f_isBearish(ema_alignment_option, ema1, ema2, ema3)
+
+// 추세: 정배열 + 200EMA 기울기 + ADX
+isBull = alignBull and slope200 > 0 and (not use_adx or adxVal > adx_threshold)
+isBear = alignBear and slope200 < 0 and (not use_adx or adxVal > adx_threshold)
+
+// 풀백: 최근 N봉 저가(롱)/고가(숏)가 기준 EMA 근처까지 왔었는지
+ref_ema = switch pullback_ref_ema
+    "EMA 단기 (50)"  => ema1
+    "EMA 중기 (100)" => ema2
+    "EMA 장기 (200)" => ema3
+    => ema3
+maxDist     = distance_mult * atr
+touchedBull = bypass_touch or ta.lowest(low,  pullback_lookback) <= ref_ema + maxDist
+touchedBear = bypass_touch or ta.highest(high, pullback_lookback) >= ref_ema - maxDist
+
+// MACD
+[macdLine, signalLine, _] = ta.macd(close, macd_fast_length, macd_slow_length, macd_signal_length)
+hist          = macdLine - signalLine
+macd_strength = math.abs(hist) / atr
+goldenCross   = ta.crossover(macdLine,  signalLine)
+deadCross     = ta.crossunder(macdLine, signalLine)
+
+// 클러스터 중복 억제: 같은 방향 크로스가 cluster_gap_bars 이내 연속 발생 시 첫 크로스만
+// 시그널 후보로 표시. 이후 ta.valuewhen/ta.barssince의 기준 이벤트로 사용.
+var int golden_prev_cross_bar = na
+var int dead_prev_cross_bar   = na
+golden_cluster_start = false
+dead_cluster_start   = false
+if goldenCross
+    golden_cluster_start := na(golden_prev_cross_bar) or (bar_index - golden_prev_cross_bar) > cluster_gap_bars
+    golden_prev_cross_bar := bar_index
+if deadCross
+    dead_cluster_start := na(dead_prev_cross_bar) or (bar_index - dead_prev_cross_bar) > cluster_gap_bars
+    dead_prev_cross_bar := bar_index
+
+golden_ref = use_cluster_dedup ? golden_cluster_start : goldenCross
+dead_ref   = use_cluster_dedup ? dead_cluster_start   : deadCross
+
+// 크로스 윈도우: 기준 이벤트 발생 후 이 봉 수 내에 강도·기타 조건 충족 시 시그널.
+// 제로라인 조건은 기준 이벤트 시점의 값으로 고정.
+bars_since_golden = ta.barssince(golden_ref)
+bars_since_dead   = ta.barssince(dead_ref)
+golden_in_window  = not na(bars_since_golden) and bars_since_golden < macd_cross_window
+dead_in_window    = not na(bars_since_dead)   and bars_since_dead   < macd_cross_window
+
+macd_at_golden = ta.valuewhen(golden_ref, macdLine,   0)
+sig_at_golden  = ta.valuewhen(golden_ref, signalLine, 0)
+macd_at_dead   = ta.valuewhen(dead_ref,   macdLine,   0)
+sig_at_dead    = ta.valuewhen(dead_ref,   signalLine, 0)
+
+zero_ok_golden = not require_zero_line or (not na(macd_at_golden) and macd_at_golden < 0 and sig_at_golden < 0)
+zero_ok_dead   = not require_zero_line or (not na(macd_at_dead)   and macd_at_dead   > 0 and sig_at_dead   > 0)
+
+strength_ok = macd_strength > macd_strength_mult
+
+validGolden = golden_in_window and zero_ok_golden and strength_ok
+validDead   = dead_in_window   and zero_ok_dead   and strength_ok
+
+// 상위 TF (선택)
+htf_ema200 = request.security(syminfo.tickerid, htf_tf, ta.ema(close, ema3_length), lookahead=barmerge.lookahead_off)
+htfBull    = close > htf_ema200
+htfBear    = close < htf_ema200
+
+// 200EMA 위/아래 종가 마감 필터 (스펙: close > ema200 / close < ema200)
+close_ok_bull = not use_close_filter or close > ema3
+close_ok_bear = not use_close_filter or close < ema3
+
+// 쿨다운
+var int lastLongBar  = na
+var int lastShortBar = na
+cooldownLongOK  = na(lastLongBar)  or (bar_index - lastLongBar)  >= cooldown_bars
+cooldownShortOK = na(lastShortBar) or (bar_index - lastShortBar) >= cooldown_bars
+
+bar_ok = not confirm_bar_only or barstate.isconfirmed
+
+// 최종 시그널
+longSignal  = isBull and touchedBull and validGolden and close_ok_bull and cooldownLongOK  and (not use_htf or htfBull) and bar_ok
+shortSignal = isBear and touchedBear and validDead   and close_ok_bear and cooldownShortOK and (not use_htf or htfBear) and bar_ok
+
+if longSignal
+    lastLongBar := bar_index
+if shortSignal
+    lastShortBar := bar_index
+
+// =====================================================================
+// 진입·SL·TP 계산 (크로스 봉 = B/S 라벨이 표시되는 봉 기준)
+// =====================================================================
+
+var float last_entry     = na
+var float last_sl        = na
+var float last_tp1       = na
+var float last_tp2       = na
+var int   last_dir       = na    // 1=LONG, -1=SHORT
+var bool  last_pierced   = false
+var bool  last_sl_manual = false
+var int   last_sig_bar   = na
+
+use_smart_sl = sl_method == "스마트 (EMA / 스윙로우 자동)"
+
+// 스윙 하이/로우는 과거 참조용 시리즈로 미리 계산 (크로스 봉 시점 값을 [offset]으로 조회)
+swing_low_series  = ta.lowest(low,  swing_lookback)
+swing_high_series = ta.highest(high, swing_lookback)
+
+if longSignal
+    offset       = na(bars_since_golden) ? 0 : bars_since_golden
+    cx_close     = close[offset]
+    cx_low       = low[offset]
+    cx_ema       = ema3[offset]
+    cx_atr       = atr[offset]
+    cx_swing_lo  = swing_low_series[offset]
+    is_pierced   = use_smart_sl and (cx_low < cx_ema - pierce_threshold_atr * cx_atr)
+    sl_ref       = is_pierced ? cx_swing_lo : cx_ema
+    auto_sl      = sl_ref - sl_buffer_atr * cx_atr
+    // use_manual_sl ON이면 크로스 봉의 200EMA에서 오프셋만큼 떨어뜨림 (자동 로직 우회)
+    sl_price     = use_manual_sl ? cx_ema - sl_offset_atr * cx_atr : auto_sl
+    risk         = cx_close - sl_price
+    last_entry     := cx_close
+    last_sl        := sl_price
+    last_tp1       := cx_close + tp1_rr * risk
+    last_tp2       := cx_close + tp2_rr * risk
+    last_dir       := 1
+    last_pierced   := is_pierced and not use_manual_sl
+    last_sl_manual := use_manual_sl
+    last_sig_bar   := bar_index - offset
+
+if shortSignal
+    offset        = na(bars_since_dead) ? 0 : bars_since_dead
+    cx_close      = close[offset]
+    cx_high       = high[offset]
+    cx_ema        = ema3[offset]
+    cx_atr        = atr[offset]
+    cx_swing_hi   = swing_high_series[offset]
+    is_pierced    = use_smart_sl and (cx_high > cx_ema + pierce_threshold_atr * cx_atr)
+    sl_ref        = is_pierced ? cx_swing_hi : cx_ema
+    auto_sl       = sl_ref + sl_buffer_atr * cx_atr
+    // use_manual_sl ON이면 크로스 봉의 200EMA에서 오프셋만큼 떨어뜨림 (자동 로직 우회)
+    sl_price      = use_manual_sl ? cx_ema + sl_offset_atr * cx_atr : auto_sl
+    risk          = sl_price - cx_close
+    last_entry     := cx_close
+    last_sl        := sl_price
+    last_tp1       := cx_close - tp1_rr * risk
+    last_tp2       := cx_close - tp2_rr * risk
+    last_dir       := -1
+    last_pierced   := is_pierced and not use_manual_sl
+    last_sl_manual := use_manual_sl
+    last_sig_bar   := bar_index - offset
+
+// =====================================================================
+// 후행 성과 집계 (SL vs TP 레이스)
+// =====================================================================
+
+var array<int>   sig_bar_arr     = array.new<int>()
+var array<float> sig_sl_arr      = array.new<float>()
+var array<float> sig_tp1_arr     = array.new<float>()
+var array<float> sig_tp2_arr     = array.new<float>()
+var array<int>   sig_dir_arr     = array.new<int>()
+var array<bool>  sig_sl_hit_arr  = array.new<bool>()
+var array<bool>  sig_tp1_hit_arr = array.new<bool>()
+var array<bool>  sig_tp2_hit_arr = array.new<bool>()
+
+var int total_long    = 0
+var int total_short   = 0
+var int sl_long       = 0
+var int sl_short      = 0
+var int tp1only_long  = 0
+var int tp1only_short = 0
+var int tp2_long      = 0
+var int tp2_short     = 0
+var int expired_long  = 0
+var int expired_short = 0
+
+// 새 시그널 등록 — SL/TP 가격은 크로스 봉 기준이지만, 후행 히트 집계는 시그널 확정 봉부터 시작 (실제 진입 가능 시점)
+if use_performance and longSignal
+    array.push(sig_bar_arr,     bar_index)
+    array.push(sig_sl_arr,      last_sl)
+    array.push(sig_tp1_arr,     last_tp1)
+    array.push(sig_tp2_arr,     last_tp2)
+    array.push(sig_dir_arr,     1)
+    array.push(sig_sl_hit_arr,  false)
+    array.push(sig_tp1_hit_arr, false)
+    array.push(sig_tp2_hit_arr, false)
+if use_performance and shortSignal
+    array.push(sig_bar_arr,     bar_index)
+    array.push(sig_sl_arr,      last_sl)
+    array.push(sig_tp1_arr,     last_tp1)
+    array.push(sig_tp2_arr,     last_tp2)
+    array.push(sig_dir_arr,     -1)
+    array.push(sig_sl_hit_arr,  false)
+    array.push(sig_tp1_hit_arr, false)
+    array.push(sig_tp2_hit_arr, false)
+
+// 활성 시그널 상태 업데이트 (시그널 봉 다음부터)
+if use_performance and array.size(sig_bar_arr) > 0
+    for i = 0 to array.size(sig_bar_arr) - 1
+        sig_bar = array.get(sig_bar_arr, i)
+        if bar_index > sig_bar
+            d       = array.get(sig_dir_arr, i)
+            sl      = array.get(sig_sl_arr, i)
+            tp1     = array.get(sig_tp1_arr, i)
+            tp2     = array.get(sig_tp2_arr, i)
+            sl_hit  = array.get(sig_sl_hit_arr, i)
+            tp1_hit = array.get(sig_tp1_hit_arr, i)
+            tp2_hit = array.get(sig_tp2_hit_arr, i)
+            if not sl_hit and not tp1_hit
+                if d == 1
+                    if low <= sl
+                        array.set(sig_sl_hit_arr, i, true)
+                    else
+                        if high >= tp2
+                            array.set(sig_tp1_hit_arr, i, true)
+                            array.set(sig_tp2_hit_arr, i, true)
+                        else if high >= tp1
+                            array.set(sig_tp1_hit_arr, i, true)
+                else
+                    if high >= sl
+                        array.set(sig_sl_hit_arr, i, true)
+                    else
+                        if low <= tp2
+                            array.set(sig_tp1_hit_arr, i, true)
+                            array.set(sig_tp2_hit_arr, i, true)
+                        else if low <= tp1
+                            array.set(sig_tp1_hit_arr, i, true)
+            else if tp1_hit and not tp2_hit
+                if d == 1 and high >= tp2
+                    array.set(sig_tp2_hit_arr, i, true)
+                if d == -1 and low <= tp2
+                    array.set(sig_tp2_hit_arr, i, true)
+
+// 만료된 head 평가 & 제거
+while use_performance and array.size(sig_bar_arr) > 0 and (bar_index - array.get(sig_bar_arr, 0)) >= eval_bars
+    d_  = array.get(sig_dir_arr, 0)
+    slh = array.get(sig_sl_hit_arr, 0)
+    t1h = array.get(sig_tp1_hit_arr, 0)
+    t2h = array.get(sig_tp2_hit_arr, 0)
+    if d_ == 1
+        total_long += 1
+        if slh and not t1h
+            sl_long += 1
+        else if t2h
+            tp2_long += 1
+        else if t1h
+            tp1only_long += 1
+        else
+            expired_long += 1
+    else
+        total_short += 1
+        if slh and not t1h
+            sl_short += 1
+        else if t2h
+            tp2_short += 1
+        else if t1h
+            tp1only_short += 1
+        else
+            expired_short += 1
+    array.shift(sig_bar_arr)
+    array.shift(sig_sl_arr)
+    array.shift(sig_tp1_arr)
+    array.shift(sig_tp2_arr)
+    array.shift(sig_dir_arr)
+    array.shift(sig_sl_hit_arr)
+    array.shift(sig_tp1_hit_arr)
+    array.shift(sig_tp2_hit_arr)
+
+// =====================================================================
+// 플롯 (EMA + 배경)
+// =====================================================================
+
+plot(show_emas ? ema1 : na, title="EMA 단기",  color=color.new(color.yellow, 0), linewidth=1)
+plot(show_emas ? ema2 : na, title="EMA 중기",  color=color.new(color.orange, 0), linewidth=1)
+ema3_color = isBull ? color.new(color.green, 0) : isBear ? color.new(color.red, 0) : color.new(color.gray, 0)
+plot(show_emas ? ema3 : na, title="EMA 장기 (200)", color=ema3_color, linewidth=2)
+
+bgcol = isBull ? color.new(color.green, 90) : isBear ? color.new(color.red, 90) : color.new(color.gray, 92)
+bgcolor(show_bg ? bgcol : na, title="추세 배경색")
+
+// 알림용 숨김 플롯
+plot(last_entry, title="Entry", display=display.data_window)
+plot(last_sl,    title="SL",    display=display.data_window)
+plot(last_tp1,   title="TP1",   display=display.data_window)
+plot(last_tp2,   title="TP2",   display=display.data_window)
+
+// =====================================================================
+// 시그널 라벨
+// =====================================================================
+
+if show_labels and longSignal
+    long_cross_bar = na(bars_since_golden) ? bar_index : bar_index - bars_since_golden
+    label.new(long_cross_bar, na, long_label_text, style=label.style_label_up, yloc=yloc.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+if show_labels and shortSignal
+    short_cross_bar = na(bars_since_dead) ? bar_index : bar_index - bars_since_dead
+    label.new(short_cross_bar, na, short_label_text, style=label.style_label_down, yloc=yloc.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+
+// =====================================================================
+// 진입·SL·TP 라인 (가장 최근 시그널 1건만 유지)
+// =====================================================================
+
+var line  ln_entry = na
+var line  ln_sl    = na
+var line  ln_tp1   = na
+var line  ln_tp2   = na
+var label lb_entry = na
+var label lb_sl    = na
+var label lb_tp1   = na
+var label lb_tp2   = na
+
+if longSignal or shortSignal
+    if show_entry_line
+        line.delete(ln_entry)
+        label.delete(lb_entry)
+        col_entry = color.new(color.white, 20)
+        ln_entry := line.new(bar_index, last_entry, bar_index+1, last_entry, extend=extend.right, color=col_entry, width=1, style=line.style_solid)
+        if show_entry_label
+            lb_entry := label.new(bar_index, last_entry, "ENTRY " + str.tostring(last_entry, format.mintick), style=label.style_label_left, color=color.new(color.gray, 30), textcolor=color.white, size=size.small)
+    if show_sl_line
+        line.delete(ln_sl)
+        label.delete(lb_sl)
+        col_sl = color.new(color.red, 20)
+        ln_sl := line.new(bar_index, last_sl, bar_index+1, last_sl, extend=extend.right, color=col_sl, width=1, style=line.style_dashed)
+        sl_tag = last_sl_manual ? ("SL (200EMA " + str.tostring(sl_offset_atr, "+#.##;-#.##") + "ATR)") : use_smart_sl ? (last_pierced ? "SL (스윙 기준)" : "SL (EMA 기준)") : "SL"
+        lb_sl := label.new(bar_index, last_sl, sl_tag + " " + str.tostring(last_sl, format.mintick), style=label.style_label_left, color=color.new(color.red, 30), textcolor=color.white, size=size.small)
+    if show_tp_lines
+        line.delete(ln_tp1)
+        line.delete(ln_tp2)
+        label.delete(lb_tp1)
+        label.delete(lb_tp2)
+        col_tp1 = color.new(color.lime, 30)
+        col_tp2 = color.new(color.green, 10)
+        ln_tp1 := line.new(bar_index, last_tp1, bar_index+1, last_tp1, extend=extend.right, color=col_tp1, width=1, style=line.style_dashed)
+        ln_tp2 := line.new(bar_index, last_tp2, bar_index+1, last_tp2, extend=extend.right, color=col_tp2, width=1, style=line.style_solid)
+        lb_tp1 := label.new(bar_index, last_tp1, "TP1 (" + str.tostring(tp1_rr, "#.#") + "R) " + str.tostring(last_tp1, format.mintick), style=label.style_label_left, color=color.new(color.lime, 40), textcolor=color.black, size=size.small)
+        lb_tp2 := label.new(bar_index, last_tp2, "TP2 (" + str.tostring(tp2_rr, "#.#") + "R) " + str.tostring(last_tp2, format.mintick), style=label.style_label_left, color=color.new(color.green, 20), textcolor=color.white, size=size.small)
+
+// 매 봉 라벨을 현재 봉 오른쪽으로 이동
+if barstate.islast
+    new_x = bar_index + label_offset_bars
+    if not na(lb_entry)
+        label.set_x(lb_entry, new_x)
+    if not na(lb_sl)
+        label.set_x(lb_sl, new_x)
+    if not na(lb_tp1)
+        label.set_x(lb_tp1, new_x)
+    if not na(lb_tp2)
+        label.set_x(lb_tp2, new_x)
+
+// =====================================================================
+// 상태 테이블
+// =====================================================================
+
+var table statusTable = table.new(f_pos(status_pos), 2, 10, border_width=1)
+if show_table and barstate.islast
+    trend_text  = isBull ? "상승" : isBear ? "하락" : "횡보"
+    trend_col   = isBull ? color.new(color.green, 20) : isBear ? color.new(color.red, 20) : color.new(color.gray, 20)
+    slope_text  = slope200 > 0 ? "상방" : slope200 < 0 ? "하방" : "수평"
+    bars_since_long  = na(lastLongBar)  ? "-" : str.tostring(bar_index - lastLongBar)
+    bars_since_short = na(lastShortBar) ? "-" : str.tostring(bar_index - lastShortBar)
+    adx_grade   = adxVal < 15 ? "아주 약함" :
+                  adxVal < 20 ? "약함" :
+                  adxVal < 25 ? "중간" :
+                  adxVal < 40 ? "강함" :
+                  "아주 강함"
+    adx_fit     = adxVal < 20 ? "비권장" :
+                  adxVal < 35 ? "조심해서 사용" :
+                  "권장"
+    adx_col     = adxVal < 20 ? color.new(color.red,    30) :
+                  adxVal < 35 ? color.new(color.orange, 30) :
+                  color.new(color.green, 20)
+    bg_head = color.new(color.black, 80)
+    fg      = color.white
+    table.cell(statusTable, 0, 0, "추세",           bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 1, 0, trend_text,        bgcolor=trend_col, text_color=fg)
+    table.cell(statusTable, 0, 1, "ADX",            bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 1, 1, str.tostring(adxVal, "#.0") + " · " + adx_grade + " · " + adx_fit, bgcolor=adx_col, text_color=fg)
+    table.cell(statusTable, 0, 2, "200EMA 기울기",  bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 1, 2, slope_text,        bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 0, 3, "마지막 롱 이후", bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 1, 3, bars_since_long,   bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 0, 4, "마지막 숏 이후", bgcolor=bg_head,   text_color=fg)
+    table.cell(statusTable, 1, 4, bars_since_short,  bgcolor=bg_head,   text_color=fg)
+
+    if use_performance
+        total_all    = total_long + total_short
+        sl_all       = sl_long + sl_short
+        tp1only_all  = tp1only_long + tp1only_short
+        tp2_all      = tp2_long + tp2_short
+        tp1plus_long  = tp1only_long + tp2_long
+        tp1plus_short = tp1only_short + tp2_short
+        tp1plus_all   = tp1plus_long + tp1plus_short
+        active_n     = array.size(sig_bar_arr)
+        total_r       = tp1_rr * tp1only_all + tp2_rr * tp2_all - 1.0 * sl_all
+        r_expect      = total_all > 0 ? total_r / total_all : 0.0
+        total_r_l     = tp1_rr * tp1only_long  + tp2_rr * tp2_long  - 1.0 * sl_long
+        total_r_s     = tp1_rr * tp1only_short + tp2_rr * tp2_short - 1.0 * sl_short
+        r_expect_l    = total_long  > 0 ? total_r_l / total_long  : 0.0
+        r_expect_s    = total_short > 0 ? total_r_s / total_short : 0.0
+
+        header_text = "성과 (" + str.tostring(eval_bars) + "봉 평가)"
+        summary     = str.tostring(total_all) + " 완료 · " + str.tostring(active_n) + " 진행"
+        perf_col_h  = color.new(color.purple, 40)
+        table.cell(statusTable, 0, 5, header_text, bgcolor=bg_head,    text_color=fg)
+        table.cell(statusTable, 1, 5, summary,      bgcolor=perf_col_h, text_color=fg)
+
+        tp1_row_title = "TP1 (" + str.tostring(tp1_rr, "#.#") + "R) 도달률"
+        tp2_row_title = "TP2 (" + str.tostring(tp2_rr, "#.#") + "R) 도달률"
+
+        string tp1_text = ""
+        string tp2_text = ""
+        string sl_text  = ""
+        string r_text   = ""
+        if perf_split_ls
+            tp1_text := "L " + str.tostring(tp1plus_long) + "/" + str.tostring(total_long) + " (" + f_pct(tp1plus_long, total_long) + ") · S " + str.tostring(tp1plus_short) + "/" + str.tostring(total_short) + " (" + f_pct(tp1plus_short, total_short) + ")"
+            tp2_text := "L " + str.tostring(tp2_long) + "/" + str.tostring(total_long) + " (" + f_pct(tp2_long, total_long) + ") · S " + str.tostring(tp2_short) + "/" + str.tostring(total_short) + " (" + f_pct(tp2_short, total_short) + ")"
+            sl_text  := "L " + str.tostring(sl_long) + "/" + str.tostring(total_long) + " (" + f_pct(sl_long, total_long) + ") · S " + str.tostring(sl_short) + "/" + str.tostring(total_short) + " (" + f_pct(sl_short, total_short) + ")"
+            r_text   := "L " + str.tostring(r_expect_l, "+#.00;-#.00") + "R · S " + str.tostring(r_expect_s, "+#.00;-#.00") + "R"
+        else
+            tp1_text := str.tostring(tp1plus_all) + "/" + str.tostring(total_all) + " (" + f_pct(tp1plus_all, total_all) + ")"
+            tp2_text := str.tostring(tp2_all)     + "/" + str.tostring(total_all) + " (" + f_pct(tp2_all,     total_all) + ")"
+            sl_text  := str.tostring(sl_all)      + "/" + str.tostring(total_all) + " (" + f_pct(sl_all,      total_all) + ")"
+            r_text   := str.tostring(r_expect, "+#.00;-#.00") + "R"
+
+        r_col = r_expect > 0 ? color.new(color.green, 20) : r_expect < 0 ? color.new(color.red, 20) : color.new(color.gray, 40)
+        table.cell(statusTable, 0, 6, tp1_row_title, bgcolor=bg_head, text_color=fg)
+        table.cell(statusTable, 1, 6, tp1_text,      bgcolor=color.new(color.green, 50), text_color=fg)
+        table.cell(statusTable, 0, 7, tp2_row_title, bgcolor=bg_head, text_color=fg)
+        table.cell(statusTable, 1, 7, tp2_text,      bgcolor=color.new(color.green, 30), text_color=fg)
+        table.cell(statusTable, 0, 8, "SL 히트율",   bgcolor=bg_head, text_color=fg)
+        table.cell(statusTable, 1, 8, sl_text,       bgcolor=color.new(color.red, 50),   text_color=fg)
+        table.cell(statusTable, 0, 9, "R 기댓값",    bgcolor=bg_head, text_color=fg)
+        table.cell(statusTable, 1, 9, r_text,        bgcolor=r_col,   text_color=fg)
+
+// =====================================================================
+// 알림
+// =====================================================================
+
+msg_long  = '{{ticker}} / {{interval}} / 롱 시그널 / HT1 / E: {{plot("Entry")}} / SL: {{plot("SL")}} / TP1: {{plot("TP1")}} / TP2: {{plot("TP2")}}'
+msg_short = '{{ticker}} / {{interval}} / 숏 시그널 / HT1 / E: {{plot("Entry")}} / SL: {{plot("SL")}} / TP1: {{plot("TP1")}} / TP2: {{plot("TP2")}}'
+
+alertcondition(longSignal,  title="롱 시그널",  message=msg_long)
+alertcondition(shortSignal, title="숏 시그널", message=msg_short)

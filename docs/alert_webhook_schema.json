@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ht1.alert.v2",
+  "title": "HT1 v2 알림 웹훅 페이로드 — 단일 정본",
+  "description": "HT1_v2_indicator.pine의 alert() JSON 계약. 지표·수신 서버·Claude veto 필터·집행 봇이 공유하는 유일한 인터페이스 정의. 인라인 스키마를 다른 문서에 두지 말 것 (이 파일만 갱신). 모든 가격은 시그널 확정 봉 기준 — 소급 가격 금지 (v1 감사 C-1/H-6).",
+  "type": "object",
+  "required": ["schema", "engine", "id", "ts", "exchange", "symbol", "tf", "side", "event", "entry", "sl", "tp1", "tp2", "ctx"],
+  "properties": {
+    "schema": { "const": "ht1.v2", "description": "스키마 식별자. 서버는 불일치 시 거부." },
+    "engine": { "type": "string", "description": "지표 엔진 버전 (예: 2.0.0). 구버전 페이로드 거부 기준.", "examples": ["2.0.0"] },
+    "id": {
+      "type": "string",
+      "description": "멱등키. {exchange}:{symbol}|{tf}|{시그널 봉 time(ms)}|{side}. TV 웹훅은 전달 보장이 없고 중복 가능 → 서버는 이 키로 중복 주문 차단·유실 감지. 반드시 '시그널 확정 봉' 기준 (크로스 봉 아님).",
+      "examples": ["BYBIT:BTCUSDT.P|15|1781424000000|long"]
+    },
+    "ts": { "type": "integer", "description": "시그널 봉 time (UTC epoch ms). 서버는 수신 시각과 비교해 ±2분 신선도 검증 (Pine은 HMAC 불가 → IP 화이트리스트 + URL 경로 시크릿 + 본 필드 신선도 + 멱등키가 인증 모델)." },
+    "exchange": { "type": "string", "examples": ["BYBIT", "BINANCE"] },
+    "symbol": { "type": "string", "examples": ["BTCUSDT.P"] },
+    "tf": { "type": "string", "description": "차트 타임프레임 (timeframe.period)", "examples": ["5", "15", "60"] },
+    "side": { "enum": ["long", "short"] },
+    "event": {
+      "enum": ["entry"],
+      "description": "v2.0은 entry만. 향후 확장 예약: exit, cancel, level(돌파 레벨 사전 공지 — 단 stop-entry 선설치는 별도 백테스트 통과 전 금지)."
+    },
+    "entry": { "type": "number", "description": "시그널 확정 봉 종가 (mintick 라운딩). 실집행 가드: 서버는 현재가-entry 괴리 > 0.5×risk_atr×ATR이면 주문 스킵." },
+    "sl": { "type": "number", "description": "구조 SL = 풀백 저점 − 0.5 ATR (mintick 라운딩)" },
+    "tp1": { "type": "number", "description": "entry + 1.5R (롱 기준). 50% 부분청산 + SL→BE 이동 지점" },
+    "tp2": { "type": "number", "description": "entry + 3.0R (롱 기준). 잔여 50% 청산 지점" },
+    "risk_atr": { "type": "number", "description": "risk(=|entry−sl|)를 ATR 단위로 표현. 서버 갭 가드·로깅용" },
+    "qty_hint": {
+      "type": "number",
+      "description": "지표가 계산한 참고 수량 (계좌·리스크% 입력 기반). 참고치일 뿐 — 수량의 최종 권위는 서버 (실잔고 + 거래소 instrument info(qtyStep/minOrderQty) + 추정 청산가가 SL보다 유리한지 검증 후 재계산)."
+    },
+    "ctx": {
+      "type": "object",
+      "description": "시그널 품질 컨텍스트 — Claude veto 필터·등급 라우팅·저널링 입력. 전부 시그널 확정 시점에 캡처된 값.",
+      "required": ["slope_norm", "depth", "pb_bars", "score", "grade"],
+      "properties": {
+        "slope_norm": { "type": "number", "description": "(ema200 − ema200[20]) / (atr × 20). 무차원 추세 기울기" },
+        "cap_er": { "type": ["number", "null"], "description": "임펄스→풀백 전이 시점에 캡처된 Kaufman ER(20). 확인 모드 ER/둘다일 때" },
+        "cap_adx_pct": { "type": ["number", "null"], "description": "임펄스→풀백 전이 시점에 캡처된 ADX 백분위(0~100). 확인 모드 ADX/둘다일 때" },
+        "adx_exhaust": { "type": "boolean", "description": "임펄스 중 ADX 40+ 고점 후 꺾임 (추세 소진 경고, 스코어 −15 반영됨)" },
+        "depth": { "type": "number", "description": "풀백 되돌림 깊이 = (impHigh−pbLow)/(impHigh−impLow), 롱 기준" },
+        "pb_bars": { "type": "integer", "description": "풀백 지속 봉수" },
+        "vol_ratio": { "type": ["number", "null"], "description": "풀백 평균 거래량 / 임펄스 평균 거래량 (낮을수록 건전한 수축)" },
+        "htf_bull": { "type": "boolean", "description": "HTF 확정봉 추세 일치 여부 (시그널 방향 기준)" },
+        "pattern": {
+          "enum": ["falling_wedge", "rising_wedge", "triangle", "flag", null],
+          "description": "풀백 형태 분류 (추세 지속 패턴만 — falling_wedge/triangle/flag=롱 컨텍스트, rising_wedge/triangle/flag=숏 컨텍스트). null=무패턴"
+        },
+        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "grade": { "enum": ["A", "B", "C"], "description": "A≥80, B 65–79, C<65. 수동 운용 기본은 B 이상만 송출, 서버 도입 후엔 전량 송출 + 서버 라우팅(C는 섀도우 추적 전용)" }
+      }
+    }
+  },
+  "examples": [
+    {
+      "schema": "ht1.v2",
+      "engine": "2.0.0",
+      "id": "BYBIT:BTCUSDT.P|15|1781424000000|long",
+      "ts": 1781424000000,
+      "exchange": "BYBIT",
+      "symbol": "BTCUSDT.P",
+      "tf": "15",
+      "side": "long",
+      "event": "entry",
+      "entry": 64210.5,
+      "sl": 63800.0,
+      "tp1": 64826.3,
+      "tp2": 65442.0,
+      "risk_atr": 1.4,
+      "qty_hint": 0.024,
+      "ctx": {
+        "slope_norm": 0.07,
+        "cap_er": 0.42,
+        "cap_adx_pct": 68.0,
+        "adx_exhaust": false,
+        "depth": 0.48,
+        "pb_bars": 7,
+        "vol_ratio": 0.63,
+        "htf_bull": true,
+        "pattern": "falling_wedge",
+        "score": 82,
+        "grade": "A"
+      }
+    }
+  ]
+}
