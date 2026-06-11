@@ -75,7 +75,7 @@ fund_avoid_min     = input.int(10,      "펀딩 전 금지 (분)", minval=0, max
 block_weekend      = input.bool(false,  "주말 진입 금지", group=g4)
 
 // ---------- 상수 (동결 — SPEC §13) ----------
-string ENGINE_VER = "2.0.0"
+string ENGINE_VER = "2.0.1"
 float SL_BUF_ATR   = 0.5    // SL = 풀백 극값 ∓ 0.5 ATR
 float RISK_MIN_ATR = 0.5    // valid_risk 하한
 float RISK_MAX_ATR = 3.0    // valid_risk 상한
@@ -213,6 +213,11 @@ f_fit(bool useHigh, int n) =>
     float r2 = ssTot > 0 ? 1.0 - ssRes / ssTot : 0.0
     [slope, icept, r2]
 
+// 풀백 무효화 사유 카운터 (진단용 — 롱/숏 합산)
+var int invStruct = 0   // 임펄스 저/고점 이탈 (추세 가설 기각)
+var int invTime   = 0   // 지속 봉수 초과
+var int invDepth  = 0   // 되돌림 깊이 초과 (>0.78)
+
 // =====================================================================
 // 롱 상태기계 (SPEC §3 — 동일 봉 순서: ① 상태 갱신 → ② 무효화 → ③ 트리거)
 // =====================================================================
@@ -286,6 +291,9 @@ else if phL == Phase.pullback
         volPbSumL := 0.0
         rsiPbLowL := na
     else if close < impLowL or (bar_index - pbStartL) > pbMax or depthNowL > INVALID_DEPTH
+        invStruct += close < impLowL ? 1 : 0
+        invTime   += close >= impLowL and (bar_index - pbStartL) > pbMax ? 1 : 0
+        invDepth  += close >= impLowL and (bar_index - pbStartL) <= pbMax and depthNowL > INVALID_DEPTH ? 1 : 0
         phL := Phase.idle
 else if phL == Phase.cooldown
     if bar_index - cdStartL >= COOLDOWN_BARS
@@ -359,6 +367,9 @@ else if phS == Phase.pullback
         volPbSumS := 0.0
         rsiPbHighS := na
     else if close > impHighS or (bar_index - pbStartS) > pbMax or depthNowS > INVALID_DEPTH
+        invStruct += close > impHighS ? 1 : 0
+        invTime   += close <= impHighS and (bar_index - pbStartS) > pbMax ? 1 : 0
+        invDepth  += close <= impHighS and (bar_index - pbStartS) <= pbMax and depthNowS > INVALID_DEPTH ? 1 : 0
         phS := Phase.idle
 else if phS == Phase.cooldown
     if bar_index - cdStartS >= COOLDOWN_BARS

@@ -69,7 +69,7 @@ fund_avoid_min     = input.int(10,      "펀딩 전 금지 (분)", minval=0, max
 block_weekend      = input.bool(false,  "주말 진입 금지", group=g4)
 
 // ---------- 상수 (동결 — SPEC §13) ----------
-string ENGINE_VER = "2.0.0"
+string ENGINE_VER = "2.0.1"
 float SL_BUF_ATR   = 0.5    // SL = 풀백 극값 ∓ 0.5 ATR
 float RISK_MIN_ATR = 0.5    // valid_risk 하한
 float RISK_MAX_ATR = 3.0    // valid_risk 상한
@@ -207,6 +207,11 @@ f_fit(bool useHigh, int n) =>
     float r2 = ssTot > 0 ? 1.0 - ssRes / ssTot : 0.0
     [slope, icept, r2]
 
+// 풀백 무효화 사유 카운터 (진단용 — 롱/숏 합산)
+var int invStruct = 0   // 임펄스 저/고점 이탈 (추세 가설 기각)
+var int invTime   = 0   // 지속 봉수 초과
+var int invDepth  = 0   // 되돌림 깊이 초과 (>0.78)
+
 // =====================================================================
 // 롱 상태기계 (SPEC §3 — 동일 봉 순서: ① 상태 갱신 → ② 무효화 → ③ 트리거)
 // =====================================================================
@@ -280,6 +285,9 @@ else if phL == Phase.pullback
         volPbSumL := 0.0
         rsiPbLowL := na
     else if close < impLowL or (bar_index - pbStartL) > pbMax or depthNowL > INVALID_DEPTH
+        invStruct += close < impLowL ? 1 : 0
+        invTime   += close >= impLowL and (bar_index - pbStartL) > pbMax ? 1 : 0
+        invDepth  += close >= impLowL and (bar_index - pbStartL) <= pbMax and depthNowL > INVALID_DEPTH ? 1 : 0
         phL := Phase.idle
 else if phL == Phase.cooldown
     if bar_index - cdStartL >= COOLDOWN_BARS
@@ -353,6 +361,9 @@ else if phS == Phase.pullback
         volPbSumS := 0.0
         rsiPbHighS := na
     else if close > impHighS or (bar_index - pbStartS) > pbMax or depthNowS > INVALID_DEPTH
+        invStruct += close > impHighS ? 1 : 0
+        invTime   += close <= impHighS and (bar_index - pbStartS) > pbMax ? 1 : 0
+        invDepth  += close <= impHighS and (bar_index - pbStartS) <= pbMax and depthNowS > INVALID_DEPTH ? 1 : 0
         phS := Phase.idle
 else if phS == Phase.cooldown
     if bar_index - cdStartS >= COOLDOWN_BARS
@@ -666,6 +677,93 @@ while j >= 0
     j -= 1
 
 // =====================================================================
+// 지표 전용: 게이트 진단 깔때기 — "트리거는 발화했는데 왜 시그널이 아닌가"
+// 풀백 중 트리거 조건이 참인데 시그널이 차단된 봉마다, 실패한 게이트를 집계
+// =====================================================================
+var int nCandBlk = 0
+var int fRegime = 0
+var int fDead = 0
+var int fDepth = 0
+var int fBars = 0
+var int fVol = 0
+var int fRsi = 0
+var int fStr = 0
+var int fHtf = 0
+var int fRisk = 0
+var int fFilt = 0
+var string lastBlk = "—"
+
+if barstate.isconfirmed and phL == Phase.pullback and trigL and not longSignal
+    nCandBlk += 1
+    string why = ""
+    if not regimeBull
+        fRegime += 1
+        why += " 레짐"
+    if deadMarket
+        fDead += 1
+        why += " 죽은장"
+    if not (not na(depthL) and depthL >= depthMin and depthL <= depthMax)
+        fDepth += 1
+        why += " 깊이"
+    if not (pbBarsL >= pbMin and pbBarsL <= pbMax)
+        fBars += 1
+        why += " 봉수"
+    if not (na(volRatioL) or volRatioL < volMax)
+        fVol += 1
+        why += " 거래량"
+    if not (not na(rsiPbLowL) and rsiPbLowL >= rsiLo and rsiPbLowL <= rsiHi)
+        fRsi += 1
+        why += " RSI"
+    if not strengthOkL
+        fStr += 1
+        why += " 강도"
+    if not htfBull
+        fHtf += 1
+        why += " HTF"
+    if not validRiskL
+        fRisk += 1
+        why += " 리스크"
+    if not (fundingOk and sessionOk and volCircuitOk)
+        fFilt += 1
+        why += " 펀딩/서킷"
+    lastBlk := "L " + str.format_time(time, "MM-dd HH:mm", "UTC") + " ·" + why
+
+if barstate.isconfirmed and phS == Phase.pullback and trigS and not shortSignal
+    nCandBlk += 1
+    string why = ""
+    if not regimeBear
+        fRegime += 1
+        why += " 레짐"
+    if deadMarket
+        fDead += 1
+        why += " 죽은장"
+    if not (not na(depthS) and depthS >= depthMin and depthS <= depthMax)
+        fDepth += 1
+        why += " 깊이"
+    if not (pbBarsS >= pbMin and pbBarsS <= pbMax)
+        fBars += 1
+        why += " 봉수"
+    if not (na(volRatioS) or volRatioS < volMax)
+        fVol += 1
+        why += " 거래량"
+    if not (not na(rsiPbHighS) and rsiPbHighS >= (100 - rsiHi) and rsiPbHighS <= (100 - rsiLo))
+        fRsi += 1
+        why += " RSI"
+    if not strengthOkS
+        fStr += 1
+        why += " 강도"
+    if not htfBear
+        fHtf += 1
+        why += " HTF"
+    if not validRiskS
+        fRisk += 1
+        why += " 리스크"
+    if not (fundingOk and sessionOk and volCircuitOk)
+        fFilt += 1
+        why += " 펀딩/서킷"
+    lastBlk := "S " + str.format_time(time, "MM-dd HH:mm", "UTC") + " ·" + why
+
+// =====================================================================
 // 지표 전용: 시각화
 // =====================================================================
 plot(show_emas ? emaF : na, "EMA 50",  color=color.new(color.orange, 30), linewidth=1)
@@ -765,7 +863,7 @@ f_phaseTxt(Phase p) =>
 f_pct(int a, int b) =>
     b == 0 ? "—" : str.tostring(100.0 * a / b, "#.#") + "%"
 
-var table tbl = table.new(f_pos(table_pos), 2, 12, border_width=1)
+var table tbl = table.new(f_pos(table_pos), 2, 15, border_width=1)
 if show_table and barstate.islast
     color bgH = color.new(color.black, 75)
     color fg = color.white
@@ -802,3 +900,12 @@ if show_table and barstate.islast
     table.cell(tbl, 1, 10, use_time_stop ? str.tostring(nTimeout) + "건" : "OFF", bgcolor=bgH, text_color=fg, text_size=size.small)
     table.cell(tbl, 0, 11, "라벨 표시/누적", bgcolor=bgH, text_color=fg, text_size=size.small)
     table.cell(tbl, 1, 11, "최대 500 / " + str.tostring(nTotalSig), bgcolor=bgH, text_color=fg, text_size=size.small)
+    // 진단 깔때기 — 시그널 희소성의 원인을 게이트별로 표시
+    string funnelTxt = "레짐" + str.tostring(fRegime) + " 깊이" + str.tostring(fDepth) + " 봉수" + str.tostring(fBars) + " 량" + str.tostring(fVol) + " RSI" + str.tostring(fRsi) + " 강도" + str.tostring(fStr) + " HTF" + str.tostring(fHtf) + " 릭" + str.tostring(fRisk) + " 죽" + str.tostring(fDead) + " 필" + str.tostring(fFilt)
+    color funCol = nCandBlk > 0 ? color.new(color.orange, 40) : bgH
+    table.cell(tbl, 0, 12, "차단된 트리거 " + str.tostring(nCandBlk) + "건", bgcolor=bgH, text_color=fg, text_size=size.tiny)
+    table.cell(tbl, 1, 12, funnelTxt, bgcolor=funCol, text_color=fg, text_size=size.tiny)
+    table.cell(tbl, 0, 13, "풀백 무효화 (구조/기간/깊이)", bgcolor=bgH, text_color=fg, text_size=size.tiny)
+    table.cell(tbl, 1, 13, str.tostring(invStruct) + " / " + str.tostring(invTime) + " / " + str.tostring(invDepth), bgcolor=bgH, text_color=fg, text_size=size.tiny)
+    table.cell(tbl, 0, 14, "마지막 차단", bgcolor=bgH, text_color=fg, text_size=size.tiny)
+    table.cell(tbl, 1, 14, lastBlk, bgcolor=bgH, text_color=fg, text_size=size.tiny)
