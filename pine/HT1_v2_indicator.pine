@@ -16,6 +16,7 @@ enum TrigMode
     breakout = "눌림 고점 돌파 (기본)"
     pattern = "패턴 추세선 돌파"
     macd = "MACD 크로스 (레거시)"
+    macdZero = "MACD 제로라인 크로스 (v1 원조 — 딥 셋업용)"
 
 enum SetupMode
     standard = "표준 (임펄스 30~70% 되돌림)"
@@ -50,7 +51,7 @@ enum Phase
 // ---------- 입력 (로직 임계값은 전부 프리셋/상수 — SPEC §13) ----------
 g1 = "[1] 엔진"
 preset       = input.enum(Preset.standard,    "프리셋",        group=g1, tooltip="풀백 품질 게이트·레짐 임계를 일괄 결정. 개별 수치 조정 불가 — 과최적화 방지.")
-trig_mode    = input.enum(TrigMode.breakout,  "진입 트리거",   group=g1, tooltip="기본: 눌림 마이너 고점 돌파 + MACD 히스토그램 동의. 패턴: 웻지/삼각수렴 상단선 돌파(미검출 시 기본으로 폴백). 레거시: v1 방식 MACD 크로스.")
+trig_mode    = input.enum(TrigMode.breakout,  "진입 트리거",   group=g1, tooltip="기본: 눌림 마이너 고점 돌파 + MACD 히스토그램 동의. 패턴: 웻지/삼각수렴 상단선 돌파(미검출 시 기본으로 폴백). 레거시: v1 방식 MACD 크로스. 제로라인: 롱=두 선 모두 0 아래에서 골든크로스 / 숏=0 위에서 데드크로스 — 200EMA 딥 풀백과 짝을 이루는 원조 셋업 (셋업 모드 '딥' 또는 '둘 다'와 함께 사용 권장. 얕은 풀백에선 MACD가 0 아래까지 안 가므로 표준 셋업 시그널은 드물어짐).")
 confirm_mode = input.enum(ConfirmMode.er,     "추세 강도 확인", group=g1, tooltip="임펄스→풀백 전이 시점에 캡처해 평가 (풀백 중 지표 하락으로 좋은 진입을 거부하는 위상역전 회피).")
 direction    = input.enum(Direction.both,     "방향",          group=g1)
 tp2_mode     = input.enum(Tp2Mode.fixed,      "TP2 방식",      group=g1, tooltip="검증 단계에서는 고정 3R 권장 (R 분포 안정화). 구조/샹들리에는 전략 버전 A/B 비교용.")
@@ -75,7 +76,7 @@ fund_avoid_min     = input.int(10,      "펀딩 전 금지 (분)", minval=0, max
 block_weekend      = input.bool(false,  "주말 진입 금지", group=g4)
 
 // ---------- 상수 (동결 — SPEC §13) ----------
-string ENGINE_VER = "2.1.0"
+string ENGINE_VER = "2.2.0"
 float SL_BUF_ATR   = 0.5    // SL = 풀백 극값 ∓ 0.5 ATR
 float RISK_MIN_ATR = 0.5    // valid_risk 하한
 float RISK_MAX_ATR = 3.0    // valid_risk 상한
@@ -464,7 +465,7 @@ bool qualityL = phL == Phase.pullback and not na(depthL) and depthL >= depthMin 
 // 딥 셋업 게이트 (v2.1): EMA50~200존 터치 + 한도 내 + 추가 확인(캔들/패턴) 필수.
 // 표준의 깊이·기간·거래량 게이트는 미적용 — 대신 임펄스 저점 이탈은 SM이 여전히 무효화.
 bool emaZoneL = not na(pbLowL) and pbLowL <= emaF + EMA_ZONE_BUF * atrV and pbLowL >= emaS - EMA_ZONE_BUF * atrV and close > emaS
-bool deepOkL  = allowDeep and phL == Phase.pullback and emaZoneL and not na(depthL) and depthL <= DEEP_DEPTH_MAX and pbBarsL >= pbMin and pbBarsL <= DEEP_PB_MAX and not na(rsiPbLowL) and rsiPbLowL >= DEEP_RSI_LO and (candleBullOk or patL != "")
+bool deepOkL  = allowDeep and phL == Phase.pullback and emaZoneL and not na(depthL) and depthL <= DEEP_DEPTH_MAX and pbBarsL >= pbMin and pbBarsL <= DEEP_PB_MAX and not na(rsiPbLowL) and rsiPbLowL >= DEEP_RSI_LO and (candleBullOk or patL != "" or trig_mode == TrigMode.macdZero)
 bool stdOkL   = allowStd and qualityL
 
 bool strengthOkL = switch confirm_mode
@@ -477,6 +478,7 @@ bool trigL = switch trig_mode
     TrigMode.breakout => trigBreakL
     TrigMode.pattern  => patL != "" and not na(patUpperProjL) ? close > patUpperProjL and histTurnL : trigBreakL
     TrigMode.macd     => goldenCross
+    TrigMode.macdZero => goldenCross and macdLine < 0 and signalLine < 0
 
 float slCandL   = not na(pbLowL) ? pbLowL - SL_BUF_ATR * atrV : na
 float riskCandL = not na(slCandL) ? close - slCandL : na
@@ -492,7 +494,7 @@ float volRatioS  = not na(volPbAvgS) and not na(volImpAvgS) and volImpAvgS > 0 ?
 bool qualityS = phS == Phase.pullback and not na(depthS) and depthS >= depthMin and depthS <= depthMax and pbBarsS >= pbMin and pbBarsS <= pbMax and (na(volRatioS) or volRatioS < volMax) and not na(rsiPbHighS) and rsiPbHighS >= (100 - rsiHi) and rsiPbHighS <= (100 - rsiLo)
 
 bool emaZoneS = not na(pbHighS) and pbHighS >= emaF - EMA_ZONE_BUF * atrV and pbHighS <= emaS + EMA_ZONE_BUF * atrV and close < emaS
-bool deepOkS  = allowDeep and phS == Phase.pullback and emaZoneS and not na(depthS) and depthS <= DEEP_DEPTH_MAX and pbBarsS >= pbMin and pbBarsS <= DEEP_PB_MAX and not na(rsiPbHighS) and rsiPbHighS <= (100 - DEEP_RSI_LO) and (candleBearOk or patS != "")
+bool deepOkS  = allowDeep and phS == Phase.pullback and emaZoneS and not na(depthS) and depthS <= DEEP_DEPTH_MAX and pbBarsS >= pbMin and pbBarsS <= DEEP_PB_MAX and not na(rsiPbHighS) and rsiPbHighS <= (100 - DEEP_RSI_LO) and (candleBearOk or patS != "" or trig_mode == TrigMode.macdZero)
 bool stdOkS   = allowStd and qualityS
 
 bool strengthOkS = switch confirm_mode
@@ -505,6 +507,7 @@ bool trigS = switch trig_mode
     TrigMode.breakout => trigBreakS
     TrigMode.pattern  => patS != "" and not na(patLowerProjS) ? close < patLowerProjS and histTurnS : trigBreakS
     TrigMode.macd     => deadCross
+    TrigMode.macdZero => deadCross and macdLine > 0 and signalLine > 0
 
 float slCandS   = not na(pbHighS) ? pbHighS + SL_BUF_ATR * atrV : na
 float riskCandS = not na(slCandS) ? slCandS - close : na
