@@ -569,6 +569,7 @@ type Trade
     int   state = 0
     float trail = na
     float extSince = na
+    float maxFav = na
 
 var array<Trade> trades = array.new<Trade>()
 var int   nClosed = 0
@@ -597,6 +598,7 @@ while j >= 0
         string outcome = ""
         float costR = 2 * (fee_pct / 100) * t.entry / t.risk
         if t.state == 0
+            t.maxFav := d == 1 ? math.max(nz(t.maxFav, high), high) : math.min(nz(t.maxFav, low), low)
             bool hitSl  = d == 1 ? low <= t.sl : high >= t.sl
             bool hitTp1 = d == 1 ? high >= t.tp1 : low <= t.tp1
             if hitSl and hitTp1
@@ -613,7 +615,7 @@ while j >= 0
                 t.state := 1
                 t.extSince := d == 1 ? high : low
                 nPartialHit += 1
-            else if use_time_stop and (bar_index - t.openBar) >= TS_BARS and (d == 1 ? high < t.entry + t.risk : low > t.entry - t.risk)
+            else if use_time_stop and (bar_index - t.openBar) >= TS_BARS and (d == 1 ? t.maxFav < t.entry + t.risk : t.maxFav > t.entry - t.risk)
                 r := d * (close - t.entry) / t.risk - costR
                 closed := true
                 outcome := "TIMEOUT"

@@ -1,5 +1,7 @@
 //@version=6
-strategy("HT1 v2 — Trend Pullback Strategy", shorttitle="HT1v2-ST", overlay=true, initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.055, slippage=2, process_orders_on_close=false, calc_on_every_tick=false, use_bar_magnifier=true, pyramiding=0, max_labels_count=500, max_lines_count=500, max_bars_back=500)
+strategy("HT1 v2 — Trend Pullback Strategy", shorttitle="HT1v2-ST", overlay=true, initial_capital=10000, commission_type=strategy.commission.percent, commission_value=0.055, slippage=2, process_orders_on_close=false, calc_on_every_tick=false, use_bar_magnifier=true, pyramiding=0, margin_long=10, margin_short=10, max_labels_count=500, max_lines_count=500, max_bars_back=500)
+// margin_long/short=10 (증거금 10% = 최대 10x 허용): Pine v6부터 기본값이 100(레버리지 불가)으로 바뀌어
+// 명목가 > 자본인 주문이 거절/축소됨 — 선물 전략은 반드시 명시 필요. 실제 수량 상한은 max_lev 입력이 통제.
 // 검증 절차 (SPEC §15):
 //  ① Properties에서 "Fill orders on bar close"(=process_orders_on_close) ON ↔ 지표 집계와 체결 모델 동일 → 모호성 차이 분리
 //  ② OFF(기본, 다음 봉 시가 체결 = 실거래 정합) ↔ ①과 비교 → 순수 지연·슬리피지 비용 측정
@@ -560,12 +562,13 @@ var bool  tp1Hit  = false
 var float posInit = na
 var float stExt   = na
 var float stTrail = na
+var float stMaxFav = na   // 진입 후 최대 유리 가격 (타임스톱 '+1R 미도달' 판정용)
 
 // 리스크 기반 수량: 현재 자본(복리) × 리스크% ÷ 1R 거리, 레버리지 상한 절삭
 f_stratQty(float riskP, string grade, float entryP) =>
     float riskAmt = strategy.equity * risk_pct / 100
     float q = riskAmt / riskP * f_gradeMult(grade)
-    float qCap = strategy.equity * max_lev / entryP
+    float qCap = strategy.equity * max_lev / entryP * 0.95  // 5% 여유: 수수료·체결가 변동이 가용증거금을 줄여 상한 근처 주문이 거절되는 것 방지
     math.min(q, qCap)
 
 bool flat = strategy.position_size == 0
@@ -583,6 +586,7 @@ if longSignal and flat
     posInit := na
     stExt := na
     stTrail := na
+    stMaxFav := na
     strategy.entry("L", strategy.long, qty=f_stratQty(sigRisk, sigGrade, sigEntry))
 
 if shortSignal and flat
@@ -598,6 +602,7 @@ if shortSignal and flat
     posInit := na
     stExt := na
     stTrail := na
+    stMaxFav := na
     strategy.entry("S", strategy.short, qty=f_stratQty(sigRisk, sigGrade, sigEntry))
 
 // TP1 부분 체결 감지 (포지션 축소 = TP1 50% 소화)
@@ -610,6 +615,7 @@ if flat
 
 // ---- 롱 청산 ----
 if strategy.position_size > 0
+    stMaxFav := na(stMaxFav) ? high : math.max(stMaxFav, high)
     if not tp1Hit
         strategy.exit("L-TP1", "L", stop=stSl, limit=stTp1, qty_percent=50)
         if tp2_mode == Tp2Mode.chandelier
@@ -624,13 +630,14 @@ if strategy.position_size > 0
             strategy.exit("L-TP2", "L", stop=math.max(stBe, nz(stTrail, stBe)), qty_percent=100)
         else
             strategy.exit("L-TP2", "L", stop=stBe, limit=stTp2, qty_percent=100)
-    if use_time_stop and not tp1Hit and bar_index - stEntBar >= TS_BARS and high < stEntryRef + stRisk
+    if use_time_stop and not tp1Hit and bar_index - stEntBar >= TS_BARS and nz(stMaxFav, high) < stEntryRef + stRisk
         strategy.close("L", comment="TIMEOUT")
     else if bar_index - stEntBar >= EVAL_BARS
         strategy.close("L", comment="EXPIRED")
 
 // ---- 숏 청산 ----
 if strategy.position_size < 0
+    stMaxFav := na(stMaxFav) ? low : math.min(stMaxFav, low)
     if not tp1Hit
         strategy.exit("S-TP1", "S", stop=stSl, limit=stTp1, qty_percent=50)
         if tp2_mode == Tp2Mode.chandelier
@@ -645,7 +652,7 @@ if strategy.position_size < 0
             strategy.exit("S-TP2", "S", stop=math.min(stBe, nz(stTrail, stBe)), qty_percent=100)
         else
             strategy.exit("S-TP2", "S", stop=stBe, limit=stTp2, qty_percent=100)
-    if use_time_stop and not tp1Hit and bar_index - stEntBar >= TS_BARS and low > stEntryRef - stRisk
+    if use_time_stop and not tp1Hit and bar_index - stEntBar >= TS_BARS and nz(stMaxFav, low) > stEntryRef - stRisk
         strategy.close("S", comment="TIMEOUT")
     else if bar_index - stEntBar >= EVAL_BARS
         strategy.close("S", comment="EXPIRED")
