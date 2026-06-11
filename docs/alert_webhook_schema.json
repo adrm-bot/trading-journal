@@ -48,6 +48,10 @@
           "enum": ["falling_wedge", "rising_wedge", "triangle", "flag", null],
           "description": "풀백 형태 분류 (추세 지속 패턴만 — falling_wedge/triangle/flag=롱 컨텍스트, rising_wedge/triangle/flag=숏 컨텍스트). null=무패턴"
         },
+        "setup": {
+          "enum": ["standard", "deep"],
+          "description": "셋업 유형 (v2.1) — standard: 임펄스 30~70% 얕은 되돌림 / deep: EMA50~200존 터치 깊은 눌림 (캔들/패턴 확인 동반). 서버는 셋업별 성과를 분리 추적할 것"
+        },
         "score": { "type": "integer", "minimum": 0, "maximum": 100 },
         "grade": { "enum": ["A", "B", "C"], "description": "A≥80, B 65–79, C<65. 수동 운용 기본은 B 이상만 송출, 서버 도입 후엔 전량 송출 + 서버 라우팅(C는 섀도우 추적 전용)" }
       }

@@ -23,6 +23,11 @@ enum TrigMode
     pattern = "패턴 추세선 돌파"
     macd = "MACD 크로스 (레거시)"
 
+enum SetupMode
+    standard = "표준 (임펄스 30~70% 되돌림)"
+    deep = "딥 (EMA존 터치)"
+    both = "둘 다"
+
 enum ConfirmMode
     er = "Kaufman ER (기본)"
     adx = "ADX 백분위 + DI"
@@ -55,6 +60,7 @@ trig_mode    = input.enum(TrigMode.breakout,  "진입 트리거",   group=g1, to
 confirm_mode = input.enum(ConfirmMode.er,     "추세 강도 확인", group=g1, tooltip="임펄스→풀백 전이 시점에 캡처해 평가 (풀백 중 지표 하락으로 좋은 진입을 거부하는 위상역전 회피).")
 direction    = input.enum(Direction.both,     "방향",          group=g1)
 tp2_mode     = input.enum(Tp2Mode.fixed,      "TP2 방식",      group=g1, tooltip="검증 단계에서는 고정 3R 권장 (R 분포 안정화). 구조/샹들리에는 전략 버전 A/B 비교용.")
+setup_mode   = input.enum(SetupMode.both,     "셋업 모드",     group=g1, tooltip="표준: 임펄스의 30~70% 얕은 되돌림만 (게이트 엄격). 딥: EMA50~200존까지 내려온 깊은 눌림 — 깊이 100%·40봉까지 허용하되 캔들/패턴 확인 필수. 라벨·알림에 ·D로 구분되어 성과 분리 검증 가능.")
 
 g2 = "[2] 상위 TF"
 htf_mode   = input.enum(HtfMode.auto, "HTF 선택", group=g2)
@@ -75,7 +81,7 @@ fund_avoid_min     = input.int(10,      "펀딩 전 금지 (분)", minval=0, max
 block_weekend      = input.bool(false,  "주말 진입 금지", group=g4)
 
 // ---------- 상수 (동결 — SPEC §13) ----------
-string ENGINE_VER = "2.0.1"
+string ENGINE_VER = "2.1.0"
 float SL_BUF_ATR   = 0.5    // SL = 풀백 극값 ∓ 0.5 ATR
 float RISK_MIN_ATR = 0.5    // valid_risk 하한
 float RISK_MAX_ATR = 3.0    // valid_risk 상한
@@ -96,6 +102,12 @@ float PAT_PARALLEL  = 0.03  // 플래그 평행 판정
 float PAT_CONTRACT  = 0.7   // 수렴비
 float PAT_R2        = 0.5   // 적합 품질 하한
 float CHAND_MULT    = 3.0   // 샹들리에 ATR 배수
+// 딥 셋업 (EMA존 터치) 한도 — 진단 깔때기 데이터 근거로 추가 (v2.1)
+float DEEP_DEPTH_MAX = 1.0   // 임펄스 100% 되돌림까지 허용 (임펄스 저점 이탈은 여전히 무효)
+int   DEEP_PB_MAX    = 40    // 깊은 눌림은 시간이 걸림
+float DEEP_RSI_LO    = 25.0
+float DEEP_INVALID   = 1.05  // SM 무효화 깊이 (딥 허용 시)
+float EMA_ZONE_BUF   = 0.5   // EMA존 터치 판정 버퍼 (ATR)
 
 // 프리셋 해석 (보수/표준/공격)
 bool isCons = preset == Preset.conservative
@@ -109,6 +121,12 @@ float rsiLo    = isCons ? 40.0 : isAggr ? 30.0 : 35.0
 float rsiHi    = isCons ? 55.0 : isAggr ? 58.0 : 55.0
 float slopeMin = isCons ? 0.08 : isAggr ? 0.03 : 0.05
 float erMin    = isCons ? 0.35 : isAggr ? 0.25 : 0.30
+
+// 셋업 모드 해석 — 딥 허용 시 SM 무효화 한도를 넓혀 깊은 눌림을 추적 유지
+bool allowStd  = setup_mode != SetupMode.deep
+bool allowDeep = setup_mode != SetupMode.standard
+int   effPbMaxSM   = allowDeep ? DEEP_PB_MAX : pbMax
+float effInvalidSM = allowDeep ? DEEP_INVALID : INVALID_DEPTH
 
 // ---------- 기초 시계열 (전부 전역 — 조건부 ta.* 호출 금지) ----------
 float atrV    = ta.atr(14)
@@ -290,10 +308,10 @@ else if phL == Phase.pullback
         pbStartL := na
         volPbSumL := 0.0
         rsiPbLowL := na
-    else if close < impLowL or (bar_index - pbStartL) > pbMax or depthNowL > INVALID_DEPTH
+    else if close < impLowL or (bar_index - pbStartL) > effPbMaxSM or depthNowL > effInvalidSM
         invStruct += close < impLowL ? 1 : 0
-        invTime   += close >= impLowL and (bar_index - pbStartL) > pbMax ? 1 : 0
-        invDepth  += close >= impLowL and (bar_index - pbStartL) <= pbMax and depthNowL > INVALID_DEPTH ? 1 : 0
+        invTime   += close >= impLowL and (bar_index - pbStartL) > effPbMaxSM ? 1 : 0
+        invDepth  += close >= impLowL and (bar_index - pbStartL) <= effPbMaxSM and depthNowL > effInvalidSM ? 1 : 0
         phL := Phase.idle
 else if phL == Phase.cooldown
     if bar_index - cdStartL >= COOLDOWN_BARS
@@ -366,10 +384,10 @@ else if phS == Phase.pullback
         pbStartS := na
         volPbSumS := 0.0
         rsiPbHighS := na
-    else if close > impHighS or (bar_index - pbStartS) > pbMax or depthNowS > INVALID_DEPTH
+    else if close > impHighS or (bar_index - pbStartS) > effPbMaxSM or depthNowS > effInvalidSM
         invStruct += close > impHighS ? 1 : 0
-        invTime   += close <= impHighS and (bar_index - pbStartS) > pbMax ? 1 : 0
-        invDepth  += close <= impHighS and (bar_index - pbStartS) <= pbMax and depthNowS > INVALID_DEPTH ? 1 : 0
+        invTime   += close <= impHighS and (bar_index - pbStartS) > effPbMaxSM ? 1 : 0
+        invDepth  += close <= impHighS and (bar_index - pbStartS) <= effPbMaxSM and depthNowS > effInvalidSM ? 1 : 0
         phS := Phase.idle
 else if phS == Phase.cooldown
     if bar_index - cdStartS >= COOLDOWN_BARS
@@ -449,6 +467,12 @@ float volPbAvgL  = phL == Phase.pullback ? volPbSumL / (pbBarsL + 1) : na
 float volRatioL  = not na(volPbAvgL) and not na(volImpAvgL) and volImpAvgL > 0 ? volPbAvgL / volImpAvgL : na
 bool qualityL = phL == Phase.pullback and not na(depthL) and depthL >= depthMin and depthL <= depthMax and pbBarsL >= pbMin and pbBarsL <= pbMax and (na(volRatioL) or volRatioL < volMax) and not na(rsiPbLowL) and rsiPbLowL >= rsiLo and rsiPbLowL <= rsiHi
 
+// 딥 셋업 게이트 (v2.1): EMA50~200존 터치 + 한도 내 + 추가 확인(캔들/패턴) 필수.
+// 표준의 깊이·기간·거래량 게이트는 미적용 — 대신 임펄스 저점 이탈은 SM이 여전히 무효화.
+bool emaZoneL = not na(pbLowL) and pbLowL <= emaF + EMA_ZONE_BUF * atrV and pbLowL >= emaS - EMA_ZONE_BUF * atrV and close > emaS
+bool deepOkL  = allowDeep and phL == Phase.pullback and emaZoneL and not na(depthL) and depthL <= DEEP_DEPTH_MAX and pbBarsL >= pbMin and pbBarsL <= DEEP_PB_MAX and not na(rsiPbLowL) and rsiPbLowL >= DEEP_RSI_LO and (candleBullOk or patL != "")
+bool stdOkL   = allowStd and qualityL
+
 bool strengthOkL = switch confirm_mode
     ConfirmMode.er   => nz(capErL, 0) >= erMin
     ConfirmMode.adx  => nz(capAdxPctL, 0) >= 50 and capDiOkL
@@ -473,6 +497,10 @@ float volRatioS  = not na(volPbAvgS) and not na(volImpAvgS) and volImpAvgS > 0 ?
 // 숏 RSI 존 = 롱 존의 100 기준 미러: 하한 (100−rsiHi) ≤ rsiPbHighS ≤ 상한 (100−rsiLo)
 bool qualityS = phS == Phase.pullback and not na(depthS) and depthS >= depthMin and depthS <= depthMax and pbBarsS >= pbMin and pbBarsS <= pbMax and (na(volRatioS) or volRatioS < volMax) and not na(rsiPbHighS) and rsiPbHighS >= (100 - rsiHi) and rsiPbHighS <= (100 - rsiLo)
 
+bool emaZoneS = not na(pbHighS) and pbHighS >= emaF - EMA_ZONE_BUF * atrV and pbHighS <= emaS + EMA_ZONE_BUF * atrV and close < emaS
+bool deepOkS  = allowDeep and phS == Phase.pullback and emaZoneS and not na(depthS) and depthS <= DEEP_DEPTH_MAX and pbBarsS >= pbMin and pbBarsS <= DEEP_PB_MAX and not na(rsiPbHighS) and rsiPbHighS <= (100 - DEEP_RSI_LO) and (candleBearOk or patS != "")
+bool stdOkS   = allowStd and qualityS
+
 bool strengthOkS = switch confirm_mode
     ConfirmMode.er   => nz(capErS, 0) >= erMin
     ConfirmMode.adx  => nz(capAdxPctS, 0) >= 50 and capDiOkS
@@ -495,8 +523,8 @@ int scoreL = math.round(math.max(0.0, math.min(100.0, (f_clamp01(slopeNorm / 0.1
 int scoreS = math.round(math.max(0.0, math.min(100.0, (f_clamp01(-slopeNorm / 0.15) * 0.5 + strengthNormS * 0.5) * 20 + f_clamp01(1 - math.abs(nz(depthS) - 0.5) / 0.28) * 20 + (na(volRatioS) ? 7.5 : f_clamp01((1 - volRatioS) / 0.4) * 15) + ((histTurnS ? 0.5 : 0.0) + (hist > 0 ? 0.5 : 0.0)) * 15 + (htfBear ? 10 : 0) + (candleBearOk ? 5 : 0) + (patS != "" ? 15 : 0) - (adxExhaustS ? 15 : 0))))
 
 // ---- 최종 시그널 (전부 시그널 확정 봉 — SPEC §6) ----
-bool longSignal  = phL == Phase.pullback and regimeBull and not deadMarket and qualityL and strengthOkL and trigL and htfBull and validRiskL and fundingOk and sessionOk and volCircuitOk and allowLong and barstate.isconfirmed
-bool shortSignal = phS == Phase.pullback and regimeBear and not deadMarket and qualityS and strengthOkS and trigS and htfBear and validRiskS and fundingOk and sessionOk and volCircuitOk and allowShort and barstate.isconfirmed
+bool longSignal  = phL == Phase.pullback and regimeBull and not deadMarket and (stdOkL or deepOkL) and strengthOkL and trigL and htfBull and validRiskL and fundingOk and sessionOk and volCircuitOk and allowLong and barstate.isconfirmed
+bool shortSignal = phS == Phase.pullback and regimeBear and not deadMarket and (stdOkS or deepOkS) and strengthOkS and trigS and htfBear and validRiskS and fundingOk and sessionOk and volCircuitOk and allowShort and barstate.isconfirmed
 
 // ---- 시그널 산출물 (진입가·SL·TP·사이징 — 시그널 봉 값으로 고정) ----
 var float sigEntry = na
@@ -509,6 +537,7 @@ var float sigQty   = na
 var int   sigScore = na
 var string sigGrade = na
 var string sigPattern = na
+var string sigSetup = na
 var int   sigDir   = na
 var float sigImpliedLev = na
 
@@ -526,6 +555,7 @@ if longSignal
     sigScore := scoreL
     sigGrade := f_grade(scoreL)
     sigPattern := patL
+    sigSetup := stdOkL ? "standard" : "deep"
     sigDir   := 1
     float qtyRaw = acct_size * risk_pct / 100 / riskP * f_gradeMult(sigGrade)
     float qtyCap = acct_size * max_lev / entryP
@@ -548,6 +578,7 @@ if shortSignal
     sigScore := scoreS
     sigGrade := f_grade(scoreS)
     sigPattern := patS
+    sigSetup := stdOkS ? "standard" : "deep"
     sigDir   := -1
     float qtyRaw = acct_size * risk_pct / 100 / riskP * f_gradeMult(sigGrade)
     float qtyCap = acct_size * max_lev / entryP
