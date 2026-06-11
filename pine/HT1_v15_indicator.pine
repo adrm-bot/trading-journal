@@ -87,6 +87,8 @@ status_pos       = input.string("상단 우측", "상태 테이블 위치",
 show_labels      = input.bool(true, "시그널 라벨 표시", group=g_ui)
 long_label_text  = input.string("B", "롱 라벨 텍스트", group=g_ui)
 short_label_text = input.string("S", "숏 라벨 텍스트", group=g_ui)
+label_at_cross   = input.bool(false, "라벨을 크로스 봉에 표시 (v1 스타일)", group=g_ui, tooltip="ON: v1처럼 MACD 크로스 봉에 소급 표시 — 차트는 좋아 보이지만 그 가격 진입은 불가능했음을 유의. OFF(기본): 실제 진입 가능한 시그널 확정 봉에 표시. 알림·ENTRY/SL/TP 가격은 어느 쪽이든 항상 시그널 봉 기준.")
+show_cross_marker = input.bool(true, "크로스 원점 ○ 마커 표시", group=g_ui, tooltip="시그널이 비롯된 MACD 크로스 봉에 작은 ○ 표시 — 셋업 원점과 진입 시점의 간격을 한눈에.")
 
 // =====================================================================
 // 유틸 함수 (원본 그대로)
@@ -432,9 +434,15 @@ plot(last_tp2,   title="TP2",   display=display.data_window)
 // =====================================================================
 
 if show_labels and longOk
-    label.new(bar_index, na, long_label_text, style=label.style_label_up, yloc=yloc.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+    int crossBarL = na(bars_since_golden) ? bar_index : bar_index - bars_since_golden
+    label.new(label_at_cross ? crossBarL : bar_index, na, long_label_text, style=label.style_label_up, yloc=yloc.belowbar, color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+    if show_cross_marker and not label_at_cross and crossBarL != bar_index
+        label.new(crossBarL, na, "○", style=label.style_none, yloc=yloc.belowbar, textcolor=color.new(color.green, 20), size=size.small)
 if show_labels and shortOk
-    label.new(bar_index, na, short_label_text, style=label.style_label_down, yloc=yloc.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+    int crossBarS = na(bars_since_dead) ? bar_index : bar_index - bars_since_dead
+    label.new(label_at_cross ? crossBarS : bar_index, na, short_label_text, style=label.style_label_down, yloc=yloc.abovebar, color=color.new(color.red, 0), textcolor=color.white, size=size.small)
+    if show_cross_marker and not label_at_cross and crossBarS != bar_index
+        label.new(crossBarS, na, "○", style=label.style_none, yloc=yloc.abovebar, textcolor=color.new(color.red, 20), size=size.small)
 
 // =====================================================================
 // 진입·SL·TP 라인 (가장 최근 시그널 1건만 유지) — 원본 구조 유지
