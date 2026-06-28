@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "PowerShell($u = Get-Command uv -ErrorAction SilentlyContinue; if \\($u\\) { \"uv: $\\($u.Source\\)\"; uv --version } else { \"uv: NOT INSTALLED\" }; $x = Get-Command uvx -ErrorAction SilentlyContinue; if \\($x\\) { \"uvx: $\\($x.Source\\)\" } else { \"uvx: NOT INSTALLED\" }; \"---\"; $cfg = \"$env:APPDATA\\\\Claude\\\\claude_desktop_config.json\"; if \\(Test-Path $cfg\\) { \"config exists: $cfg\"; Get-Content $cfg } else { \"config NOT FOUND at $cfg\" })",
-      "PowerShell($env:Path = \"C:\\\\Users\\\\user\\\\.local\\\\bin;$env:Path\"; uv tool install --python 3.13 tradingview-mcp-server)"
-    ]
-  }
-}

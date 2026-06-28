@@ -1,0 +1,35 @@
+# Render 배포 설정 — Starter($7/월) + 영속 디스크 (데이터 영구 보존)
+services:
+  - type: web
+    name: trading-journal
+    runtime: python
+    plan: starter
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --workers 1
+    healthCheckPath: /healthz
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.10"
+      - key: APP_ENV
+        value: production
+      - key: DEV_MODE
+        value: "false"
+      - key: LOOKBACK_DAYS
+        value: "30"
+      - key: APP_DB_PATH
+        value: /var/data/data.db        # 영속 디스크 → 재배포해도 데이터 유지
+      - key: SESSION_SECRET
+        generateValue: true             # Render가 강한 랜덤 생성
+      - key: APP_SECRET_KEY
+        sync: false                     # Fernet 키 — 대시보드에서 수동 입력
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: OAUTH_REDIRECT_URI
+        sync: false                     # 예: https://trading-journal.onrender.com/auth/callback

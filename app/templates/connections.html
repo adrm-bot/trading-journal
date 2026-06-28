@@ -1,0 +1,67 @@
+<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>연동 설정</title>
+<style>
+  body{background:#0e1116;color:#e6edf3;font-family:-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;margin:0}
+  header{display:flex;justify-content:space-between;align-items:center;padding:16px 22px;border-bottom:1px solid #272d38}
+  header h1{font-size:18px;margin:0} a{color:#58a6ff;text-decoration:none;margin-left:14px;font-size:13px}
+  .wrap{max-width:680px;margin:0 auto;padding:22px}
+  .tag{display:inline-block;background:rgba(63,185,80,.15);color:#3fb950;border-radius:999px;padding:3px 10px;font-size:12px;margin-right:6px}
+  .card{background:#171b22;border:1px solid #272d38;border-radius:12px;padding:16px 18px;margin-bottom:14px}
+  .card h3{margin:0 0 4px;font-size:15px} .card .hint{color:#8b949e;font-size:12px;margin:0 0 12px;line-height:1.5}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  input{width:100%;background:#0e1116;border:1px solid #272d38;color:#e6edf3;border-radius:8px;padding:9px 11px;font:inherit;margin-bottom:8px}
+  button{font:inherit;cursor:pointer;border:none;border-radius:8px;padding:9px 16px;font-weight:600}
+  .save{background:#58a6ff;color:#0d1117} .del{background:#1d222b;color:#f85149;border:1px solid #272d38}
+  .read{color:#d29922;font-size:11.5px;margin-left:8px}
+</style></head><body>
+<header><h1>🔌 연동 설정</h1><div><a href="/dashboard">대시보드</a><a href="/logout">로그아웃</a></div></header>
+<div class="wrap">
+  <p>연결됨:
+    {% for k in connected %}<span class="tag">{{ k }}</span>{% else %}<span style="color:#8b949e">아직 없음</span>{% endfor %}
+  </p>
+
+  <div class="card">
+    <h3>거래소 — Bybit <span class="read">read-only 키만! (주문·출금 OFF)</span></h3>
+    <p class="hint">바이비트 API Management → System-generated → Read-Only → Positions/Orders/Wallet.</p>
+    <form method="post" action="/connections" class="grid">
+      <input name="key" placeholder="API Key"><input name="secret" placeholder="API Secret">
+      <input type="hidden" name="kind" value="bybit"><button class="save">저장</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>거래소 — Binance <span class="read">read-only 키만!</span></h3>
+    <p class="hint">Binance USDⓈ-M 선물 read-only 키.</p>
+    <form method="post" action="/connections" class="grid">
+      <input name="key" placeholder="API Key"><input name="secret" placeholder="API Secret">
+      <input type="hidden" name="kind" value="binance"><button class="save">저장</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Notion (선택)</h3>
+    <p class="hint">integration 토큰 + 대상 DB id. (일지를 Notion에도 미러)</p>
+    <form method="post" action="/connections">
+      <input name="token" placeholder="NOTION_TOKEN"><input name="extra" placeholder="DB id">
+      <input type="hidden" name="kind" value="notion"><button class="save">저장</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Telegram (선택)</h3>
+    <p class="hint">@BotFather 봇 토큰 + chat id. 행동 다이제스트 푸시.</p>
+    <form method="post" action="/connections">
+      <input name="token" placeholder="BOT_TOKEN"><input name="extra" placeholder="chat_id">
+      <input type="hidden" name="kind" value="telegram"><button class="save">저장</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <h3>Google Sheets (선택)</h3>
+    <p class="hint">서비스계정 JSON + 시트 id. (일지를 시트에 미러)</p>
+    <form method="post" action="/connections">
+      <input name="token" placeholder="서비스계정 JSON"><input name="extra" placeholder="sheet_id">
+      <input type="hidden" name="kind" value="sheets"><button class="save">저장</button>
+    </form>
+  </div>
+</div></body></html>

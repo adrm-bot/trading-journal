@@ -1,0 +1,11 @@
+# journal/ 폴더만 따로 친구에게 줘도 .env·데이터가 새지 않게 (자체 .gitignore)
+.env
+*.env
+!*.env.example
+*.db
+*.db-wal
+*.db-shm
+매매일지.xlsx
+*.xlsx
+__pycache__/
+*.pyc

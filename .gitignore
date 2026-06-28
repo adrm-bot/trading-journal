@@ -1,0 +1,22 @@
+# --- secrets / 환경 (절대 커밋 금지) ---
+.env
+*.env
+!*.env.example
+secrets/
+
+# --- 로컬 데이터 ---
+*.db
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+journal/*.csv
+
+# --- python ---
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# --- claude 로컬 설정 (이미 추적 중이면 git rm --cached 필요) ---
+.claude/settings.local.json

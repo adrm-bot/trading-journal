@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매매일지</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/app.css">
+</head><body>
+<a class="sr-only" href="#main">본문 바로가기</a>
+<div class="shell" id="shell">
+  <aside class="side">
+    <div class="brand">📓 매매일지</div>
+    <nav class="nav" aria-label="주 메뉴">
+      <a href="#dashboard" data-view="dashboard"><span class="ic" aria-hidden="true">📊</span>대시보드</a>
+      <a href="#journal" data-view="journal"><span class="ic" aria-hidden="true">📒</span>거래</a>
+      <a href="#insights" data-view="insights"><span class="ic" aria-hidden="true">🧠</span>인사이트</a>
+      <a href="#settings" data-view="settings"><span class="ic" aria-hidden="true">⚙️</span>설정</a>
+    </nav>
+    <div class="foot"><div class="email" id="email">—</div><a href="/logout">로그아웃</a></div>
+  </aside>
+  <main class="main" id="main">
+    <div class="topbar">
+      <div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
+      <div id="actions"></div>
+    </div>
+    <div class="content">
+      <section id="view-dashboard" class="view" aria-live="polite"></section>
+      <section id="view-journal" class="view" hidden></section>
+      <section id="view-insights" class="view" hidden></section>
+      <section id="view-settings" class="view" hidden></section>
+    </div>
+  </main>
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMeta">
+  <h3 id="modalTitle">사후 의도 캡처</h3><div class="meta" id="modalMeta"></div>
+  <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
+  <div class="row2">
+    <div class="field"><label for="f_setup">셋업</label><input id="f_setup" placeholder="눌림목 / 돌파 / 역추세"></div>
+    <div class="field"><label for="f_sl">무효선 (SL 의도가)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
+  </div>
+  <div class="field"><label for="f_emo">감정</label><select id="f_emo">
+    <option value="">—</option><option>차분</option><option>확신</option><option>조급</option><option>공포</option><option>탐욕</option><option>지루함</option></select></div>
+  <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
+  <div class="modal-actions"><button class="btn ghost" id="cancelBtn">취소</button><button class="btn primary" id="saveBtn">저장 · 기록완료</button></div>
+</div></div>
+
+<div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--plate);border:1px solid var(--line-2);color:var(--ice);padding:10px 16px;border-radius:8px;box-shadow:var(--card-elev);display:none;z-index:50;font-size:13px"></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
+const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
+const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const EXCH=new Set(["bybit","binance"]);
+let toastT;
+function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block";clearTimeout(toastT);toastT=setTimeout(()=>t.style.display="none",3200);}
+
+async function api(path,opt){
+  const r=await fetch(path,opt);
+  if(r.status===401){location.href="/login";throw new Error("auth");}
+  if(!r.ok) throw new Error("http "+r.status);
+  return r;
+}
+function postJSON(path,body){return api(path,{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"fetch"},body:JSON.stringify(body||{})});}
+
+const VIEWS={
+  dashboard:{title:"대시보드",desc:"오늘의 거래와 행동 패턴 개요",actions:pullActions,render:renderDashboard},
+  journal:{title:"거래",desc:"전체 거래 · 계획 사후 입력",actions:pullActions,render:renderJournal},
+  insights:{title:"인사이트",desc:"행동 패턴과 종목별 성과",actions:()=>"",render:renderInsights},
+  settings:{title:"설정",desc:"거래소·Notion·Sheets·Telegram 연동",actions:()=>"",render:renderSettings},
+};
+function pullActions(){return `<button class="btn" id="pullBtn">↻ 적재</button> <button class="btn primary" id="refreshBtn" style="margin-left:8px">새로고침</button>`;}
+
+async function loadAll(){
+  const [me,data,conn]=await Promise.all([
+    api("/api/me").then(r=>r.json()), api("/api/data").then(r=>r.json()), api("/api/connections").then(r=>r.json())]);
+  $("#email").textContent=me.email||""; DATA=data; CONN=conn.connected||[];
+}
+function route(){
+  const v=(location.hash.replace("#","")||"dashboard"); const view=VIEWS[v]?v:"dashboard";
+  $$(".nav a").forEach(a=>{if(a.dataset.view===view)a.setAttribute("aria-current","page");else a.removeAttribute("aria-current");});
+  $("#title").textContent=VIEWS[view].title; $("#desc").textContent=VIEWS[view].desc;
+  $("#actions").innerHTML=VIEWS[view].actions();
+  $$(".view").forEach(s=>s.hidden=true); $("#view-"+view).hidden=false;
+  VIEWS[view].render($("#view-"+view));
+  if($("#pullBtn"))$("#pullBtn").onclick=pull; if($("#refreshBtn"))$("#refreshBtn").onclick=refresh;
+}
+async function refresh(){try{await loadAll();route();}catch(e){toast("불러오기 실패 — 새로고침 해주세요");}}
+
+/* ---------- views ---------- */
+function statCards(s){
+  const c=[["총 거래",(s.n||0)+"건",""],["실현손익",money(s.total_pnl)+" USDT",(s.total_pnl||0)>=0?"pos":"neg"],
+    ["승률",s.n?Math.round((s.win_rate||0)*100)+"% ("+(s.wins||0)+"/"+s.n+")":"—",""],["의도 미기입",(s.unplanned||0)+"건",(s.unplanned||0)>0?"neg":""]];
+  return `<div class="cards">`+c.map(x=>`<div class="card stat"><div class="label">${x[0]}</div><div class="val ${x[2]}">${x[1]}</div></div>`).join("")+`</div>`;
+}
+function flagsBlock(s){return (s.flags||[]).length?`<div class="flags">`+s.flags.map(f=>`<div class="flag">${esc(f)}</div>`).join("")+`</div>`:"";}
+function onboarding(){
+  const hasExch=CONN.some(k=>EXCH.has(k));
+  return `<div class="empty"><div class="em" aria-hidden="true">${hasExch?"🌱":"🔌"}</div>
+    <h2>${hasExch?"아직 거래가 없어요":"거래소를 연결하면 시작돼요"}</h2>
+    <p>${hasExch?"최근 거래가 잡히면 여기 자동으로 들어옵니다. 지금 한번 긁어볼까요?":"read-only 키만 연결하면 청산 거래가 자동으로 일지에 들어오고, 계획 없던 거래는 따로 잡아둡니다."}</p>
+    ${hasExch?`<button class="btn primary" id="emptyPull">↻ 거래 적재</button>`:`<a class="btn primary" href="#settings">거래소 연결하기</a>`}</div>`;
+}
+function tradeRows(rows){
+  return rows.map(r=>{
+    const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${esc(r.direction)}</span>`:"—";
+    const st=r.status==='의도 미기입'?`<span class="badge pending">의도 미기입</span>`:`<span class="badge done">${esc(r.status||'기록')}</span>`;
+    return `<tr><td class="num">${esc((r.closed_at||'').slice(0,16))}</td><td>${esc(r.exchange)}</td><td>${esc(r.symbol)}</td><td>${dir}</td>
+      <td class="num ${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</td><td>${st}</td>
+      <td class="plan-cell">${r.plan?esc(r.plan):'<span class="muted">— 비어있음</span>'}</td>
+      <td><button class="btn sm editBtn" data-id="${esc(r.trade_id)}">${r.plan?'편집':'채우기'}</button></td></tr>`;
+  }).join("");
+}
+function table(rows){
+  return `<div class="table-wrap"><table><thead><tr><th class="num">청산시각</th><th>거래소</th><th>심볼</th><th>방향</th>
+    <th class="num">손익</th><th>상태</th><th>계획/의도</th><th></th></tr></thead><tbody>${tradeRows(rows)}</tbody></table></div>`;
+}
+function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
+
+function renderDashboard(el){
+  if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
+  el.innerHTML=statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
+    +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
+  bindEdit();
+}
+function renderJournal(el){
+  if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
+  el.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:14px">
+      <button class="btn sm fbtn" data-f="all" aria-current="page">전체 ${DATA.trades.length}</button>
+      <button class="btn sm fbtn" data-f="pending">의도 미기입 ${DATA.summary.unplanned||0}</button></div><div id="jt"></div>`;
+  const draw=f=>{const rows=f==='pending'?DATA.trades.filter(t=>t.status==='의도 미기입'):DATA.trades;$("#jt").innerHTML=table(rows);bindEdit();};
+  $$(".fbtn").forEach(b=>b.onclick=()=>{$$(".fbtn").forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");draw(b.dataset.f);});
+  draw("all");
+}
+function renderInsights(el){
+  if(!DATA.trades.length){el.innerHTML=onboarding();return;}
+  const by={};DATA.trades.forEach(t=>{const k=t.symbol||"?";(by[k]=by[k]||{n:0,pnl:0,w:0});by[k].n++;by[k].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[k].w++;});
+  const rows=Object.entries(by).sort((a,b)=>a[1].pnl-b[1].pnl).map(([k,v])=>
+    `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
+  el.innerHTML=`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음.</p>`)
+    +`<div class="section-title">종목별 성과 (손실 큰 순)</div><div class="table-wrap"><table>
+    <thead><tr><th>심볼</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+const CONN_DEFS=[
+  {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
+  {k:"binance",nm:"Binance",hint:"USDⓈ-M 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
+  {k:"notion",nm:"Notion",hint:"일지를 Notion에 미러 (출력 연동은 준비 중)",fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
+  {k:"telegram",nm:"Telegram",hint:"행동 다이제스트 푸시 (출력 연동은 준비 중)",fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
+  {k:"sheets",nm:"Google Sheets",hint:"일지를 시트에 미러 (출력 연동은 준비 중)",fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},
+];
+function renderSettings(el){
+  el.innerHTML=`<div class="grid">`+CONN_DEFS.map((d,di)=>{
+    const on=CONN.includes(d.k);
+    return `<div class="card"><div class="conn"><div>
+        <div class="nm"><span class="dot ${on?'on':''}"></span>${d.nm}${d.read?`<span class="read-tag">read-only</span>`:""}</div>
+        <div class="hint">${d.hint}</div></div>
+        ${on?`<button class="btn sm delBtn" data-k="${d.k}">연결 해제</button>`:""}</div>
+      <form class="connForm" data-k="${d.k}" style="margin-top:14px">
+        ${d.fields.map((f,fi)=>{const id=`c_${d.k}_${f[0]}`;return `<label class="sr-only" for="${id}">${d.nm} ${f[1]}</label><input id="${id}" name="${f[0]}" type="${f[2]||'text'}" placeholder="${f[1]}" autocomplete="off">`;}).join("")}
+        <button class="btn primary sm" type="submit">${on?'업데이트':'연결'}</button>
+      </form></div>`;
+  }).join("")+`</div>
+    <div class="section-title">계정</div><div class="card"><div class="conn">
+      <div><div class="nm" id="acctEmail"></div><div class="hint">키·시크릿은 암호화되어 저장됩니다 (평문 미저장).</div></div>
+      <a class="btn sm" href="/logout">로그아웃</a></div></div>`;
+  $("#acctEmail").textContent=$("#email").textContent;
+  $$(".connForm").forEach(f=>f.onsubmit=async e=>{e.preventDefault();
+    const btn=f.querySelector("button");const body={kind:f.dataset.k};
+    [...f.elements].forEach(i=>{if(i.name)body[i.name]=i.value;});
+    btn.disabled=true;const orig=btn.textContent;btn.textContent="저장 중…";
+    try{await postJSON("/api/connections",body);await loadAll();route();toast("연결 저장됨");}
+    catch(err){toast("저장 실패 — 입력값을 확인하세요");btn.disabled=false;btn.textContent=orig;}});
+  $$(".delBtn").forEach(b=>b.onclick=async()=>{
+    b.disabled=true;
+    try{await postJSON("/api/connections/delete",{kind:b.dataset.k});await loadAll();route();}
+    catch(err){toast("해제 실패");b.disabled=false;}});
+}
+
+/* ---------- actions ---------- */
+function tById(id){return DATA.trades.find(t=>t.trade_id===id);}
+function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
+  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)} · 손익 ${money(r.pnl)}`;
+  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_sl").value=r.sl??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
+  $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
+function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
+async function saveIntent(){
+  if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,sl:$("#f_sl").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
+  try{
+    const res=await(await postJSON("/api/intent",p)).json();
+    if(res.ok){closeModal();await loadAll();route();toast("저장됨");}else toast("저장 실패 — 거래를 찾지 못했어요");
+  }catch(err){toast("저장 실패 — 잠시 후 다시");}
+  finally{SAVING=false;btn.disabled=false;}
+}
+async function pull(){
+  const b=$("#pullBtn")||$("#emptyPull"); const orig=b?b.textContent:"";
+  if(b){b.disabled=true;b.textContent="적재 중…";}
+  try{
+    const res=await(await postJSON("/api/pull",{})).json();
+    if(res.ok){await loadAll();route();toast(`적재 완료 (신규 ${res.fetched??0}건)`);}else toast(res.error||"적재 실패");
+  }catch(err){toast("적재 실패 — 키/연결을 확인하세요");}
+  finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 적재";}}
+}
+
+$("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;
+$("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
+document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#modalBg").classList.contains("show"))closeModal();});
+window.addEventListener("hashchange",route);
+(async()=>{try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em">⚠️</div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">새로고침</button></div>';}})();
+</script></body></html>

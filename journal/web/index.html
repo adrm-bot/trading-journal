@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>매매일지</title>
+<style>
+  :root{
+    --bg:#0e1116; --panel:#171b22; --panel2:#1d222b; --line:#272d38;
+    --txt:#e6edf3; --muted:#8b949e; --green:#3fb950; --red:#f85149;
+    --accent:#58a6ff; --amber:#d29922;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"Segoe UI",Roboto,"Malgun Gothic",sans-serif;font-size:14px}
+  header{display:flex;align-items:center;justify-content:space-between;
+    padding:16px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+  header h1{font-size:18px;margin:0;font-weight:650}
+  header .sub{color:var(--muted);font-size:12px;margin-left:8px}
+  button{font:inherit;cursor:pointer;border:1px solid var(--line);background:var(--panel2);
+    color:var(--txt);padding:8px 14px;border-radius:8px}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#0d1117;font-weight:600}
+  .wrap{max-width:1100px;margin:0 auto;padding:22px}
+  .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px}
+  .card .label{color:var(--muted);font-size:12px}
+  .card .val{font-size:24px;font-weight:700;margin-top:4px}
+  .flags{display:flex;flex-direction:column;gap:8px;margin-bottom:18px}
+  .flag{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);
+    padding:10px 14px;border-radius:8px;font-size:13.5px}
+  table{width:100%;border-collapse:collapse;background:var(--panel);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+  th,td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);font-size:13px;white-space:nowrap}
+  th{color:var(--muted);font-weight:600;background:var(--panel2);position:sticky;top:61px}
+  tr:last-child td{border-bottom:none}
+  tr:hover td{background:var(--panel2)}
+  .num{font-variant-numeric:tabular-nums;text-align:right}
+  .pos{color:var(--green)} .neg{color:var(--red)}
+  .badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11.5px;font-weight:600}
+  .b-long{background:rgba(63,185,80,.15);color:var(--green)}
+  .b-short{background:rgba(248,81,73,.15);color:var(--red)}
+  .b-pending{background:rgba(210,153,34,.18);color:var(--amber)}
+  .b-done{background:rgba(88,166,255,.15);color:var(--accent)}
+  .plan-cell{max-width:240px;overflow:hidden;text-overflow:ellipsis;color:var(--muted)}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:center;justify-content:center;z-index:20}
+  .modal{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px;width:min(520px,92vw);max-height:90vh;overflow:auto}
+  .modal h3{margin:0 0 4px}
+  .modal .meta{color:var(--muted);font-size:12.5px;margin-bottom:16px}
+  .field{margin-bottom:13px}
+  .field label{display:block;color:var(--muted);font-size:12px;margin-bottom:5px}
+  input,textarea,select{width:100%;background:var(--bg);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:9px 11px;font:inherit}
+  textarea{resize:vertical;min-height:60px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
+  .empty{color:var(--muted);text-align:center;padding:40px}
+  @media(max-width:680px){.cards{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>📓 매매일지<span class="sub" id="scope">로컬 · read-only</span></h1></div>
+  <div style="display:flex;gap:10px">
+    <button id="pullBtn">↻ 적재</button>
+    <button class="primary" id="refreshBtn">새로고침</button>
+  </div>
+</header>
+<div class="wrap">
+  <div class="cards" id="cards"></div>
+  <div class="flags" id="flags"></div>
+  <div id="tableWrap"></div>
+</div>
+
+<div class="modal-bg" id="modalBg">
+  <div class="modal">
+    <h3>사후 의도 캡처</h3>
+    <div class="meta" id="modalMeta"></div>
+    <div class="field"><label>계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
+    <div class="row2">
+      <div class="field"><label>셋업</label><input id="f_setup" placeholder="눌림목/돌파/역추세…"></div>
+      <div class="field"><label>무효선 (SL 의도가)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
+    </div>
+    <div class="field"><label>감정</label>
+      <select id="f_emo">
+        <option value="">—</option><option>차분</option><option>확신</option>
+        <option>조급</option><option>공포</option><option>탐욕</option><option>지루함</option>
+      </select>
+    </div>
+    <div class="field"><label>메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
+    <div class="modal-actions">
+      <button id="cancelBtn">취소</button>
+      <button class="primary" id="saveBtn">저장 · 기록완료</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = s => document.querySelector(s);
+let TRADES = [], EDITING = null;
+const PREVIEW = !!window.__DATA__;
+
+function fmt(n){ return (n==null||isNaN(n)) ? "—" : Number(n).toLocaleString(undefined,{maximumFractionDigits:6}); }
+function fmtMoney(n){ if(n==null) return "—"; const s=Number(n); return (s>=0?"+":"")+s.toFixed(2); }
+
+async function load(){
+  let d = window.__DATA__;
+  if(!d){ d = await (await fetch("/api/data")).json(); }
+  TRADES = d.trades||[];
+  renderCards(d.summary||{});
+  renderFlags(d.summary||{});
+  renderTable(TRADES);
+  if(PREVIEW) $("#scope").textContent = "미리보기";
+}
+
+function renderCards(s){
+  const cards=[
+    ["총 거래", (s.n||0)+"건"],
+    ["실현손익", fmtMoney(s.total_pnl)+" USDT", (s.total_pnl||0)>=0?"pos":"neg"],
+    ["승률", s.n? Math.round((s.win_rate||0)*100)+"% ("+(s.wins||0)+"/"+s.n+")":"—"],
+    ["의도 미기입", (s.unplanned||0)+"건", (s.unplanned||0)>0?"neg":""],
+  ];
+  $("#cards").innerHTML = cards.map(c=>
+    `<div class="card"><div class="label">${c[0]}</div><div class="val ${c[2]||''}">${c[1]}</div></div>`).join("");
+}
+function renderFlags(s){
+  $("#flags").innerHTML = (s.flags||[]).map(f=>`<div class="flag">${f}</div>`).join("");
+}
+function renderTable(rows){
+  if(!rows.length){ $("#tableWrap").innerHTML='<div class="empty">거래 없음 — ↻ 적재를 눌러라.</div>'; return; }
+  const head=`<tr><th>청산시각</th><th>거래소</th><th>심볼</th><th>방향</th>
+    <th class="num">손익</th><th>상태</th><th>계획/의도</th><th></th></tr>`;
+  const body=rows.map((r,i)=>{
+    const dir=r.방향?`<span class="badge ${r.방향==='Long'?'b-long':'b-short'}">${r.방향}</span>`:"—";
+    const pnl=`<span class="${(r.실현손익||0)>=0?'pos':'neg'}">${fmtMoney(r.실현손익)}</span>`;
+    const st=r.상태==='의도 미기입'?'<span class="badge b-pending">의도 미기입</span>'
+            :`<span class="badge b-done">${r.상태||'기록'}</span>`;
+    return `<tr>
+      <td>${r.청산시각||'—'}</td><td>${r.거래소||''}</td><td>${r.심볼||''}</td><td>${dir}</td>
+      <td class="num">${pnl}</td><td>${st}</td>
+      <td class="plan-cell">${(r.계획||'')||'<span style="opacity:.5">— 비어있음</span>'}</td>
+      <td><button data-i="${i}" class="editBtn">${r.계획?'편집':'채우기'}</button></td>
+    </tr>`;
+  }).join("");
+  $("#tableWrap").innerHTML=`<table><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  document.querySelectorAll(".editBtn").forEach(b=>b.onclick=()=>openModal(+b.dataset.i));
+}
+
+function openModal(i){
+  const r=TRADES[i]; EDITING=r;
+  $("#modalMeta").textContent=`${r.거래소} · ${r.심볼} ${r.방향||''} · ${r.청산시각} · 손익 ${fmtMoney(r.실현손익)}`;
+  $("#f_plan").value=r.계획||""; $("#f_setup").value=r.셋업||"";
+  $("#f_sl").value=r.무효선??""; $("#f_emo").value=r.감정||""; $("#f_memo").value=r.메모||"";
+  $("#modalBg").style.display="flex";
+}
+function closeModal(){ $("#modalBg").style.display="none"; EDITING=null; }
+
+async function save(){
+  if(!EDITING) return;
+  const payload={ "거래ID":EDITING.거래ID, "계획":$("#f_plan").value, "셋업":$("#f_setup").value,
+    "무효선":$("#f_sl").value, "감정":$("#f_emo").value, "메모":$("#f_memo").value, "상태":"기록완료" };
+  if(PREVIEW){ alert("미리보기 모드 — 실제 앱에서 저장됩니다."); closeModal(); return; }
+  const res=await (await fetch("/api/intent",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)})).json();
+  if(res.ok){ closeModal(); load(); } else { alert("저장 실패 — 거래ID 매칭 안 됨"); }
+}
+async function pull(){
+  if(PREVIEW){ alert("미리보기 모드"); return; }
+  $("#pullBtn").textContent="적재 중…"; $("#pullBtn").disabled=true;
+  await fetch("/api/pull",{method:"POST"}); await load();
+  $("#pullBtn").textContent="↻ 적재"; $("#pullBtn").disabled=false;
+}
+
+$("#refreshBtn").onclick=load;
+$("#pullBtn").onclick=pull;
+$("#saveBtn").onclick=save;
+$("#cancelBtn").onclick=closeModal;
+$("#modalBg").onclick=e=>{ if(e.target===$("#modalBg")) closeModal(); };
+load();
+</script>
+</body>
+</html>
