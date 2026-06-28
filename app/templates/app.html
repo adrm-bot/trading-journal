@@ -121,14 +121,14 @@ function tradeRows(rows){
     const rcell=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
     const liq=r.liquidated?` <span class="badge liq" title="강제청산/ADL">⚡청산</span>`:'';
     const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:'';
-    return `<tr><td class="num">${esc((r.closed_at||'').slice(0,16))}</td>
+    return `<tr><td class="num">${esc((toKST(r.closed_at)||{}).str||'')}</td>
       <td>${esc(r.symbol)} <span class="ex">${esc(r.exchange)}</span>${lev}${liq}</td><td>${dir}</td>
       <td class="num">${fmtP(r.entry)}</td><td class="num">${fmtP(r.exit)}</td>
       <td class="num ${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</td><td class="num">${rcell}</td><td>${st}</td>
       <td><button class="btn sm editBtn" data-id="${esc(r.trade_id)}">${r.plan?'편집':'채우기'}</button></td></tr>`;
   }).join("");
 }
-const TCOLS=[['closed_at','청산시각','num'],['symbol','심볼',''],['direction','방향',''],
+const TCOLS=[['closed_at','청산시각(KST)','num'],['symbol','심볼',''],['direction','방향',''],
   ['entry','진입가','num'],['exit','청산가','num'],['pnl','손익','num'],['r','R','num'],['status','상태','']];
 function table(rows,opts){
   opts=opts||{};
@@ -199,10 +199,10 @@ function renderDashboard(el){
     +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
   bindEdit();ensureMarket();
 }
-function iso(d){return d.toISOString().slice(0,10);}
+function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" ${JT[field]===v?'aria-current="page"':''}>${esc(label)}</button>`).join('');}
 function jtMatch(t){
-  const day=(t.closed_at||'').slice(0,10);
+  const day=trDate(t);
   if(JT.from&&day<JT.from)return false;
   if(JT.to&&day>JT.to)return false;
   if(JT.exchange!=='all'&&t.exchange!==JT.exchange)return false;
@@ -289,8 +289,17 @@ function groupTable(keyFn,head,asc){
 }
 /* ---------- 성과 분석 ---------- */
 function num(v){return Number(v)||0;}
-function trDate(t){return (t.closed_at||'').slice(0,10);}
-function trHourUTC(t){const h=parseInt((t.closed_at||'').slice(11,13),10);return isNaN(h)?null:h;}
+/* 서버는 UTC로 저장 → 화면·집계는 전부 KST(UTC+9)로 변환(한국 트레이더의 '하루'·세션 정합) */
+const KST_OFF=9*3600000;
+function toKST(s){
+  if(!s)return null;
+  const d=new Date(s.replace(' ','T')+'Z'); if(isNaN(d))return null;
+  const k=new Date(d.getTime()+KST_OFF), p=n=>String(n).padStart(2,'0');
+  return {date:`${k.getUTCFullYear()}-${p(k.getUTCMonth()+1)}-${p(k.getUTCDate())}`,hour:k.getUTCHours(),
+    str:`${k.getUTCFullYear()}-${p(k.getUTCMonth()+1)}-${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`};
+}
+function trDate(t){const k=toKST(t.closed_at);return k?k.date:'';}
+function trHour(t){const k=toKST(t.closed_at);return k?k.hour:null;}
 function perfMetrics(ts){
   const pnls=ts.map(t=>num(t.pnl)), n=ts.length;
   const wins=pnls.filter(p=>p>0), losses=pnls.filter(p=>p<0);
@@ -347,19 +356,21 @@ function calCard(ts){
     if(v!=null){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(59,191,166,${a})`:`rgba(228,109,76,${a})`;tt=`${k}: ${money(v)}`;}
     cells+=`<div class="cal-cell" style="background:${bg}" title="${esc(tt)}"></div>`;
   }
-  return `<div class="card"><div class="cal">${cells}</div><div class="ccap muted">초록=수익일 · 빨강=손실일 (UTC)</div></div>`;
+  return `<div class="card"><div class="cal">${cells}</div><div class="ccap muted">초록=수익일 · 빨강=손실일 · 한국시간(KST) 기준</div></div>`;
 }
 function sessionCard(ts){
   const hp=Array(24).fill(0), hn=Array(24).fill(0);
-  ts.forEach(t=>{const h=trHourUTC(t);if(h!=null){hp[h]+=num(t.pnl);hn[h]++;}});
+  ts.forEach(t=>{const h=trHour(t);if(h!=null){hp[h]+=num(t.pnl);hn[h]++;}});
   const mx=Math.max(...hp.map(v=>Math.abs(v)),1); let hours='';
-  for(let h=0;h<24;h++){const v=hp[h];let bg='var(--card-2)',tt=`${String(h).padStart(2,'0')}:00 UTC`;
+  for(let h=0;h<24;h++){const v=hp[h];let bg='var(--card-2)',tt=`${String(h).padStart(2,'0')}:00 KST`;
     if(hn[h]){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(59,191,166,${a})`:`rgba(228,109,76,${a})`;tt+=` · ${money(v)} (${hn[h]}건)`;}
     hours+=`<div class="hcell" style="background:${bg}" title="${esc(tt)}">${h}</div>`;}
-  const sess=[['아시아','00–08',0,8],['런던','08–13',8,13],['뉴욕','13–21',13,21],['그 외','21–24',21,24]];
-  const rows=sess.map(([nm,lbl,a,b])=>{let p=0,n=0;for(let h=a;h<b;h++){p+=hp[h];n+=hn[h];}
-    return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} UTC</span></span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span><span class="muted num">${n}건</span></div>`;}).join('');
-  return `<div class="card"><div class="hours">${hours}</div><div class="sess">${rows}</div><div class="ccap muted">UTC 기준 · 한국시간 = UTC+9</div></div>`;
+  // 글로벌 장세를 KST 시각으로 매핑(미국장은 자정 넘김)
+  const inR=(h,a,b)=>a<b?(h>=a&&h<b):(h>=a||h<b);
+  const sess=[['아시아장','09–17',9,17],['유럽장','17–22',17,22],['미국장','22–06',22,6],['그 외','06–09',6,9]];
+  const rows=sess.map(([nm,lbl,a,b])=>{let p=0,n=0;for(let h=0;h<24;h++){if(inR(h,a,b)){p+=hp[h];n+=hn[h];}}
+    return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} KST</span></span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span><span class="muted num">${n}건</span></div>`;}).join('');
+  return `<div class="card"><div class="hours">${hours}</div><div class="sess">${rows}</div><div class="ccap muted">한국시간(KST·UTC+9) 기준 · 위 칸 숫자=시(0~23시)</div></div>`;
 }
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
@@ -447,7 +458,7 @@ function updateRR(){
 }
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
   const liq=r.liquidated?' · ⚡강제청산':'';
-  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)}${liq}`;
+  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(toKST(r.closed_at)||{}).str||''} KST${liq}`;
   renderFacts(r);
   $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_strategy").value=r.strategy||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
   updateRR();
