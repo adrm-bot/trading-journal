@@ -90,6 +90,14 @@ a{color:inherit;text-decoration:none}
 .stat .val.neg{color:var(--ember)} .stat .val.pos{color:var(--mint)}
 .section-title{margin:var(--s6) 0 var(--s3)}
 
+/* ---- 시장 컨텍스트 스트립 ---- */
+.market{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3);margin-bottom:var(--s5)}
+.mchip{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:12px 16px;box-shadow:var(--inset);min-height:74px;display:flex;flex-direction:column;gap:4px;justify-content:center}
+.mchip .mk{font-family:var(--f-mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--fog)}
+.mchip .mv{font-family:var(--f-display);font-size:18px;font-weight:600;color:var(--ice);letter-spacing:0}
+.mchip .ms{font-size:11.5px;color:var(--muted);font-family:var(--f-mono)}
+.mchip.skel{align-items:center;color:var(--muted);font-size:12.5px}
+
 /* ---- insight flags ---- */
 .flags{display:flex;flex-direction:column;gap:var(--s2)}
 .flag{display:flex;gap:var(--s3);align-items:flex-start;background:var(--card);border:1px solid var(--line);
@@ -154,5 +162,5 @@ textarea{resize:vertical;min-height:64px}
   .shell{grid-template-columns:1fr}
   .side{flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--line);padding:var(--s2) var(--s4);overflow-x:auto}
   .brand{padding:var(--s2)} .nav{flex-direction:row} .side .foot{margin:0 0 0 auto;border:none;padding:0}
-  .side .foot .email{display:none} .cards{grid-template-columns:repeat(2,1fr)} .content{padding:var(--s4)} .topbar{padding:var(--s4)}
+  .side .foot .email{display:none} .cards,.market{grid-template-columns:repeat(2,1fr)} .content{padding:var(--s4)} .topbar{padding:var(--s4)}
 }

@@ -10,7 +10,7 @@ DB_PATH = os.getenv("APP_DB_PATH", os.path.join(os.path.dirname(__file__), "data
 
 TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "closed_at", "status", "plan", "setup", "sl", "emotion", "memo"]
-_INTENT = {"plan", "setup", "sl", "tp", "emotion", "memo", "status"}
+_INTENT = {"plan", "setup", "strategy", "sl", "tp", "emotion", "memo", "status"}
 
 
 def conn():
@@ -34,13 +34,14 @@ def init():
           user_id INTEGER, trade_id TEXT,
           exchange TEXT, symbol TEXT, direction TEXT, entry REAL, exit REAL, qty REAL, pnl REAL,
           closed_at TEXT, status TEXT DEFAULT '의도 미기입',
-          plan TEXT, setup TEXT, sl REAL, tp REAL, emotion TEXT, memo TEXT,
+          plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, emotion TEXT, memo TEXT,
           PRIMARY KEY(user_id, trade_id));
         """)
-        # 마이그레이션: 기존 DB에 tp 컬럼 없으면 추가 (idempotent)
+        # 마이그레이션: 기존 DB에 누락 컬럼 추가 (idempotent)
         cols = {r[1] for r in c.execute("PRAGMA table_info(trades)")}
-        if "tp" not in cols:
-            c.execute("ALTER TABLE trades ADD COLUMN tp REAL")
+        for name, typ in (("tp", "REAL"), ("strategy", "TEXT")):
+            if name not in cols:
+                c.execute(f"ALTER TABLE trades ADD COLUMN {name} {typ}")
 
 
 # --- users ---

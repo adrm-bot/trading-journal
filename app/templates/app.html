@@ -36,7 +36,11 @@
   <h3 id="modalTitle">거래 상세 · 사후 의도</h3><div class="meta" id="modalMeta"></div>
   <div class="facts" id="modalFacts"></div>
   <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
-  <div class="field"><label for="f_setup">셋업</label><input id="f_setup" placeholder="눌림목 / 돌파 / 역추세 / 추세추종"></div>
+  <div class="row2">
+    <div class="field"><label for="f_strategy">진입전략</label><select id="f_strategy">
+      <option value="">—</option><option>추세추종</option><option>눌림목(되돌림)</option><option>돌파(브레이크아웃)</option><option>역추세(리버설)</option><option>레인지</option><option>스캘핑</option><option>뉴스·이벤트</option><option>기타</option></select></div>
+    <div class="field"><label for="f_setup">진입근거 / 셋업</label><input id="f_setup" placeholder="추세선 지지 · 4H 다이버전스 · 거래량"></div>
+  </div>
   <div class="row2">
     <div class="field"><label for="f_sl">손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
     <div class="field"><label for="f_tp">익절가 (TP)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
@@ -53,6 +57,7 @@
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
+let MARKET=null, MKT_LOADING=false;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -125,11 +130,37 @@ function table(rows){
 }
 function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
 
+/* ---------- 시장 컨텍스트 스트립 ---------- */
+const TREND={up:["▲","상승","pos"],down:["▼","하락","neg"],side:["▬","횡보","muted"]};
+function chgTxt(v){return v==null?"":`<span class="${v>=0?'pos':'neg'}">${(v>=0?'+':'')+v}%</span>`;}
+function usd(n){return n==null?"—":"$"+Number(n).toLocaleString(undefined,{maximumFractionDigits:n<10?4:0});}
+function fngKo(v){if(v==null)return["—","muted"];if(v<25)return["극단적 공포","neg"];if(v<45)return["공포","neg"];if(v<=55)return["중립","muted"];if(v<=75)return["탐욕","pos"];return["극단적 탐욕","pos"];}
+function mchip(label,main,sub,cls){return `<div class="mchip"><div class="mk">${label}</div><div class="mv ${cls||''}">${main}</div>${sub?`<div class="ms">${sub}</div>`:""}</div>`;}
+function marketStrip(m){
+  if(!m)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 불러오는 중…</div></div>`;
+  const chips=[];
+  if(m.btc){const t=TREND[m.btc.trend]||["·","—","muted"];
+    chips.push(mchip("비트코인 추세",`<span class="${t[2]}">${t[0]} ${t[1]}</span>`,`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`));}
+  if(m.eth)chips.push(mchip("이더리움",usd(m.eth.price),`24h ${chgTxt(m.eth.chg24)} · 7d ${chgTxt(m.eth.chg7)}`));
+  if(m.fng){const f=fngKo(m.fng.value);chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,"시장 심리 (alt.me)"));}
+  if(m.dom)chips.push(mchip("BTC 도미넌스",`${m.dom.btc}%`,`전체 시총 24h ${chgTxt(m.dom.mcap_chg)}`));
+  if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 일시 불가</div></div>`;
+  return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
+}
+async function ensureMarket(){
+  const e=$("#marketStrip"); if(!e)return;
+  if(MARKET){e.outerHTML=marketStrip(MARKET);return;}
+  if(MKT_LOADING)return; MKT_LOADING=true;
+  try{MARKET=await(await api("/api/market")).json();}catch(err){MARKET={};}
+  MKT_LOADING=false; const el2=$("#marketStrip"); if(el2)el2.outerHTML=marketStrip(MARKET);
+}
+
 function renderDashboard(el){
-  if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
-  el.innerHTML=statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
+  const strip=marketStrip(MARKET);
+  if(!DATA.trades.length){el.innerHTML=strip+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();return;}
+  el.innerHTML=strip+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
     +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
-  bindEdit();
+  bindEdit();ensureMarket();
 }
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
@@ -140,14 +171,20 @@ function renderJournal(el){
   $$(".fbtn").forEach(b=>b.onclick=()=>{$$(".fbtn").forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");draw(b.dataset.f);});
   draw("all");
 }
+function groupTable(keyFn,head,asc){
+  const by={};DATA.trades.forEach(t=>{const k=keyFn(t);if(k==null)return;(by[k]=by[k]||{n:0,pnl:0,w:0});by[k].n++;by[k].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[k].w++;});
+  const ks=Object.entries(by).sort((a,b)=>asc?a[1].pnl-b[1].pnl:b[1].pnl-a[1].pnl);
+  if(!ks.length)return"";
+  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
+  return `<div class="table-wrap"><table><thead><tr><th>${head}</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
-  const by={};DATA.trades.forEach(t=>{const k=t.symbol||"?";(by[k]=by[k]||{n:0,pnl:0,w:0});by[k].n++;by[k].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[k].w++;});
-  const rows=Object.entries(by).sort((a,b)=>a[1].pnl-b[1].pnl).map(([k,v])=>
-    `<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
+  const stratTbl=groupTable(t=>t.strategy,"전략",false);
   el.innerHTML=`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음.</p>`)
-    +`<div class="section-title">종목별 성과 (손실 큰 순)</div><div class="table-wrap"><table>
-    <thead><tr><th>심볼</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    +(stratTbl?`<div class="section-title">전략별 성과 (수익 큰 순)</div>`+stratTbl
+      :`<div class="section-title">전략별 성과</div><p class="muted">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)
+    +`<div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true);
 }
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
@@ -203,13 +240,13 @@ function updateRR(){
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
   $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)}`;
   renderFacts(r);
-  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
+  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_strategy").value=r.strategy||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
   updateRR();
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
-  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,sl:$("#f_sl").value,tp:$("#f_tp").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,strategy:$("#f_strategy").value,sl:$("#f_sl").value,tp:$("#f_tp").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){closeModal();await loadAll();route();toast("저장됨");}else toast("저장 실패 — 거래를 찾지 못했어요");

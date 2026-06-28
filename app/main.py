@@ -25,7 +25,7 @@ load_dotenv(os.path.join(HERE, ".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
-from . import db, engine, crypto  # noqa: E402
+from . import db, engine, crypto, market  # noqa: E402
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
@@ -189,6 +189,12 @@ def api_data(request: Request):
     return JSONResponse({"summary": summary, "trades": [_enrich(t) for t in trades]})
 
 
+@app.get("/api/market")
+def api_market(request: Request):
+    _require(request)
+    return JSONResponse(market.get_context())
+
+
 @app.post("/api/pull")
 def api_pull(request: Request):
     uid = _require(request)
@@ -211,9 +217,9 @@ async def api_intent(request: Request):
         except (TypeError, ValueError):
             return None
     sl, tp = _num(b.get("sl")), _num(b.get("tp"))
-    has_content = sl is not None or tp is not None or any((b.get(k) or "").strip() for k in ("plan", "setup", "memo", "emotion"))
-    fields = {"plan": b.get("plan"), "setup": b.get("setup"), "sl": sl, "tp": tp,
-              "emotion": b.get("emotion"), "memo": b.get("memo"),
+    has_content = sl is not None or tp is not None or any((b.get(k) or "").strip() for k in ("plan", "setup", "strategy", "memo", "emotion"))
+    fields = {"plan": b.get("plan"), "setup": b.get("setup"), "strategy": b.get("strategy"),
+              "sl": sl, "tp": tp, "emotion": b.get("emotion"), "memo": b.get("memo"),
               "status": "기록완료" if has_content else "의도 미기입"}
     ok = db.update_intent(uid, b.get("trade_id"), fields)
     return JSONResponse({"ok": ok}, status_code=200 if ok else 404)
