@@ -33,12 +33,15 @@
 </div>
 
 <div class="modal-bg" id="modalBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMeta">
-  <h3 id="modalTitle">사후 의도 캡처</h3><div class="meta" id="modalMeta"></div>
+  <h3 id="modalTitle">거래 상세 · 사후 의도</h3><div class="meta" id="modalMeta"></div>
+  <div class="facts" id="modalFacts"></div>
   <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
+  <div class="field"><label for="f_setup">셋업</label><input id="f_setup" placeholder="눌림목 / 돌파 / 역추세 / 추세추종"></div>
   <div class="row2">
-    <div class="field"><label for="f_setup">셋업</label><input id="f_setup" placeholder="눌림목 / 돌파 / 역추세"></div>
-    <div class="field"><label for="f_sl">무효선 (SL 의도가)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
+    <div class="field"><label for="f_sl">손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
+    <div class="field"><label for="f_tp">익절가 (TP)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
   </div>
+  <div class="rr-line" id="rrLine"></div>
   <div class="field"><label for="f_emo">감정</label><select id="f_emo">
     <option value="">—</option><option>차분</option><option>확신</option><option>조급</option><option>공포</option><option>탐욕</option><option>지루함</option></select></div>
   <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
@@ -51,6 +54,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
+const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const EXCH=new Set(["bybit","binance"]);
 let toastT;
@@ -106,15 +110,18 @@ function tradeRows(rows){
   return rows.map(r=>{
     const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${esc(r.direction)}</span>`:"—";
     const st=r.status==='의도 미기입'?`<span class="badge pending">의도 미기입</span>`:`<span class="badge done">${esc(r.status||'기록')}</span>`;
-    return `<tr><td class="num">${esc((r.closed_at||'').slice(0,16))}</td><td>${esc(r.exchange)}</td><td>${esc(r.symbol)}</td><td>${dir}</td>
-      <td class="num ${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</td><td>${st}</td>
-      <td class="plan-cell">${r.plan?esc(r.plan):'<span class="muted">— 비어있음</span>'}</td>
+    const rcell=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
+    return `<tr><td class="num">${esc((r.closed_at||'').slice(0,16))}</td>
+      <td>${esc(r.symbol)} <span class="ex">${esc(r.exchange)}</span></td><td>${dir}</td>
+      <td class="num">${fmtP(r.entry)}</td><td class="num">${fmtP(r.exit)}</td>
+      <td class="num ${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</td><td class="num">${rcell}</td><td>${st}</td>
       <td><button class="btn sm editBtn" data-id="${esc(r.trade_id)}">${r.plan?'편집':'채우기'}</button></td></tr>`;
   }).join("");
 }
 function table(rows){
-  return `<div class="table-wrap"><table><thead><tr><th class="num">청산시각</th><th>거래소</th><th>심볼</th><th>방향</th>
-    <th class="num">손익</th><th>상태</th><th>계획/의도</th><th></th></tr></thead><tbody>${tradeRows(rows)}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th class="num">청산시각</th><th>심볼</th><th>방향</th>
+    <th class="num">진입가</th><th class="num">청산가</th><th class="num">손익</th><th class="num">R</th><th>상태</th><th></th></tr></thead>
+    <tbody>${tradeRows(rows)}</tbody></table></div>`;
 }
 function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
 
@@ -179,14 +186,30 @@ function renderSettings(el){
 
 /* ---------- actions ---------- */
 function tById(id){return DATA.trades.find(t=>t.trade_id===id);}
+function fact(label,val){return `<div class="fact"><span class="fl">${label}</span><span class="fv num">${val}</span></div>`;}
+function renderFacts(r){
+  const mv=r.move_pct==null?'<span class="muted">—</span>':`<span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
+  const rr=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
+  $("#modalFacts").innerHTML=fact("진입가",fmtP(r.entry))+fact("청산가",fmtP(r.exit))+fact("수량",fmtP(r.qty))
+    +fact("가격변동",mv)+fact("실현손익",`<span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>`)+fact("실현 R",rr);
+}
+function updateRR(){
+  if(!EDIT)return; const e=EDIT.entry,x=EDIT.exit,d=EDIT.direction;
+  const sl=parseFloat($("#f_sl").value), tp=parseFloat($("#f_tp").value); let h="";
+  if(e&&x&&!isNaN(sl)&&e!==sl){const r=d==='Short'?(e-x)/(sl-e):(x-e)/(e-sl);h+=`실현 <b class="${r>=0?'pos':'neg'}">${(r>=0?'+':'')+r.toFixed(2)}R</b>`;}
+  if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl){const rr=Math.abs(tp-e)/Math.abs(e-sl);h+=(h?' · ':'')+`계획 손익비 <b>1 : ${rr.toFixed(1)}</b>`;}
+  $("#rrLine").innerHTML=h;
+}
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
-  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)} · 손익 ${money(r.pnl)}`;
-  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_sl").value=r.sl??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
+  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)}`;
+  renderFacts(r);
+  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
+  updateRR();
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
-  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,sl:$("#f_sl").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,sl:$("#f_sl").value,tp:$("#f_tp").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){closeModal();await loadAll();route();toast("저장됨");}else toast("저장 실패 — 거래를 찾지 못했어요");
@@ -204,6 +227,7 @@ async function pull(){
 }
 
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;
+$("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#modalBg").classList.contains("show"))closeModal();});
 window.addEventListener("hashchange",route);

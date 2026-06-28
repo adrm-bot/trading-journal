@@ -99,6 +99,19 @@ def _redirect_uri(request):
     return os.getenv("OAUTH_REDIRECT_URI") or str(request.url_for("auth_callback"))
 
 
+def _enrich(t):
+    """거래에 가격변동%·R·계획RR 파생값 추가."""
+    e, x, sl, tp, d = t.get("entry"), t.get("exit"), t.get("sl"), t.get("tp"), t.get("direction")
+    short = d == "Short"
+    if e and x and e != 0:
+        t["move_pct"] = round(((x - e) / e * 100) * (-1 if short else 1), 2)
+    if e and x and sl and e != sl:
+        t["r"] = round((e - x) / (sl - e) if short else (x - e) / (e - sl), 2)
+    if e and sl and tp and e != sl:
+        t["rr"] = round(abs(tp - e) / abs(e - sl), 2)
+    return t
+
+
 # --- routes ---
 @app.get("/healthz")
 def healthz():
@@ -173,7 +186,7 @@ def api_me(request: Request):
 def api_data(request: Request):
     uid = _require(request)
     summary, trades = engine.analyze_user(uid)
-    return JSONResponse({"summary": summary, "trades": trades})
+    return JSONResponse({"summary": summary, "trades": [_enrich(t) for t in trades]})
 
 
 @app.post("/api/pull")
@@ -192,13 +205,14 @@ async def api_intent(request: Request):
     uid = _require(request)
     _csrf(request)
     b = await request.json()
-    sl = b.get("sl")
-    try:
-        sl = float(sl) if sl not in (None, "") else None
-    except (TypeError, ValueError):
-        sl = None
-    has_content = sl is not None or any((b.get(k) or "").strip() for k in ("plan", "setup", "memo", "emotion"))
-    fields = {"plan": b.get("plan"), "setup": b.get("setup"), "sl": sl,
+    def _num(v):
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    sl, tp = _num(b.get("sl")), _num(b.get("tp"))
+    has_content = sl is not None or tp is not None or any((b.get(k) or "").strip() for k in ("plan", "setup", "memo", "emotion"))
+    fields = {"plan": b.get("plan"), "setup": b.get("setup"), "sl": sl, "tp": tp,
               "emotion": b.get("emotion"), "memo": b.get("memo"),
               "status": "기록완료" if has_content else "의도 미기입"}
     ok = db.update_intent(uid, b.get("trade_id"), fields)
