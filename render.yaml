@@ -1,7 +1,7 @@
 # Render 배포 설정 — Starter($7/월) + 영속 디스크 (데이터 영구 보존)
 services:
   - type: web
-    name: trading-journal
+    name: trading-journal-gunner
     runtime: python
     plan: starter
     region: singapore
@@ -32,4 +32,4 @@ services:
       - key: GOOGLE_CLIENT_SECRET
         sync: false
       - key: OAUTH_REDIRECT_URI
-        sync: false                     # 예: https://trading-journal.onrender.com/auth/callback
+        sync: false                     # 예: https://trading-journal-gunner.onrender.com/auth/callback
