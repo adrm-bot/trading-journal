@@ -8,6 +8,7 @@
 import logging
 import os
 import secrets
+from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -100,8 +101,9 @@ def _redirect_uri(request):
 
 
 def _enrich(t):
-    """거래에 가격변동%·R·계획RR 파생값 추가."""
-    e, x, sl, tp, d = t.get("entry"), t.get("exit"), t.get("sl"), t.get("tp"), t.get("direction")
+    """거래에 가격변동%·R·계획RR·리스크·보유시간 파생값 추가."""
+    e, x, sl, d, qty = t.get("entry"), t.get("exit"), t.get("sl"), t.get("direction"), t.get("qty")
+    tp, tp2 = t.get("tp"), t.get("tp2")
     short = d == "Short"
     if e and x and e != 0:
         t["move_pct"] = round(((x - e) / e * 100) * (-1 if short else 1), 2)
@@ -109,6 +111,16 @@ def _enrich(t):
         t["r"] = round((e - x) / (sl - e) if short else (x - e) / (e - sl), 2)
     if e and sl and tp and e != sl:
         t["rr"] = round(abs(tp - e) / abs(e - sl), 2)
+    if e and sl and tp2 and e != sl:
+        t["rr2"] = round(abs(tp2 - e) / abs(e - sl), 2)
+    if e and sl and qty:
+        t["risk_usd"] = round(abs(e - sl) * qty, 2)  # 계획 리스크 = 진입~손절 거리 × 수량
+    oa, ca = t.get("opened_at"), t.get("closed_at")
+    if oa and ca:
+        try:
+            t["hold_min"] = round((datetime.fromisoformat(ca) - datetime.fromisoformat(oa)).total_seconds() / 60)
+        except (TypeError, ValueError):
+            pass
     return t
 
 
@@ -200,10 +212,12 @@ def api_pull(request: Request):
     uid = _require(request)
     _csrf(request)
     try:
-        return {"ok": True, "fetched": engine.pull_user(uid)}
+        results = engine.pull_user(uid)  # {exchange: {added, error}} — 거래소별 결과
     except Exception:  # noqa: BLE001
         logger.exception("pull 실패 uid=%s", uid)
         return JSONResponse({"ok": False, "error": "거래 적재 실패 — 키/권한을 확인하세요"}, status_code=400)
+    total = sum(r["added"] for r in results.values())
+    return {"ok": True, "fetched": total, "results": results}
 
 
 @app.post("/api/intent")
@@ -216,10 +230,11 @@ async def api_intent(request: Request):
             return float(v) if v not in (None, "") else None
         except (TypeError, ValueError):
             return None
-    sl, tp = _num(b.get("sl")), _num(b.get("tp"))
-    has_content = sl is not None or tp is not None or any((b.get(k) or "").strip() for k in ("plan", "setup", "strategy", "memo", "emotion"))
+    sl, tp, tp2 = _num(b.get("sl")), _num(b.get("tp")), _num(b.get("tp2"))
+    has_content = (sl is not None or tp is not None or tp2 is not None
+                   or any((b.get(k) or "").strip() for k in ("plan", "setup", "strategy", "memo", "emotion")))
     fields = {"plan": b.get("plan"), "setup": b.get("setup"), "strategy": b.get("strategy"),
-              "sl": sl, "tp": tp, "emotion": b.get("emotion"), "memo": b.get("memo"),
+              "sl": sl, "tp": tp, "tp2": tp2, "emotion": b.get("emotion"), "memo": b.get("memo"),
               "status": "기록완료" if has_content else "의도 미기입"}
     ok = db.update_intent(uid, b.get("trade_id"), fields)
     return JSONResponse({"ok": ok}, status_code=200 if ok else 404)

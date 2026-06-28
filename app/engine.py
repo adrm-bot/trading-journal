@@ -1,7 +1,13 @@
-"""engine.py — 유저별 거래소 풀링(ccxt, 키는 인자로만) + 행동분석. app 자립(journal/ 의존 없음).
+"""engine.py — 유저별 거래소 풀링 + 포지션 단위 재구성 + 행동분석. app 자립.
 
-거래소 예외는 키가 섞일 수 있으므로 `raise ... from None`으로 원문 체인을 끊는다.
+핵심 설계 (v2, 2026-06-29):
+- 거래는 "닫는 주문 1건"이 아니라 **하나의 경제적 포지션(분할 진입/분할 청산 = open→flat 1사이클)** 단위로 적재한다.
+- Bybit: closed-pnl을 시간·심볼·방향으로 그룹핑(강제청산 포함 완전, 손익 정확). 체결 워킹은 강제청산 체결을
+  표준 execution 피드가 누락해 깨지므로 쓰지 않는다(실데이터로 검증됨).
+- Binance: closed-pnl 등가가 없어 userTrades(체결, 강제청산 포함)를 부호 walk로 재구성, 실현손익은 거래소 보고값 합산.
+- 거래소 예외는 키가 섞일 수 있어 `raise ... from None`으로 원문 체인을 끊는다.
 """
+import logging
 import os
 import time
 from datetime import datetime, timezone
@@ -10,91 +16,265 @@ import ccxt
 
 from . import behaviors, db
 
-LOOKBACK = int(os.getenv("LOOKBACK_DAYS", "30"))
+logger = logging.getLogger("app.engine")
+
+LOOKBACK = int(os.getenv("LOOKBACK_DAYS", "90"))
+# 같은 심볼·방향에서 직전 청산으로부터 이 시간 내 청산이면 같은 포지션으로 묶는다.
+POS_GAP_HOURS = float(os.getenv("POSITION_GAP_HOURS", "12"))
 
 
 def _f(d, k):
     try:
         return float(d.get(k))
     except (TypeError, ValueError):
-        return None
+        return 0.0
 
 
-def _row(exchange, trade_id, updated_ms, symbol, direction, entry, exit_, qty, pnl):
-    dt = datetime.fromtimestamp(updated_ms / 1000, tz=timezone.utc).replace(tzinfo=None)
-    return {"trade_id": trade_id, "exchange": exchange, "symbol": symbol, "direction": direction,
-            "entry": entry, "exit": exit_, "qty": qty, "pnl": pnl,
-            "closed_at": dt.strftime("%Y-%m-%d %H:%M:%S"), "status": "의도 미기입"}
+def _ts_str(ms):
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).replace(tzinfo=None).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def fetch_bybit(key, secret, lookback):
-    ex = ccxt.bybit({"apiKey": key, "secret": secret, "enableRateLimit": True})
+def _position_row(exchange, trade_id, symbol, direction, entry, exit_, qty, pnl,
+                  opened_ms, closed_ms, fees=0.0, funding=0.0, leverage=0.0,
+                  fill_count=0, liquidated=False):
+    return {
+        "trade_id": trade_id, "exchange": exchange, "symbol": symbol, "direction": direction,
+        "entry": entry, "exit": exit_, "qty": qty, "pnl": pnl,
+        "opened_at": _ts_str(opened_ms), "closed_at": _ts_str(closed_ms),
+        "fees": round(fees, 6), "funding": round(funding, 6),
+        "leverage": leverage or None, "fill_count": fill_count or None,
+        "liquidated": 1 if liquidated else 0, "status": "의도 미기입",
+    }
+
+
+# ---------- Bybit: closed-pnl 그룹핑 ----------
+def _bybit_closed_pnl(ex, lookback):
     now = ex.milliseconds()
     start = now - lookback * 86_400_000
     chunk = 7 * 86_400_000
     rows, w = [], start
-    try:
-        while w < now:
-            e = min(w + chunk, now)
-            cursor = None
-            while True:
-                p = {"category": "linear", "startTime": w, "endTime": e, "limit": 100}
-                if cursor:
-                    p["cursor"] = cursor
-                resp = ex.private_get_v5_position_closed_pnl(p)
-                if str(resp.get("retCode")) != "0":
-                    raise RuntimeError("bybit fetch rejected") from None
-                res = resp.get("result", {})
-                for r in res.get("list", []):
-                    sym, oid = r.get("symbol", ""), r.get("orderId", "")
-                    upd = int(r.get("updatedTime") or r.get("createdTime") or 0)
-                    s = (r.get("side") or "").lower()
-                    direction = "Long" if s == "sell" else ("Short" if s == "buy" else None)
-                    rows.append(_row("bybit", f"bybit:{sym}:{oid}:{upd}", upd, sym, direction,
-                                     _f(r, "avgEntryPrice"), _f(r, "avgExitPrice"),
-                                     _f(r, "qty") or _f(r, "closedSize"), _f(r, "closedPnl")))
-                cursor = res.get("nextPageCursor")
-                if not cursor:
-                    break
-                time.sleep(0.2)
-            w = e
-    except ccxt.BaseError:
-        raise RuntimeError("bybit auth/fetch failed") from None
+    while w < now:
+        e = min(w + chunk, now)
+        cursor = None
+        while True:
+            p = {"category": "linear", "startTime": w, "endTime": e, "limit": 100}
+            if cursor:
+                p["cursor"] = cursor
+            resp = ex.private_get_v5_position_closed_pnl(p)
+            if str(resp.get("retCode")) != "0":
+                raise RuntimeError("bybit closed-pnl rejected") from None
+            res = resp.get("result", {})
+            rows += res.get("list", [])
+            cursor = res.get("nextPageCursor")
+            if not cursor:
+                break
+            time.sleep(0.15)
+        w = e
     return rows
+
+
+def reconstruct_bybit(rows):
+    """closed-pnl 레코드들을 포지션(open→flat 사이클)으로 그룹핑."""
+    for r in rows:
+        r["_ct"] = int(r.get("createdTime") or r.get("updatedTime") or 0)
+        r["_ut"] = int(r.get("updatedTime") or r.get("createdTime") or 0)
+    rows.sort(key=lambda r: r["_ct"])
+    gap = POS_GAP_HOURS * 3600 * 1000
+    groups, cur = [], None
+    for r in rows:
+        # Bybit closed-pnl: side=Sell → 롱 청산, Buy → 숏 청산
+        direction = "Long" if r.get("side") == "Sell" else "Short"
+        sym = r.get("symbol", "")
+        if cur and cur["symbol"] == sym and cur["dir"] == direction and r["_ct"] - cur["last"] <= gap:
+            cur["rows"].append(r)
+            cur["last"] = max(cur["last"], r["_ut"])
+        else:
+            if cur:
+                groups.append(cur)
+            cur = {"symbol": sym, "dir": direction, "rows": [r], "first": r["_ct"], "last": r["_ut"]}
+    if cur:
+        groups.append(cur)
+
+    out = []
+    for g in groups:
+        rs = g["rows"]
+        cs = sum(_f(r, "closedSize") for r in rs) or sum(_f(r, "qty") for r in rs)
+        if cs <= 0:
+            continue
+        entry = sum(_f(r, "avgEntryPrice") * (_f(r, "closedSize") or _f(r, "qty")) for r in rs) / cs
+        exit_ = sum(_f(r, "avgExitPrice") * (_f(r, "closedSize") or _f(r, "qty")) for r in rs) / cs
+        pnl = sum(_f(r, "closedPnl") for r in rs)
+        fees = sum(_f(r, "openFee") + _f(r, "closeFee") for r in rs)
+        fill_count = sum(int(r.get("fillCount") or 1) for r in rs)
+        leverage = max((_f(r, "leverage") for r in rs), default=0.0)
+        liquidated = any(str(r.get("execType", "")).lower().startswith("bust")
+                         or str(r.get("execType", "")).lower() == "adltrade" for r in rs)
+        # 멱등키 = 가장 최근 청산주문 id (재풀링해도 안정: 마지막 청산이 윈도에서 가장 늦게 사라짐)
+        last_row = max(rs, key=lambda r: r["_ut"])
+        tid = f"bybit:pos:{g['symbol']}:{last_row.get('orderId', '')}"
+        out.append(_position_row("bybit", tid, g["symbol"], g["dir"], round(entry, 10),
+                                 round(exit_, 10), cs, round(pnl, 8), g["first"], g["last"],
+                                 fees=fees, leverage=leverage, fill_count=fill_count, liquidated=liquidated))
+    return out
+
+
+def fetch_bybit(key, secret, lookback):
+    ex = ccxt.bybit({"apiKey": key, "secret": secret, "enableRateLimit": True})
+    try:
+        rows = _bybit_closed_pnl(ex, lookback)
+    except ccxt.BaseError:
+        raise RuntimeError("bybit 인증/조회 실패 — read-only 키·권한을 확인하세요") from None
+    return reconstruct_bybit(rows)
+
+
+# ---------- Binance: userTrades 부호 walk ----------
+def _binance_symbols_and_funding(ex, lookback):
+    now = ex.milliseconds()
+    start = now - lookback * 86_400_000
+    week = 7 * 86_400_000
+    symbols, funding = set(), {}
+    cur = start
+    while cur < now:
+        e = min(cur + week, now)
+        for inc in ex.fapiPrivateGetIncome({"startTime": cur, "endTime": e, "limit": 1000}):
+            typ = inc.get("incomeType")
+            sym = inc.get("symbol") or ""
+            if typ == "REALIZED_PNL" and sym:
+                symbols.add(sym)
+            elif typ == "FUNDING_FEE" and sym:
+                funding[sym] = funding.get(sym, 0.0) + _f(inc, "income")
+        cur = e
+    return symbols, funding
+
+
+def _binance_user_trades(ex, symbol, lookback):
+    now = ex.milliseconds()
+    start = now - lookback * 86_400_000
+    week = 7 * 86_400_000
+    out, cur = [], start
+    while cur < now:
+        e = min(cur + week, now)
+        from_id = None
+        while True:
+            p = {"symbol": symbol, "startTime": cur, "endTime": e, "limit": 1000}
+            if from_id is not None:
+                p = {"symbol": symbol, "fromId": from_id, "limit": 1000}
+            batch = ex.fapiPrivateGetUserTrades(p)
+            if not batch:
+                break
+            out += batch
+            if len(batch) < 1000:
+                break
+            from_id = int(batch[-1]["id"]) + 1  # 완전 페이지네이션
+        cur = e
+    # 중복 제거(시간창+fromId 혼용 안전장치)
+    seen, uniq = set(), []
+    for t in out:
+        if t["id"] not in seen:
+            seen.add(t["id"])
+            uniq.append(t)
+    return uniq
+
+
+def _new_bpos(direction, ts, anchor):
+    return {"dir": direction, "en": 0.0, "eq": 0.0, "xn": 0.0, "xq": 0.0,
+            "fee": 0.0, "rp": 0.0, "n": 0, "o": ts, "c": ts, "anchor": anchor, "liq": False}
+
+
+def reconstruct_binance(symbol, trades, funding_total=0.0):
+    """userTrades(체결)를 positionSide별로 부호 walk → open→flat 포지션. 진행중은 제외."""
+    buckets = {}
+    for t in trades:
+        buckets.setdefault(t.get("positionSide") or "BOTH", []).append(t)
+    out = []
+    for fills in buckets.values():
+        fills.sort(key=lambda t: (int(t["time"]), int(t["id"])))
+        peak = max((abs(float(t["qty"])) for t in fills), default=1.0)
+        tol = max(peak * 1e-6, 1e-12)
+        pos, net = None, 0.0
+        for t in fills:
+            q = abs(float(t["qty"]))
+            if q <= 0:
+                continue
+            s = 1 if str(t.get("side")).upper() == "BUY" else -1
+            price = float(t["price"])
+            fee = _f(t, "commission")
+            realized = _f(t, "realizedPnl")
+            ts = int(t["time"])
+            if pos is None:
+                pos = _new_bpos("Long" if s > 0 else "Short", ts, str(t["id"]))
+            inc = (s > 0) == (pos["dir"] == "Long")  # 포지션과 같은 방향 = 증가
+            pos["n"] += 1
+            pos["c"] = ts
+            if inc:  # 진입/물타기
+                pos["en"] += price * q; pos["eq"] += q; pos["fee"] += fee; pos["rp"] += realized
+                net += s * q
+            else:    # 감소/청산/플립
+                close_q = min(q, abs(net))
+                frac = close_q / q if q else 1.0
+                pos["xn"] += price * close_q; pos["xq"] += close_q
+                pos["fee"] += fee * frac; pos["rp"] += realized
+                net += (-close_q if net > 0 else close_q)  # net을 0쪽으로
+                leftover = q - close_q
+                if abs(net) <= tol:  # flat → emit
+                    out.append(_finalize_binance(symbol, pos, str(t["id"])))
+                    pos = None
+                    if leftover > tol:  # 플립: 잔여로 반대 포지션 오픈
+                        nd = "Long" if s > 0 else "Short"
+                        pos = _new_bpos(nd, ts, str(t["id"]))
+                        pos["en"] = price * leftover; pos["eq"] = leftover
+                        pos["fee"] = fee * (leftover / q); pos["n"] = 1
+                        net = (1 if nd == "Long" else -1) * leftover
+        # 루프 종료 후 pos가 남으면 진행중 → 제외
+    if out and funding_total:
+        out[-1]["funding"] = round(funding_total, 6)  # 펀딩 심볼합을 최근 포지션에 귀속(근사)
+    return out
+
+
+def _finalize_binance(symbol, pos, closing_id):
+    eq, xq = pos["eq"], pos["xq"]
+    entry = pos["en"] / eq if eq else 0.0
+    exit_ = pos["xn"] / xq if xq else 0.0
+    tid = f"binance:pos:{symbol}:{closing_id}"
+    row = _position_row("binance", tid, symbol, pos["dir"], round(entry, 10), round(exit_, 10),
+                        round(eq, 10), round(pos["rp"], 8), pos["o"], pos["c"],
+                        fees=pos["fee"], fill_count=pos["n"], liquidated=pos["liq"])
+    return row
 
 
 def fetch_binance(key, secret, lookback):
     ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
-    now = ex.milliseconds()
-    cur, week = now - lookback * 86_400_000, 7 * 86_400_000
-    rows = []
     try:
-        while cur < now:
-            e = min(cur + week, now)
-            for inc in ex.fapiPrivateGetIncome({"incomeType": "REALIZED_PNL", "startTime": cur, "endTime": e, "limit": 1000}):
-                pnl = _f(inc, "income")
-                if pnl is None:
-                    continue
-                sym, t, tran = inc.get("symbol", ""), int(inc.get("time", 0)), inc.get("tranId", "")
-                rows.append(_row("binance", f"binance:{sym}:{tran}:{t}", t, sym, None, None, None, None, pnl))
-            cur = e
+        symbols, funding = _binance_symbols_and_funding(ex, lookback)
+        rows = []
+        for sym in sorted(symbols):
+            trades = _binance_user_trades(ex, sym, lookback)
+            rows += reconstruct_binance(sym, trades, funding.get(sym, 0.0))
+        return rows
     except ccxt.BaseError:
-        raise RuntimeError("binance auth/fetch failed") from None
-    return rows
+        raise RuntimeError("binance 인증/조회 실패 — USDⓈ-M read-only 키·권한·시간동기를 확인하세요") from None
 
 
 ADAPTERS = {"bybit": fetch_bybit, "binance": fetch_binance}
 
 
-def pull_user(uid) -> int:
-    """신규 적재 건수만 반환(멱등)."""
-    added = 0
+def pull_user(uid):
+    """거래소별 적재 결과를 반환: {exchange: {"added": n, "error": str|None}}."""
+    results = {}
     for kind in db.list_connections(uid):
-        if kind in ADAPTERS:
-            cred = db.get_connection(uid, kind)
-            for r in ADAPTERS[kind](cred["key"], cred["secret"], LOOKBACK):
-                added += db.upsert_trade(uid, r)
-    return added
+        if kind not in ADAPTERS:
+            continue
+        cred = db.get_connection(uid, kind)
+        try:
+            added = sum(db.upsert_trade(uid, r) for r in ADAPTERS[kind](cred["key"], cred["secret"], LOOKBACK))
+            results[kind] = {"added": added, "error": None}
+        except RuntimeError as e:
+            logger.warning("pull %s 실패 uid=%s: %s", kind, uid, e)
+            results[kind] = {"added": 0, "error": str(e)}
+        except Exception:  # noqa: BLE001
+            logger.exception("pull %s 예외 uid=%s", kind, uid)
+            results[kind] = {"added": 0, "error": f"{kind} 적재 중 알 수 없는 오류"}
+    return results
 
 
 def _parse(s):

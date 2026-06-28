@@ -158,8 +158,30 @@ textarea{resize:vertical;min-height:64px}
 .rr-line b{font-family:var(--f-mono);font-weight:600;color:var(--ice)}
 .ex{font-family:var(--f-mono);font-size:10px;color:var(--dim);text-transform:uppercase;margin-left:5px}
 
+/* ---- 거래 툴바: 필터·검색·정렬·페이지네이션 ---- */
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:var(--s3)}
+.jbar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);margin-bottom:var(--s3)}
+.jbar input[type=date],.jbar input[type=search],.jbar select{width:auto;min-height:34px;padding:6px 10px;font-size:12.5px}
+.jbar input[type=search]{min-width:200px;flex:0 1 240px}
+.jbar input[type=date]{min-width:140px}
+.cgrp{display:inline-flex;gap:6px;flex-wrap:wrap}
+.btn[aria-current="page"]{box-shadow:inset 0 0 0 1px var(--frost);color:var(--glacier);background:rgba(186,215,247,.06)}
+.jsum{margin-left:auto;color:var(--muted);font-size:12.5px}
+.jsum b{font-family:var(--f-mono);color:var(--ice);font-weight:600}
+th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonlight)}
+.sarr{margin-left:4px;color:var(--frost);font-size:9px}
+.pager{display:flex;align-items:center;justify-content:flex-end;gap:var(--s3);margin-top:var(--s3)}
+.pginfo{color:var(--muted);font-size:12px;font-family:var(--f-mono)}
+.empty-sm{padding:var(--s8);text-align:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card)}
+.banner{display:flex;align-items:center;gap:8px;padding:9px var(--s5);font-size:13px;border-bottom:1px solid var(--line)}
+.banner.err{background:var(--neg-soft);color:var(--ember);border-bottom-color:rgba(228,109,76,.3)}
+.banner b{font-weight:600}
+.banner .bx{margin-left:auto;background:none;border:none;color:inherit;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
+.badge.liq{background:var(--neg-soft);color:var(--ember);font-size:10px;padding:1px 6px}
+
 @media(max-width:860px){
   .shell{grid-template-columns:1fr}
+  .row3{grid-template-columns:1fr}
   .side{flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--line);padding:var(--s2) var(--s4);overflow-x:auto}
   .brand{padding:var(--s2)} .nav{flex-direction:row} .side .foot{margin:0 0 0 auto;border:none;padding:0}
   .side .foot .email{display:none} .cards,.market{grid-template-columns:repeat(2,1fr)} .content{padding:var(--s4)} .topbar{padding:var(--s4)}

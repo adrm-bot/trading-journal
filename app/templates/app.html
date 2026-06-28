@@ -23,6 +23,7 @@
       <div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
       <div id="actions"></div>
     </div>
+    <div id="pullbanner"></div>
     <div class="content">
       <section id="view-dashboard" class="view" aria-live="polite"></section>
       <section id="view-journal" class="view" hidden></section>
@@ -41,9 +42,10 @@
       <option value="">—</option><option>추세추종</option><option>눌림목(되돌림)</option><option>돌파(브레이크아웃)</option><option>역추세(리버설)</option><option>레인지</option><option>스캘핑</option><option>뉴스·이벤트</option><option>기타</option></select></div>
     <div class="field"><label for="f_setup">진입근거 / 셋업</label><input id="f_setup" placeholder="추세선 지지 · 4H 다이버전스 · 거래량"></div>
   </div>
-  <div class="row2">
+  <div class="row3">
     <div class="field"><label for="f_sl">손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
-    <div class="field"><label for="f_tp">익절가 (TP)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
+    <div class="field"><label for="f_tp">익절가 1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
+    <div class="field"><label for="f_tp2">익절가 2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
   </div>
   <div class="rr-line" id="rrLine"></div>
   <div class="field"><label for="f_emo">감정</label><select id="f_emo">
@@ -58,6 +60,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false;
+let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25}, jtDebounce;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -116,17 +119,25 @@ function tradeRows(rows){
     const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${esc(r.direction)}</span>`:"—";
     const st=r.status==='의도 미기입'?`<span class="badge pending">의도 미기입</span>`:`<span class="badge done">${esc(r.status||'기록')}</span>`;
     const rcell=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
+    const liq=r.liquidated?` <span class="badge liq" title="강제청산/ADL">⚡청산</span>`:'';
+    const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:'';
     return `<tr><td class="num">${esc((r.closed_at||'').slice(0,16))}</td>
-      <td>${esc(r.symbol)} <span class="ex">${esc(r.exchange)}</span></td><td>${dir}</td>
+      <td>${esc(r.symbol)} <span class="ex">${esc(r.exchange)}</span>${lev}${liq}</td><td>${dir}</td>
       <td class="num">${fmtP(r.entry)}</td><td class="num">${fmtP(r.exit)}</td>
       <td class="num ${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</td><td class="num">${rcell}</td><td>${st}</td>
       <td><button class="btn sm editBtn" data-id="${esc(r.trade_id)}">${r.plan?'편집':'채우기'}</button></td></tr>`;
   }).join("");
 }
-function table(rows){
-  return `<div class="table-wrap"><table><thead><tr><th class="num">청산시각</th><th>심볼</th><th>방향</th>
-    <th class="num">진입가</th><th class="num">청산가</th><th class="num">손익</th><th class="num">R</th><th>상태</th><th></th></tr></thead>
-    <tbody>${tradeRows(rows)}</tbody></table></div>`;
+const TCOLS=[['closed_at','청산시각','num'],['symbol','심볼',''],['direction','방향',''],
+  ['entry','진입가','num'],['exit','청산가','num'],['pnl','손익','num'],['r','R','num'],['status','상태','']];
+function table(rows,opts){
+  opts=opts||{};
+  const th=TCOLS.map(c=>{
+    if(!opts.sortable)return `<th class="${c[2]}">${c[1]}</th>`;
+    const on=JT.sortKey===c[0], arr=on?(JT.sortDir==='desc'?'▼':'▲'):'';
+    return `<th class="${c[2]} sortable" data-sort="${c[0]}" aria-sort="${on?(JT.sortDir==='desc'?'descending':'ascending'):'none'}">${c[1]}<span class="sarr">${arr}</span></th>`;
+  }).join('')+`<th></th>`;
+  return `<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${tradeRows(rows)}</tbody></table></div>`;
 }
 function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
 
@@ -162,14 +173,86 @@ function renderDashboard(el){
     +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
   bindEdit();ensureMarket();
 }
+function iso(d){return d.toISOString().slice(0,10);}
+function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" ${JT[field]===v?'aria-current="page"':''}>${esc(label)}</button>`).join('');}
+function jtMatch(t){
+  const day=(t.closed_at||'').slice(0,10);
+  if(JT.from&&day<JT.from)return false;
+  if(JT.to&&day>JT.to)return false;
+  if(JT.exchange!=='all'&&t.exchange!==JT.exchange)return false;
+  if(JT.dir!=='all'&&t.direction!==JT.dir)return false;
+  if(JT.status==='pending'&&t.status!=='의도 미기입')return false;
+  if(JT.status==='done'&&t.status==='의도 미기입')return false;
+  if(JT.q){const hay=[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion].join(' ').toLowerCase();if(!hay.includes(JT.q.toLowerCase()))return false;}
+  return true;
+}
+function jtCmp(a,b){
+  const k=JT.sortKey, num=['entry','exit','pnl','r','qty','leverage'].includes(k);
+  let av=a[k],bv=b[k];
+  if(num){av=av==null?-Infinity:Number(av);bv=bv==null?-Infinity:Number(bv);}
+  else{av=av==null?'':String(av);bv=bv==null?'':String(bv);}
+  const c=av<bv?-1:av>bv?1:0;
+  return JT.sortDir==='desc'?-c:c;
+}
+function renderPager(k,pages){
+  const el=$("#jPager");if(!el)return;
+  if(k<=JT.size){el.innerHTML='';return;}
+  const s=(JT.page-1)*JT.size+1, e=Math.min(k,JT.page*JT.size);
+  el.innerHTML=`<button class="btn sm" id="pgPrev" ${JT.page<=1?'disabled':''}>‹ 이전</button>
+    <span class="pginfo">${s}–${e} / 총 ${k}건</span>
+    <button class="btn sm" id="pgNext" ${JT.page>=pages?'disabled':''}>다음 ›</button>`;
+  if($("#pgPrev"))$("#pgPrev").onclick=()=>{JT.page--;applyJournal();};
+  if($("#pgNext"))$("#pgNext").onclick=()=>{JT.page++;applyJournal();};
+}
+function applyJournal(){
+  if(!$("#jt"))return;
+  const rows=DATA.trades.filter(jtMatch).sort(jtCmp);
+  const k=rows.length, total=rows.reduce((s,t)=>s+(t.pnl||0),0);
+  const pages=Math.max(1,Math.ceil(k/JT.size));
+  if(JT.page>pages)JT.page=pages;
+  const start=(JT.page-1)*JT.size;
+  $("#jt").innerHTML=k?table(rows.slice(start,start+JT.size),{sortable:true})
+    :`<div class="empty-sm muted">조건에 맞는 거래 없음 — 필터를 완화해보세요.</div>`;
+  $("#jSummary").innerHTML=`결과 <b>${k}</b>건 · 합산손익 <b class="${total>=0?'pos':'neg'}">${money(total)}</b> USDT`;
+  renderPager(k,pages);
+  bindEdit();
+  $$("#jt th.sortable").forEach(th=>th.onclick=()=>{const c=th.dataset.sort;
+    if(JT.sortKey===c)JT.sortDir=JT.sortDir==='desc'?'asc':'desc';
+    else{JT.sortKey=c;JT.sortDir=(c==='closed_at'||c==='pnl'||c==='r')?'desc':'asc';}
+    applyJournal();});
+}
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
-  el.innerHTML=`<div style="display:flex;gap:8px;margin-bottom:14px">
-      <button class="btn sm fbtn" data-f="all" aria-current="page">전체 ${DATA.trades.length}</button>
-      <button class="btn sm fbtn" data-f="pending">의도 미기입 ${DATA.summary.unplanned||0}</button></div><div id="jt"></div>`;
-  const draw=f=>{const rows=f==='pending'?DATA.trades.filter(t=>t.status==='의도 미기입'):DATA.trades;$("#jt").innerHTML=table(rows);bindEdit();};
-  $$(".fbtn").forEach(b=>b.onclick=()=>{$$(".fbtn").forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");draw(b.dataset.f);});
-  draw("all");
+  const exs=[...new Set(DATA.trades.map(t=>t.exchange).filter(Boolean))];
+  el.innerHTML=`<div class="jbar">
+      <input type="date" id="jFrom" value="${JT.from}" aria-label="시작일">
+      <span class="muted">~</span>
+      <input type="date" id="jTo" value="${JT.to}" aria-label="종료일">
+      <button class="btn sm jpreset" data-d="0">오늘</button>
+      <button class="btn sm jpreset" data-d="7">7일</button>
+      <button class="btn sm jpreset" data-d="30">30일</button>
+      <input type="search" id="jQ" value="${esc(JT.q)}" placeholder="심볼·전략·메모 검색" aria-label="검색">
+      <select id="jSize" aria-label="페이지당 행수"><option value="25">25개</option><option value="50">50개</option><option value="100">100개</option></select>
+      <button class="btn sm" id="jReset">초기화</button>
+    </div>
+    <div class="jbar">
+      <span class="cgrp" id="jEx"></span><span class="cgrp" id="jDir"></span><span class="cgrp" id="jStat"></span>
+      <span class="jsum" id="jSummary"></span>
+    </div>
+    <div id="jt"></div><div class="pager" id="jPager"></div>`;
+  $("#jEx").innerHTML=chipGroup('exchange',[['all','전체'],...exs.map(e=>[e,e])]);
+  $("#jDir").innerHTML=chipGroup('dir',[['all','전체'],['Long','Long'],['Short','Short']]);
+  $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','미기입 '+(DATA.summary.unplanned||0)],['done','기록완료']]);
+  $("#jSize").value=String(JT.size);
+  $("#jFrom").onchange=e=>{JT.from=e.target.value;JT.page=1;applyJournal();};
+  $("#jTo").onchange=e=>{JT.to=e.target.value;JT.page=1;applyJournal();};
+  $("#jQ").oninput=e=>{clearTimeout(jtDebounce);const v=e.target.value;jtDebounce=setTimeout(()=>{JT.q=v;JT.page=1;applyJournal();},180);};
+  $("#jSize").onchange=e=>{JT.size=Number(e.target.value);JT.page=1;applyJournal();};
+  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size};renderJournal(el);};
+  $$(".jpreset").forEach(b=>b.onclick=()=>{const days=+b.dataset.d;JT.to=iso(new Date());JT.from=iso(new Date(Date.now()-days*86400000));JT.page=1;$("#jFrom").value=JT.from;$("#jTo").value=JT.to;applyJournal();});
+  $$(".fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
+    $$(`.fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");applyJournal();});
+  applyJournal();
 }
 function groupTable(keyFn,head,asc){
   const by={};DATA.trades.forEach(t=>{const k=keyFn(t);if(k==null)return;(by[k]=by[k]||{n:0,pnl:0,w:0});by[k].n++;by[k].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[k].w++;});
@@ -224,47 +307,70 @@ function renderSettings(el){
 /* ---------- actions ---------- */
 function tById(id){return DATA.trades.find(t=>t.trade_id===id);}
 function fact(label,val){return `<div class="fact"><span class="fl">${label}</span><span class="fv num">${val}</span></div>`;}
+function fmtHold(m){m=Math.round(m);if(m<60)return m+'분';const h=Math.floor(m/60),mm=m%60;if(h<24)return h+'시간'+(mm?` ${mm}분`:'');const d=Math.floor(h/24);return d+'일 '+(h%24)+'시간';}
 function renderFacts(r){
   const mv=r.move_pct==null?'<span class="muted">—</span>':`<span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const rr=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
-  $("#modalFacts").innerHTML=fact("진입가",fmtP(r.entry))+fact("청산가",fmtP(r.exit))+fact("수량",fmtP(r.qty))
-    +fact("가격변동",mv)+fact("실현손익",`<span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>`)+fact("실현 R",rr);
+  let h=fact("진입가",fmtP(r.entry))+fact("청산가",fmtP(r.exit))+fact("수량",fmtP(r.qty))
+    +fact("가격변동",mv)+fact("실현손익",`<span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>`)+fact("실현 R",rr)
+    +fact("레버리지",r.leverage?r.leverage+'x':'—')+fact("보유시간",r.hold_min==null?'—':fmtHold(r.hold_min))
+    +fact("분할 체결",r.fill_count?r.fill_count+'회':'—');
+  if(r.fees!=null)h+=fact("수수료",`-$${Number(r.fees).toLocaleString(undefined,{maximumFractionDigits:2})}`);
+  if(r.funding)h+=fact("펀딩",`<span class="${r.funding>=0?'pos':'neg'}">${money(r.funding)}</span>`);
+  $("#modalFacts").innerHTML=h;
 }
 function updateRR(){
-  if(!EDIT)return; const e=EDIT.entry,x=EDIT.exit,d=EDIT.direction;
-  const sl=parseFloat($("#f_sl").value), tp=parseFloat($("#f_tp").value); let h="";
-  if(e&&x&&!isNaN(sl)&&e!==sl){const r=d==='Short'?(e-x)/(sl-e):(x-e)/(e-sl);h+=`실현 <b class="${r>=0?'pos':'neg'}">${(r>=0?'+':'')+r.toFixed(2)}R</b>`;}
-  if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl){const rr=Math.abs(tp-e)/Math.abs(e-sl);h+=(h?' · ':'')+`계획 손익비 <b>1 : ${rr.toFixed(1)}</b>`;}
-  $("#rrLine").innerHTML=h;
+  if(!EDIT)return; const e=EDIT.entry,x=EDIT.exit,d=EDIT.direction,qty=EDIT.qty;
+  const sl=parseFloat($("#f_sl").value), tp=parseFloat($("#f_tp").value), tp2=parseFloat($("#f_tp2").value);
+  const p=[];
+  if(e&&x&&!isNaN(sl)&&e!==sl){const r=d==='Short'?(e-x)/(sl-e):(x-e)/(e-sl);p.push(`실현 <b class="${r>=0?'pos':'neg'}">${(r>=0?'+':'')+r.toFixed(2)}R</b>`);}
+  if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
+  if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl)p.push(`TP1 손익비 <b>1:${(Math.abs(tp-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
+  if(e&&!isNaN(sl)&&!isNaN(tp2)&&e!==sl)p.push(`TP2 손익비 <b>1:${(Math.abs(tp2-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
+  $("#rrLine").innerHTML=p.join(' · ');
 }
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
-  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)}`;
+  const liq=r.liquidated?' · ⚡강제청산':'';
+  $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(r.closed_at||'').slice(0,16)}${liq}`;
   renderFacts(r);
-  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_strategy").value=r.strategy||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
+  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_strategy").value=r.strategy||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
   updateRR();
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
-  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,strategy:$("#f_strategy").value,sl:$("#f_sl").value,tp:$("#f_tp").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,strategy:$("#f_strategy").value,sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){closeModal();await loadAll();route();toast("저장됨");}else toast("저장 실패 — 거래를 찾지 못했어요");
   }catch(err){toast("저장 실패 — 잠시 후 다시");}
   finally{SAVING=false;btn.disabled=false;}
 }
+function setPullBanner(results){
+  const el=$("#pullbanner");if(!el)return;
+  const errs=Object.entries(results||{}).filter(([k,v])=>v&&v.error);
+  if(!errs.length){el.innerHTML='';return;}
+  el.innerHTML=`<div class="banner err">⚠ ${errs.map(([k,v])=>`<b>${esc(k)}</b> ${esc(v.error)}`).join(' · ')}<button class="bx" aria-label="닫기">×</button></div>`;
+  el.querySelector('.bx').onclick=()=>{el.innerHTML='';};
+}
 async function pull(){
   const b=$("#pullBtn")||$("#emptyPull"); const orig=b?b.textContent:"";
   if(b){b.disabled=true;b.textContent="적재 중…";}
   try{
     const res=await(await postJSON("/api/pull",{})).json();
-    if(res.ok){await loadAll();route();toast(`적재 완료 (신규 ${res.fetched??0}건)`);}else toast(res.error||"적재 실패");
+    if(res.ok){
+      await loadAll();route();
+      const rs=res.results||{};
+      setPullBanner(rs);
+      const parts=Object.entries(rs).map(([k,v])=>v.error?`${k} 실패`:`${k} +${v.added}`);
+      toast(parts.length?`적재: ${parts.join(' · ')}`:`적재 완료 (신규 ${res.fetched??0}건) — 연결된 거래소 없음`);
+    }else toast(res.error||"적재 실패");
   }catch(err){toast("적재 실패 — 키/연결을 확인하세요");}
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 적재";}}
 }
 
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;
-$("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;
+$("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 document.addEventListener("keydown",e=>{if(e.key==="Escape"&&$("#modalBg").classList.contains("show"))closeModal();});
 window.addEventListener("hashchange",route);
