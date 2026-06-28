@@ -158,18 +158,44 @@ function marketStrip(m){
   if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 일시 불가</div></div>`;
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
+/* 상대강도 — BTC vs 알트 (7일 상대수익률) */
+const RS_REGIME={
+  btc:["BTC 우위","롱 → BTC · 숏 → 약세 알트(하단)","pos"],
+  alt:["알트 우위","롱 → 강세 알트(상단) · 숏 → BTC","pos"],
+  neutral:["혼조","페어 → 롱 강세(상단) / 숏 약세(하단)","muted"],
+};
+function rsPanel(m){
+  const rs=m&&m.rs; if(!rs||!(rs.board||[]).length)return "";
+  const reg=RS_REGIME[rs.regime]||["—","",""];
+  const mx=Math.max(...rs.board.map(b=>Math.abs(b.vs_btc_7d)),1), last=rs.board.length-1;
+  const rows=rs.board.map((b,i)=>{
+    const strong=b.vs_btc_7d>=0, w=(Math.abs(b.vs_btc_7d)/mx*50).toFixed(1);
+    const tag=i===0?'<span class="rstag long">강세·롱</span>':i===last?'<span class="rstag short">약세·숏</span>':'';
+    return `<div class="rsrow"><span class="rssym">${esc(b.sym)}${tag}</span>
+      <span class="rsbarwrap"><span class="rsbar ${strong?'pos':'neg'}" style="width:${w}%"></span></span>
+      <span class="num ${strong?'pos':'neg'}">${(b.vs_btc_7d>=0?'+':'')+b.vs_btc_7d}%</span></div>`;
+  }).join("");
+  return `<div class="section-title">상대강도 · BTC vs 알트 (7일)</div>
+    <div class="card rscard"><div class="rshead"><span class="rsbadge ${reg[2]}">${reg[0]}</span><span class="rshint">${reg[1]}</span></div>
+    <div class="rsbody">${rows}</div>
+    <div class="ccap muted">BTC 대비 7일 상대수익률 · 위=강세(롱 후보) 아래=약세(숏 후보) · ${rs.outperform}/${rs.n} 알트가 BTC 우위</div></div>`;
+}
+function paintMarket(){
+  const e=$("#marketStrip"); if(e)e.outerHTML=marketStrip(MARKET);
+  const h=$("#rsHost"); if(h)h.innerHTML=rsPanel(MARKET);
+}
 async function ensureMarket(){
-  const e=$("#marketStrip"); if(!e)return;
-  if(MARKET){e.outerHTML=marketStrip(MARKET);return;}
+  if(!$("#marketStrip"))return;
+  if(MARKET){paintMarket();return;}
   if(MKT_LOADING)return; MKT_LOADING=true;
   try{MARKET=await(await api("/api/market")).json();}catch(err){MARKET={};}
-  MKT_LOADING=false; const el2=$("#marketStrip"); if(el2)el2.outerHTML=marketStrip(MARKET);
+  MKT_LOADING=false; paintMarket();
 }
 
 function renderDashboard(el){
-  const strip=marketStrip(MARKET);
-  if(!DATA.trades.length){el.innerHTML=strip+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();return;}
-  el.innerHTML=strip+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
+  const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div>`;
+  if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();return;}
+  el.innerHTML=head+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
     +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
   bindEdit();ensureMarket();
 }

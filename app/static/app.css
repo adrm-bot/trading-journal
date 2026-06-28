@@ -179,6 +179,23 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .banner .bx{margin-left:auto;background:none;border:none;color:inherit;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
 .badge.liq{background:var(--neg-soft);color:var(--ember);font-size:10px;padding:1px 6px}
 
+/* ---- 상대강도 (BTC vs 알트) ---- */
+.rscard{padding:var(--s4) var(--s5)}
+.rshead{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s4);flex-wrap:wrap}
+.rsbadge{font-family:var(--f-display);font-weight:600;font-size:15px;padding:3px 12px;border-radius:var(--r-badge);background:var(--accent-soft);color:var(--frost)}
+.rsbadge.pos{background:var(--pos-soft);color:var(--mint)} .rsbadge.muted{background:var(--card-2);color:var(--pebble)}
+.rshint{color:var(--muted);font-size:12.5px}
+.rsbody{display:flex;flex-direction:column;gap:7px;margin-bottom:8px}
+.rsrow{display:grid;grid-template-columns:108px 1fr 56px;gap:var(--s3);align-items:center;font-size:13px}
+.rssym{font-weight:600;color:var(--moonlight);display:flex;align-items:center;gap:6px}
+.rstag{font-family:var(--f-mono);font-size:9px;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
+.rstag.long{background:var(--pos-soft);color:var(--mint)} .rstag.short{background:var(--neg-soft);color:var(--ember)}
+.rsbarwrap{position:relative;height:8px;background:var(--card-2);border-radius:4px}
+.rsbarwrap::before{content:"";position:absolute;left:50%;top:-2px;bottom:-2px;width:1px;background:var(--line-2)}
+.rsbar{position:absolute;top:0;bottom:0;border-radius:3px}
+.rsbar.pos{left:50%;background:var(--mint)} .rsbar.neg{right:50%;background:var(--ember)}
+.rsrow .num{text-align:right}
+
 /* ---- 성과 분석 (인사이트) ---- */
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3)}
 .mcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}

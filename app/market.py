@@ -52,17 +52,47 @@ def _coin(ex, symbol):
             "chg7": round(chg7, 2) if chg7 is not None else None}
 
 
-def _coins():
-    """리전 차단 회피: Bybit(접근성 높음) → Binance 순으로 시도."""
+# 상대강도 비교군(메이저 알트). BTC 대비 7일 상대수익률로 강약 순위.
+ALTS = ["ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK"]
+
+
+def _regime(board, btc):
+    """알트 breadth로 시장 레짐 판정: BTC 우위 / 알트 우위 / 혼조."""
+    n = len(board)
+    if not n:
+        return None
+    op = sum(1 for b in board if b["vs_btc_7d"] > 0)  # BTC보다 7일 강한 알트 수
+    if op <= n * 0.35:
+        regime = "btc"       # 대부분 알트가 BTC보다 약함 → BTC 우위
+    elif op >= n * 0.65:
+        regime = "alt"       # 대부분 알트가 BTC보다 강함 → 알트 우위
+    else:
+        regime = "neutral"
+    return {"regime": regime, "board": board, "n": n, "outperform": op,
+            "btc_chg7": btc.get("chg7"), "btc_trend": btc.get("trend")}
+
+
+def _market_data():
+    """리전 차단 회피: Bybit→Binance. BTC·ETH 시세 + 알트 상대강도 보드/레짐."""
     for name in ("bybit", "binance"):
         try:
             ex = getattr(ccxt, name)({"enableRateLimit": True})
             btc = _coin(ex, "BTC/USDT")
-            if btc:
-                return btc, _coin(ex, "ETH/USDT"), name
+            if not btc:
+                continue
+            eth, board = None, []
+            for sym in ALTS:
+                c = _coin(ex, f"{sym}/USDT")
+                if sym == "ETH":
+                    eth = c
+                if c and c.get("chg7") is not None and btc.get("chg7") is not None:
+                    board.append({"sym": sym, "chg24": c.get("chg24"), "chg7": c.get("chg7"),
+                                  "vs_btc_7d": round(c["chg7"] - btc["chg7"], 2)})
+            board.sort(key=lambda b: b["vs_btc_7d"], reverse=True)
+            return {"btc": btc, "eth": eth, "rs": _regime(board, btc), "src": name}
         except Exception:  # noqa: BLE001
             logger.warning("market 시세 %s 실패", name)
-    return None, None, None
+    return {"btc": None, "eth": None, "rs": None, "src": None}
 
 
 def _fng():
@@ -80,8 +110,9 @@ def get_context(force=False):
     now = time.time()
     if not force and _CACHE["data"] and now - _CACHE["at"] < _TTL:
         return _CACHE["data"]
-    btc, eth, src = _coins()
-    data = {"btc": btc, "eth": eth, "src": src, "fng": None, "dom": None, "ts": int(now)}
+    md = _market_data()
+    data = {"btc": md["btc"], "eth": md["eth"], "rs": md["rs"], "src": md["src"],
+            "fng": None, "dom": None, "ts": int(now)}
     for key, fn in (("fng", _fng), ("dom", _dominance)):
         try:
             data[key] = fn()
