@@ -261,10 +261,91 @@ function groupTable(keyFn,head,asc){
   const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>${head}</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* ---------- 성과 분석 ---------- */
+function num(v){return Number(v)||0;}
+function trDate(t){return (t.closed_at||'').slice(0,10);}
+function trHourUTC(t){const h=parseInt((t.closed_at||'').slice(11,13),10);return isNaN(h)?null:h;}
+function perfMetrics(ts){
+  const pnls=ts.map(t=>num(t.pnl)), n=ts.length;
+  const wins=pnls.filter(p=>p>0), losses=pnls.filter(p=>p<0);
+  const sum=pnls.reduce((a,b)=>a+b,0);
+  const avgWin=wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0;
+  const avgLoss=losses.length?losses.reduce((a,b)=>a+b,0)/losses.length:0;
+  const grossWin=wins.reduce((a,b)=>a+b,0), grossLoss=losses.reduce((a,b)=>a+b,0);
+  const pf=grossLoss?Math.abs(grossWin/grossLoss):(grossWin?Infinity:0);
+  const rs=ts.map(t=>t.r).filter(r=>r!=null);
+  const avgR=rs.length?rs.reduce((a,b)=>a+b,0)/rs.length:null;
+  const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  let cum=0,peak=0,mdd=0; ord.forEach(t=>{cum+=num(t.pnl);peak=Math.max(peak,cum);mdd=Math.min(mdd,cum-peak);});
+  const fees=ts.reduce((a,t)=>a+num(t.fees),0), funding=ts.reduce((a,t)=>a+num(t.funding),0);
+  return {n,sum,winRate:n?wins.length/n:0,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding};
+}
+function mcard(l,v,cls,sub){return `<div class="mcard"><div class="ml">${l}</div><div class="mval ${cls||''}">${v}</div>${sub?`<div class="msub">${sub}</div>`:''}</div>`;}
+function metricsRow(m){
+  return `<div class="mgrid">`
+    +mcard('기대값/거래',money(m.exp),m.exp>=0?'pos':'neg','1거래당 평균 손익')
+    +mcard('평균 R',m.avgR==null?'—':(m.avgR>=0?'+':'')+m.avgR.toFixed(2)+'R',m.avgR==null?'':(m.avgR>=0?'pos':'neg'),m.rsN?`SL 입력 ${m.rsN}건 기준`:'손절 입력하면 계산')
+    +mcard('손익비',m.avgLoss?(m.avgWin/Math.abs(m.avgLoss)).toFixed(2):'—','','평균이익 ÷ 평균손실')
+    +mcard('Profit Factor',isFinite(m.pf)?m.pf.toFixed(2):'∞',m.pf>=1?'pos':'neg','총이익 ÷ 총손실')
+    +mcard('최대 낙폭(MDD)',money(m.mdd),'neg','누적 고점 대비')
+    +mcard('순손익',money(m.net),m.net>=0?'pos':'neg',m.funding?'펀딩 포함':'수수료 반영')
+    +`</div>`;
+}
+function equitySVG(ts){
+  const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  let cum=0; const pts=ord.map(t=>cum+=num(t.pnl));
+  if(!pts.length)return'';
+  const W=600,H=150,pad=10, min=Math.min(0,...pts), max=Math.max(0,...pts), rng=(max-min)||1;
+  const X=i=>pad+(pts.length<=1?0:i/(pts.length-1)*(W-2*pad)), Y=v=>H-pad-((v-min)/rng)*(H-2*pad);
+  const line=pts.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
+  const col=pts[pts.length-1]>=0?'var(--mint)':'var(--ember)';
+  return `<svg class="eq" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="누적 손익 곡선">
+    <line x1="${pad}" y1="${Y(0).toFixed(1)}" x2="${W-pad}" y2="${Y(0).toFixed(1)}" stroke="var(--line-2)" stroke-dasharray="3 3"/>
+    <polyline points="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+}
+function feeCard(m){
+  const row=(l,v,cls)=>`<div class="fbrow"><span>${l}</span><span class="num ${cls||''}">${money(v)}</span></div>`;
+  return `<div class="card feebd">`
+    +row('그로스 (수수료 전)',m.gross)+row('− 수수료',-m.fees,'neg')
+    +row('실현손익 (거래소)',m.sum,m.sum>=0?'pos':'neg')+row('± 펀딩',m.funding,m.funding>=0?'pos':'neg')
+    +`<div class="fbrow tot"><span>순손익</span><span class="num ${m.net>=0?'pos':'neg'}">${money(m.net)} USDT</span></div></div>`;
+}
+function calCard(ts){
+  const by={}; ts.forEach(t=>{const d=trDate(t);if(d)by[d]=(by[d]||0)+num(t.pnl);});
+  const days=Object.keys(by); if(!days.length)return `<p class="muted">데이터 없음.</p>`;
+  const s=new Date(days.reduce((a,b)=>a<b?a:b)+'T00:00:00Z'); s.setUTCDate(s.getUTCDate()-s.getUTCDay());
+  const end=new Date(days.reduce((a,b)=>a>b?a:b)+'T00:00:00Z');
+  const mx=Math.max(...Object.values(by).map(v=>Math.abs(v)),1); let cells='';
+  for(let d=new Date(s); d<=end; d.setUTCDate(d.getUTCDate()+1)){
+    const k=d.toISOString().slice(0,10), v=by[k]; let bg='var(--card-2)', tt=k;
+    if(v!=null){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(59,191,166,${a})`:`rgba(228,109,76,${a})`;tt=`${k}: ${money(v)}`;}
+    cells+=`<div class="cal-cell" style="background:${bg}" title="${esc(tt)}"></div>`;
+  }
+  return `<div class="card"><div class="cal">${cells}</div><div class="ccap muted">초록=수익일 · 빨강=손실일 (UTC)</div></div>`;
+}
+function sessionCard(ts){
+  const hp=Array(24).fill(0), hn=Array(24).fill(0);
+  ts.forEach(t=>{const h=trHourUTC(t);if(h!=null){hp[h]+=num(t.pnl);hn[h]++;}});
+  const mx=Math.max(...hp.map(v=>Math.abs(v)),1); let hours='';
+  for(let h=0;h<24;h++){const v=hp[h];let bg='var(--card-2)',tt=`${String(h).padStart(2,'0')}:00 UTC`;
+    if(hn[h]){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(59,191,166,${a})`:`rgba(228,109,76,${a})`;tt+=` · ${money(v)} (${hn[h]}건)`;}
+    hours+=`<div class="hcell" style="background:${bg}" title="${esc(tt)}">${h}</div>`;}
+  const sess=[['아시아','00–08',0,8],['런던','08–13',8,13],['뉴욕','13–21',13,21],['그 외','21–24',21,24]];
+  const rows=sess.map(([nm,lbl,a,b])=>{let p=0,n=0;for(let h=a;h<b;h++){p+=hp[h];n+=hn[h];}
+    return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} UTC</span></span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span><span class="muted num">${n}건</span></div>`;}).join('');
+  return `<div class="card"><div class="hours">${hours}</div><div class="sess">${rows}</div><div class="ccap muted">UTC 기준 · 한국시간 = UTC+9</div></div>`;
+}
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
+  const ts=DATA.trades, m=perfMetrics(ts);
   const stratTbl=groupTable(t=>t.strategy,"전략",false);
-  el.innerHTML=`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음.</p>`)
+  el.innerHTML=
+     `<div class="section-title">성과 요약</div>`+metricsRow(m)
+    +`<div class="section-title">누적 손익 곡선</div><div class="card chartc">${equitySVG(ts)}<div class="ccap muted">총 ${m.n}건 · 실현 ${money(m.sum)} USDT</div></div>`
+    +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
+    +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
+    +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)
+    +`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음.</p>`)
     +(stratTbl?`<div class="section-title">전략별 성과 (수익 큰 순)</div>`+stratTbl
       :`<div class="section-title">전략별 성과</div><p class="muted">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)
     +`<div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true);

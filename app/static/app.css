@@ -179,7 +179,29 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .banner .bx{margin-left:auto;background:none;border:none;color:inherit;font-size:18px;cursor:pointer;line-height:1;padding:0 4px}
 .badge.liq{background:var(--neg-soft);color:var(--ember);font-size:10px;padding:1px 6px}
 
+/* ---- 성과 분석 (인사이트) ---- */
+.mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3)}
+.mcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}
+.mcard .ml{color:var(--muted);font-size:12px}
+.mcard .mval{font-family:var(--f-display);font-size:23px;font-weight:600;margin-top:5px;color:var(--ice);letter-spacing:0}
+.mcard .mval.pos{color:var(--mint)} .mcard .mval.neg{color:var(--ember)}
+.mcard .msub{color:var(--dim);font-size:11px;margin-top:3px}
+.chartc{padding:var(--s4)} svg.eq{width:100%;height:150px;display:block}
+.ccap{font-size:11.5px;margin-top:8px;font-family:var(--f-mono)}
+.feebd{padding:var(--s2) var(--s5)}
+.fbrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.fbrow:last-child{border-bottom:none}
+.fbrow.tot{font-weight:600;color:var(--glacier);border-top:1px solid var(--line-2);margin-top:2px}
+.cal{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px;overflow-x:auto;padding-bottom:4px}
+.cal-cell{width:13px;height:13px;border-radius:2px}
+.hours{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:var(--s4)}
+.hcell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:3px;font-family:var(--f-mono);font-size:9.5px;color:var(--moonlight)}
+.sess{display:flex;flex-direction:column;gap:1px}
+.srow{display:grid;grid-template-columns:1fr auto auto;gap:var(--s4);padding:7px 0;border-bottom:1px solid var(--line);font-size:13px;align-items:center}
+.srow:last-child{border-bottom:none} .srow .snm{color:var(--moonlight)}
+
 @media(max-width:860px){
+  .hours{grid-template-columns:repeat(8,1fr)}
   .shell{grid-template-columns:1fr}
   .row3{grid-template-columns:1fr}
   .side{flex-direction:row;align-items:center;border-right:none;border-bottom:1px solid var(--line);padding:var(--s2) var(--s4);overflow-x:auto}
