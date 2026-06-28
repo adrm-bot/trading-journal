@@ -238,3 +238,17 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
   .brand{padding:var(--s2)} .nav{flex-direction:row} .side .foot{margin:0 0 0 auto;border:none;padding:0}
   .side .foot .email{display:none} .cards,.market{grid-template-columns:repeat(2,1fr)} .content{padding:var(--s4)} .topbar{padding:var(--s4)}
 }
+
+/* 모바일: 1차 내비를 엄지존 하단 고정 탭바로 (가로스크롤에 묻히는 문제 해소) */
+@media(max-width:560px){
+  .side{overflow:visible;padding:var(--s2) var(--s4)}
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line);
+    justify-content:space-around;gap:0;padding:5px 0 calc(5px + env(safe-area-inset-bottom))}
+  .nav a{flex:1;flex-direction:column;gap:3px;font-size:10px;padding:6px 4px;border-radius:0;text-align:center;justify-content:center}
+  .nav a[aria-current="page"]{background:none;box-shadow:none;color:var(--frost)}
+  .nav .ic{width:auto;font-size:19px}
+  .content{padding-bottom:78px} .cards,.market{grid-template-columns:1fr}
+  .rsrow{grid-template-columns:96px 1fr 52px}
+}
+#toast{transition:bottom .2s}
+@media(max-width:560px){#toast{bottom:90px!important}}
