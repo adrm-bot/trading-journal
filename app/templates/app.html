@@ -310,9 +310,9 @@ function mcard(l,v,cls,sub){return `<div class="mcard"><div class="ml">${l}</div
 function metricsRow(m){
   return `<div class="mgrid">`
     +mcard('기대값/거래',money(m.exp),m.exp>=0?'pos':'neg','1거래당 평균 손익')
-    +mcard('평균 R',m.avgR==null?'—':(m.avgR>=0?'+':'')+m.avgR.toFixed(2)+'R',m.avgR==null?'':(m.avgR>=0?'pos':'neg'),m.rsN?`SL 입력 ${m.rsN}건 기준`:'손절 입력하면 계산')
+    +mcard('평균 R',m.avgR==null?'—':(m.avgR>=0?'+':'')+m.avgR.toFixed(2)+'R',(m.avgR==null||m.rsN<5)?'':(m.avgR>=0?'pos':'neg'),m.rsN?`${m.rsN}/${m.n}건만 SL 입력${m.rsN<m.n?' · 편향 주의':''}`:'손절 입력해야 계산')
     +mcard('손익비',m.avgLoss?(m.avgWin/Math.abs(m.avgLoss)).toFixed(2):'—','','평균이익 ÷ 평균손실')
-    +mcard('Profit Factor',isFinite(m.pf)?m.pf.toFixed(2):'∞',m.pf>=1?'pos':'neg','총이익 ÷ 총손실')
+    +mcard('Profit Factor',!isFinite(m.pf)?(m.n>=3?'∞':'—'):m.pf.toFixed(2),(isFinite(m.pf)&&m.pf>=1)?'pos':(isFinite(m.pf)?'neg':''),!isFinite(m.pf)?'무손실 · 표본부족':'총이익 ÷ 총손실')
     +mcard('최대 낙폭(MDD)',money(m.mdd),'neg','누적 고점 대비')
     +mcard('순손익',money(m.net),m.net>=0?'pos':'neg',m.funding?'펀딩 포함':'수수료 반영')
     +`</div>`;
@@ -365,8 +365,15 @@ function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
   const stratTbl=groupTable(t=>t.strategy,"전략",false);
+  const caveat=m.n<20?`<p class="caveat">⚠ 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
+  const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
+    <dl><dt>R (R배수)</dt><dd>손익을 <b>진입~손절 거리(1R)</b>로 나눈 값. +2R = 각오한 손실의 2배를 벌었다는 뜻. 사이즈가 달라도 거래 잘잘못을 같은 잣대로 비교.</dd>
+    <dt>기대값/거래</dt><dd>1거래당 평균 손익. 양수면 계속할수록 번다.</dd>
+    <dt>손익비</dt><dd>평균이익 ÷ 평균손실. 1.5면 이길 때 질 때보다 1.5배 먹음.</dd>
+    <dt>Profit Factor</dt><dd>총이익 ÷ 총손실. <b>1보다 크면 버는 시스템</b>.</dd>
+    <dt>MDD (최대낙폭)</dt><dd>누적손익이 고점 대비 가장 많이 빠진 폭. MAR(수익÷MDD)의 분모.</dd></dl></details>`;
   el.innerHTML=
-     `<div class="section-title">성과 요약</div>`+metricsRow(m)
+     `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +`<div class="section-title">누적 손익 곡선</div><div class="card chartc">${equitySVG(ts)}<div class="ccap muted">총 ${m.n}건 · 실현 ${money(m.sum)} USDT</div></div>`
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
     +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
@@ -379,17 +386,19 @@ function renderInsights(el){
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"binance",nm:"Binance",hint:"USDⓈ-M 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
-  {k:"notion",nm:"Notion",hint:"일지를 Notion에 미러 (출력 연동은 준비 중)",fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
-  {k:"telegram",nm:"Telegram",hint:"행동 다이제스트 푸시 (출력 연동은 준비 중)",fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
-  {k:"sheets",nm:"Google Sheets",hint:"일지를 시트에 미러 (출력 연동은 준비 중)",fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},
+  {k:"notion",nm:"Notion",hint:"일지를 Notion에 미러",soon:1,fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
+  {k:"telegram",nm:"Telegram",hint:"행동 다이제스트 푸시",soon:1,fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
+  {k:"sheets",nm:"Google Sheets",hint:"일지를 시트에 미러",soon:1,fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},
 ];
 function renderSettings(el){
   el.innerHTML=`<div class="grid">`+CONN_DEFS.map((d,di)=>{
     const on=CONN.includes(d.k);
-    return `<div class="card"><div class="conn"><div>
-        <div class="nm"><span class="dot ${on?'on':''}"></span>${d.nm}${d.read?`<span class="read-tag">read-only</span>`:""}</div>
+    const head=`<div class="conn"><div>
+        <div class="nm"><span class="dot ${on?'on':''}"></span>${d.nm}${d.read?`<span class="read-tag">read-only</span>`:""}${d.soon?`<span class="soon-tag">곧 제공</span>`:""}</div>
         <div class="hint">${d.hint}</div></div>
-        ${on?`<button class="btn sm delBtn" data-k="${d.k}">연결 해제</button>`:""}</div>
+        ${(on&&!d.soon)?`<button class="btn sm delBtn" data-k="${d.k}">연결 해제</button>`:""}</div>`;
+    if(d.soon)return `<div class="card soon">${head}<div class="hint" style="margin-top:10px">출력 연동을 준비 중입니다. 곧 켜집니다.</div></div>`;
+    return `<div class="card">${head}
       <form class="connForm" data-k="${d.k}" style="margin-top:14px">
         ${d.fields.map((f,fi)=>{const id=`c_${d.k}_${f[0]}`;return `<label class="sr-only" for="${id}">${d.nm} ${f[1]}</label><input id="${id}" name="${f[0]}" type="${f[2]||'text'}" placeholder="${f[1]}" autocomplete="off">`;}).join("")}
         <button class="btn primary sm" type="submit">${on?'업데이트':'연결'}</button>
@@ -434,7 +443,7 @@ function updateRR(){
   if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl)p.push(`TP1 손익비 <b>1:${(Math.abs(tp-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp2)&&e!==sl)p.push(`TP2 손익비 <b>1:${(Math.abs(tp2-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
-  $("#rrLine").innerHTML=p.join(' · ');
+  $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL) 입력 시 실현 R·리스크·손익비 자동 계산</span>';
 }
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
   const liq=r.liquidated?' · ⚡강제청산':'';
