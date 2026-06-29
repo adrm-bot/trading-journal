@@ -103,6 +103,23 @@ def get_trades(uid):
             "SELECT * FROM trades WHERE user_id=? ORDER BY closed_at DESC", (uid,))]
 
 
+def bulk_fill_unplanned(uid, fields: dict) -> int:
+    """status='의도 미기입' 거래를 일괄 기입(과거 정리용). 빈 필드는 건너뜀, status→기록완료. 반환=건수."""
+    sets = {}
+    for k, v in fields.items():
+        if k not in _INTENT or k == "status":
+            continue
+        if v is None or (isinstance(v, str) and v.strip() == ""):
+            continue
+        sets[k] = v
+    sets["status"] = "기록완료"
+    clause = ", ".join(f"{k}=?" for k in sets)
+    with conn() as c:
+        cur = c.execute(f"UPDATE trades SET {clause} WHERE user_id=? AND status='의도 미기입'",
+                        [*sets.values(), uid])
+        return cur.rowcount
+
+
 def update_intent(uid, trade_id, fields: dict) -> bool:
     """present 키만 반영(빈 문자열은 NULL로 clear). status는 빈 값이면 미반영."""
     sets = {}

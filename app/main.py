@@ -250,6 +250,15 @@ async def api_intent(request: Request):
     return JSONResponse({"ok": ok}, status_code=200 if ok else 404)
 
 
+@app.post("/api/intent/bulk")
+async def api_intent_bulk(request: Request):
+    uid = _require(request)
+    _csrf(request)
+    b = await request.json()
+    fields = {"plan": b.get("plan"), "strategy": b.get("strategy"), "emotion": b.get("emotion")}
+    return {"ok": True, "filled": db.bulk_fill_unplanned(uid, fields)}
+
+
 @app.get("/api/connections")
 def api_connections(request: Request):
     return {"connected": db.list_connections(_require(request))}
