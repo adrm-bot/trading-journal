@@ -9,12 +9,12 @@
 <a class="sr-only" href="#main">본문 바로가기</a>
 <div class="shell" id="shell">
   <aside class="side">
-    <div class="brand">📓 매매일지</div>
+    <div class="brand"><svg class="brand-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 3v18"/></svg>매매일지</div>
     <nav class="nav" aria-label="주 메뉴">
-      <a href="#dashboard" data-view="dashboard"><span class="ic" aria-hidden="true">📊</span>대시보드</a>
-      <a href="#journal" data-view="journal"><span class="ic" aria-hidden="true">📒</span>거래</a>
-      <a href="#insights" data-view="insights"><span class="ic" aria-hidden="true">🧠</span>인사이트</a>
-      <a href="#settings" data-view="settings"><span class="ic" aria-hidden="true">⚙️</span>설정</a>
+      <a href="#dashboard" data-view="dashboard"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M7 20v-6M12 20v-11M17 20v-9"/></svg></span>대시보드</a>
+      <a href="#journal" data-view="journal"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span>거래</a>
+      <a href="#insights" data-view="insights"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5 7 4-14 2.5 7h6"/></svg></span>인사이트</a>
+      <a href="#settings" data-view="settings"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="8" cy="18" r="2.2"/></svg></span>설정</a>
     </nav>
     <div class="foot"><div class="email" id="email">—</div><a href="/logout">로그아웃</a></div>
   </aside>
@@ -22,7 +22,7 @@
     <div class="topbar">
       <div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
       <div class="tbar-right">
-        <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)">🔍 검색 <span class="kbd">⌘K</span></button>
+        <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-3.8-3.8"/></svg>검색 <span class="kbd">⌘K</span></button>
         <div id="actions"></div>
       </div>
     </div>
@@ -96,6 +96,18 @@ const EXN_MAP={bybit:"Bybit",binance:"Binance",gate:"Gate.io",notion:"Notion",te
 const EXN=k=>EXN_MAP[k]||k;
 const dirKo=d=>d==='Long'?'롱':d==='Short'?'숏':'—';
 const oc=t=>t.outcome||((t.pnl||0)>0?'win':((t.pnl||0)<0?'loss':'be'));  // 승/패/본절 — 서버 enrich 판정 우선
+/* 단색 SVG 아이콘(Lucide 스타일·currentColor) — 컬러 이모지 대체 */
+const _sv='<svg class="ic-xs" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">';
+const ICONS={
+  sl:_sv+'<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6 18.4 18.4"/></svg>',
+  tp:_sv+'<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.2"/></svg>',
+  trail:_sv+'<path d="M3 17 9 11l4 4 8-8"/><path d="M16 7h5v5"/></svg>',
+  manual:_sv+'<path d="M4 4l7 17 2.5-7.5L21 11z"/></svg>',
+  liq:_sv+'<path d="M13 2 4 14h7l-1 8 9-12h-7z"/></svg>',
+  warn:_sv+'<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg>',
+  good:_sv+'<path d="M20 6 9 17l-5-5"/></svg>',
+  info:_sv+'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+};
 /* 의도 입력 칩(탭 선택형) taxonomy */
 const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)","역추세(리버설)","레인지(박스)","스캘핑","뉴스·이벤트","기타"];
 const RATIONALES=["추세선","다이버전스","거래량 급증","캔들패턴","차트패턴","지지·저항","이평선(EMA존)","전고/전저","피보나치","오더블록·유동성","펀딩·롱숏비","상대강도(BTC대비)","뉴스·재료","직감·근거없음"];
@@ -169,7 +181,7 @@ function statCards(s){
 function flagsBlock(s){
   const fl=s.flags||[]; if(!fl.length)return"";
   return `<div class="flags">`+fl.map(f=>{const o=(typeof f==='string')?{level:'warn',text:f}:f;
-    const ic=o.level==='warn'?'⚠':o.level==='good'?'✓':'•';
+    const ic=o.level==='warn'?ICONS.warn:o.level==='good'?ICONS.good:ICONS.info;
     return `<div class="flag ${esc(o.level||'info')}"><span class="fi" aria-hidden="true">${ic}</span><span>${esc(o.text)}</span></div>`;}).join("")+`</div>`;
 }
 function onboarding(){
@@ -184,7 +196,7 @@ function tradeRows(rows){
     const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${dirKo(r.direction)}</span>`:"—";
     const st=r.status==='의도 미기입'?`<span class="badge pending">계획 미기입</span>`:`<span class="badge done">${esc(r.status||'기록')}</span>`;
     const rcell=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
-    const liq=r.liquidated?` <span class="badge liq" title="강제청산/ADL">⚡청산</span>`:'';
+    const liq=r.liquidated?` <span class="badge liq" title="강제청산/ADL">${ICONS.liq}청산</span>`:'';
     const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:'';
     return `<tr><td class="num">${esc((toKST(r.closed_at)||{}).str||'')}</td>
       <td>${esc(r.symbol)} <span class="ex">${esc(EXN(r.exchange))}</span>${lev}${liq}</td><td>${dir}</td>
@@ -206,7 +218,7 @@ function table(rows,opts){
 }
 function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
 /* ---------- 일지 피드(카드): 반성 내용을 클릭 없이 노출 ---------- */
-const EXR={sl_hit:["⛔ SL 적중","neg"],tp_hit:["🎯 TP 적중","pos"],trailing:["🎯 트레일링 스탑","pos"],manual:["✋ 수동 청산","muted"],liquidation:["⚡ 강제청산","neg"]};
+const EXR={sl_hit:[ICONS.sl+" SL 적중","neg"],tp_hit:[ICONS.tp+" TP 적중","pos"],trailing:[ICONS.trail+" 트레일링 스탑","pos"],manual:[ICONS.manual+" 수동 청산","muted"],liquidation:[ICONS.liq+" 강제청산","neg"]};
 function exitBadge(r){const x=EXR[r.exit_reason];return x?`<span class="badge xr ${x[1]}">${x[0]}</span>`:"";}
 function tagChips(r){
   const out=[];
@@ -230,7 +242,7 @@ function tradeCard(r){
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>`:"";
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}</div>`;
-  const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?'⚡청산':''].filter(Boolean).join(' · ');
+  const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 — 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
@@ -603,7 +615,7 @@ function exitHabits(ts){
   const moneyLeft=ts.reduce((s,t)=>s+(t.money_left||0),0);
   if(!closed.length&&!overLoss&&!moneyLeft)return `<p class="muted">청산 방식 데이터가 아직 없어요 — Bybit는 자동으로 판별하고, 손절/익절가를 입력하면 규율 지표가 쌓입니다.</p>`;
   const dist={};closed.forEach(t=>{const k=t.exit_reason;(dist[k]=dist[k]||{n:0,pnl:0});dist[k].n++;dist[k].pnl+=(t.pnl||0);});
-  const LBL={sl_hit:"⛔ SL 적중",tp_hit:"🎯 TP 적중",trailing:"🎯 트레일링 스탑",manual:"✋ 수동 청산",liquidation:"⚡ 강제청산"};
+  const LBL={sl_hit:ICONS.sl+" SL 적중",tp_hit:ICONS.tp+" TP 적중",trailing:ICONS.trail+" 트레일링 스탑",manual:ICONS.manual+" 수동 청산",liquidation:ICONS.liq+" 강제청산"};
   const rows=Object.entries(dist).sort((a,b)=>b[1].n-a[1].n).map(([k,v])=>
     `<div class="srow"><span class="snm">${LBL[k]||esc(k)}</span><span class="muted num">${v.n}건</span><span class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</span></div>`).join("");
   const cards=`<div class="mgrid" style="margin-bottom:var(--s3)">`
