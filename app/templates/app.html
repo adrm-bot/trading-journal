@@ -193,10 +193,8 @@ function tagChips(r){
 }
 function tradeCard(r){
   const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${esc(r.direction)}</span>`:"";
-  const liq=(r.liquidated&&!r.exit_reason)?` <span class="badge liq">⚡청산</span>`:"";
   const xr=exitBadge(r)?" "+exitBadge(r):"";
   const rcell=r.r==null?"":` <span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
-  const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:"";
   const pending=r.status==='의도 미기입';
   let body;
   if(pending){body=`<button class="btn sm jfill">✏️ 왜 들어갔는지 채우기</button>`;}
@@ -208,10 +206,11 @@ function tradeCard(r){
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>`:"";
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}</div>`;
+  const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(r.exchange),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?'⚡청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}">
-    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b> <span class="ex">${esc(r.exchange)}</span>${lev}${liq}${xr} <span class="jt">${esc((toKST(r.closed_at)||{}).str||'')}</span></div>
+    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
-    ${stats}${body}</div>`;
+    <div class="jmeta">${meta}</div>${stats}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
 function bindCards(){$$(".jcard").forEach(c=>c.onclick=()=>openModal(c.dataset.id));}
@@ -348,24 +347,27 @@ function applyJournal(){
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
   const exs=[...new Set(DATA.trades.map(t=>t.exchange).filter(Boolean))];
-  el.innerHTML=`<div class="jbar">
-      <input type="date" id="jFrom" value="${JT.from}" aria-label="시작일">
-      <span class="muted">~</span>
-      <input type="date" id="jTo" value="${JT.to}" aria-label="종료일">
-      <button class="btn sm jpreset" data-d="0">오늘</button>
-      <button class="btn sm jpreset" data-d="7">7일</button>
-      <button class="btn sm jpreset" data-d="30">30일</button>
+  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all'].filter(Boolean).length;
+  el.innerHTML=`<div class="jbar top">
       <input type="search" id="jQ" value="${esc(JT.q)}" placeholder="심볼·전략·메모 검색" aria-label="검색">
-      <select id="jSize" aria-label="페이지당 행수"><option value="25">25개</option><option value="50">50개</option><option value="100">100개</option></select>
-      <button class="btn sm" id="jReset">초기화</button>
-      <button class="btn sm" id="jBulk" hidden></button>
-      <span class="cgrp" id="jView" style="margin-left:auto"><button class="btn sm vbtn" data-v="cards">일지</button><button class="btn sm vbtn" data-v="table">표</button></span>
+      <span class="cgrp" id="jView"><button class="btn sm vbtn" data-v="cards">일지</button><button class="btn sm vbtn" data-v="table">표</button></span>
     </div>
-    <div class="jbar">
-      <span class="cgrp" id="jEx"></span><span class="cgrp" id="jDir"></span><span class="cgrp" id="jStat"></span>
+    <div class="jbar sub">
+      <button class="btn sm${activeN?' on':''}" id="jFilterT" aria-expanded="false">⚙ 필터${activeN?` · ${activeN}`:''}</button>
+      <button class="btn sm" id="jBulk" hidden></button>
       <span class="jsum" id="jSummary"></span>
     </div>
+    <div class="jfilters" id="jFilters" hidden>
+      <div class="frow"><span class="flbl">기간</span>
+        <button class="btn sm jpreset" data-d="0">오늘</button><button class="btn sm jpreset" data-d="7">7일</button><button class="btn sm jpreset" data-d="30">30일</button>
+        <input type="date" id="jFrom" value="${JT.from}" aria-label="시작일"><span class="muted">~</span><input type="date" id="jTo" value="${JT.to}" aria-label="종료일"></div>
+      <div class="frow"><span class="flbl">거래소</span><span class="cgrp" id="jEx"></span></div>
+      <div class="frow"><span class="flbl">방향</span><span class="cgrp" id="jDir"></span></div>
+      <div class="frow"><span class="flbl">상태</span><span class="cgrp" id="jStat"></span></div>
+      <div class="frow"><span class="flbl">표시</span><select id="jSize" aria-label="페이지당 행수"><option value="25">25개</option><option value="50">50개</option><option value="100">100개</option></select><button class="btn sm" id="jReset">초기화</button></div>
+    </div>
     <div id="jt"></div><div class="pager" id="jPager"></div>`;
+  $("#jFilterT").onclick=()=>{const f=$("#jFilters"),open=f.hidden;f.hidden=!open;$("#jFilterT").setAttribute("aria-expanded",String(open));};
   $("#jEx").innerHTML=chipGroup('exchange',[['all','전체'],...exs.map(e=>[e,e])]);
   $("#jDir").innerHTML=chipGroup('dir',[['all','전체'],['Long','Long'],['Short','Short']]);
   $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','미기입 '+(DATA.summary.unplanned||0)],['done','기록완료']]);
