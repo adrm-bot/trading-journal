@@ -82,6 +82,7 @@
 </div></div>
 
 <div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--plate);border:1px solid var(--line-2);color:var(--ice);padding:10px 16px;border-radius:8px;box-shadow:var(--card-elev);display:none;z-index:50;font-size:13px"></div>
+<div id="tip" role="tooltip"></div>
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
@@ -200,7 +201,7 @@ function tradeRows(rows){
     const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${dirKo(r.direction)}</span>`:"—";
     const st=r.status==='의도 미기입'?`<span class="badge pending">계획 미기입</span>`:`<span class="badge done">${esc(r.status||'기록')}</span>`;
     const rcell=r.r==null?'<span class="muted">—</span>':`<span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
-    const liq=r.liquidated?` <span class="badge liq" title="강제청산/ADL">${ICONS.liq}청산</span>`:'';
+    const liq=r.liquidated?` <span class="badge liq" data-tip="강제청산/ADL">${ICONS.liq}청산</span>`:'';
     const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:'';
     return `<tr><td class="num">${esc((toKST(r.closed_at)||{}).str||'')}</td>
       <td>${esc(r.symbol)} <span class="ex">${esc(EXN(r.exchange))}</span>${lev}${liq}</td><td>${dir}</td>
@@ -580,7 +581,7 @@ function calCard(ts){
   for(let d=new Date(s); d<=end; d.setUTCDate(d.getUTCDate()+1)){
     const k=d.toISOString().slice(0,10), v=by[k]; let bg='var(--card-2)', tt=k;
     if(v!=null){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(var(--pos-rgb),${a})`:`rgba(var(--neg-rgb),${a})`;tt=`${k}: ${money(v)}`;}
-    cells+=`<div class="cal-cell" style="background:${bg}" title="${esc(tt)}"></div>`;
+    cells+=`<div class="cal-cell" style="background:${bg}" data-tip="${esc(tt)}" aria-label="${esc(tt)}"></div>`;
   }
   return `<div class="card"><div class="cal">${cells}</div><div class="ccap muted">초록=수익일 · 빨강=손실일 · 한국시간(KST) 기준</div></div>`;
 }
@@ -590,7 +591,7 @@ function sessionCard(ts){
   const mx=Math.max(...hp.map(v=>Math.abs(v)),1); let hours='';
   for(let h=0;h<24;h++){const v=hp[h];let bg='var(--card-2)',tt=`${String(h).padStart(2,'0')}:00 KST`;
     if(hn[h]){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(var(--pos-rgb),${a})`:`rgba(var(--neg-rgb),${a})`;tt+=` · ${money(v)} (${hn[h]}건)`;}
-    hours+=`<div class="hcell" style="background:${bg}" title="${esc(tt)}">${h}</div>`;}
+    hours+=`<div class="hcell" style="background:${bg}" data-tip="${esc(tt)}" aria-label="${esc(tt)}">${h}</div>`;}
   // 글로벌 장세를 KST 시각으로 매핑(미국장은 자정 넘김)
   const inR=(h,a,b)=>a<b?(h>=a&&h<b):(h>=a||h<b);
   const sess=[['아시아장','09–17',9,17],['유럽장','17–22',17,22],['미국장','22–06',22,6],['그 외','06–09',6,9]];
@@ -954,6 +955,15 @@ document.addEventListener("keydown",e=>{
   if(e.key!=="Escape")return;
   if($("#cmdkBg").classList.contains("show"))closeCmdk();
   else if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
+/* 커스텀 다크 툴팁 — [data-tip] 위임(브라우저 기본 title 대체) */
+(function(){const tip=$("#tip");if(!tip)return;let cur=null;
+  const move=e=>{if(!tip.classList.contains('show'))return;const r=tip.getBoundingClientRect();
+    let x=e.clientX+14,y=e.clientY+16;if(x+r.width>innerWidth-12)x=e.clientX-r.width-14;if(y+r.height>innerHeight-12)y=e.clientY-r.height-14;
+    tip.style.left=Math.max(6,x)+'px';tip.style.top=Math.max(6,y)+'px';};
+  document.addEventListener('mouseover',e=>{const el=e.target.closest&&e.target.closest('[data-tip]');if(el&&el!==cur){cur=el;tip.textContent=el.getAttribute('data-tip')||'';tip.classList.add('show');move(e);}});
+  document.addEventListener('mousemove',move);
+  document.addEventListener('mouseout',e=>{if(e.target.closest&&e.target.closest('[data-tip]')){cur=null;tip.classList.remove('show');}});
+})();
 window.addEventListener("hashchange",route);
 (async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>

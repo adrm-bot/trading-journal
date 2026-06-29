@@ -360,6 +360,8 @@ svg.uw{width:100%;height:46px;display:block}
   .rsrow{grid-template-columns:96px 1fr 52px}
   .btn.sm,.chips .fchip{min-height:44px} .banner .bx{min-width:44px;min-height:44px}
 }
+#tip{position:fixed;z-index:60;pointer-events:none;display:none;background:var(--plate);border:1px solid var(--line-2);color:var(--ice);padding:5px 9px;border-radius:6px;box-shadow:var(--card-elev);font-size:11.5px;font-family:var(--f-mono);white-space:nowrap;max-width:240px}
+#tip.show{display:block}
 #toast{transition:bottom .2s;animation:toastIn .22s cubic-bezier(.2,.7,.3,1)}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media(max-width:560px){#toast{bottom:90px!important}}
