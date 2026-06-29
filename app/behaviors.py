@@ -20,7 +20,8 @@ def analyze(rows: list[dict]) -> dict:
 
     total = sum(_pnl(r) for r in rows)
     wins = sum(1 for r in rows if _pnl(r) > 0)
-    res.update(total_pnl=total, wins=wins, win_rate=wins / n)
+    losses = sum(1 for r in rows if _pnl(r) < 0)
+    res.update(total_pnl=total, wins=wins, losses=losses, scratch=n - wins - losses, win_rate=wins / n)
 
     unplanned = [r for r in rows if r.get("상태") == "의도 미기입"]
     res["unplanned"] = len(unplanned)

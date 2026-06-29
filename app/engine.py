@@ -187,7 +187,7 @@ def _binance_symbols_and_funding(ex, lookback):
     now = ex.milliseconds()
     start = now - lookback * 86_400_000
     week = 7 * 86_400_000
-    symbols, funding = set(), {}
+    symbols, fevents = set(), {}
     cur = start
     while cur < now:
         e = min(cur + week, now)
@@ -202,13 +202,13 @@ def _binance_symbols_and_funding(ex, lookback):
                 # 심볼 발견: 거래가 있었으면 REALIZED_PNL이든 COMMISSION이든 잡는다(누락 방지)
                 if sym and typ in ("REALIZED_PNL", "COMMISSION", "FUNDING_FEE"):
                     symbols.add(sym)
-                if typ == "FUNDING_FEE" and sym:
-                    funding[sym] = funding.get(sym, 0.0) + _f(inc, "income")
+                if typ == "FUNDING_FEE" and sym:  # 시각 보존 → 포지션별 귀속용
+                    fevents.setdefault(sym, []).append((int(inc.get("time") or 0), _f(inc, "income")))
             if len(batch) < 1000:
                 break
             ws = int(batch[-1].get("time") or ws) + 1
         cur = e
-    return symbols, funding
+    return symbols, fevents
 
 
 def _binance_user_trades(ex, symbol, lookback):
@@ -245,12 +245,13 @@ def _new_bpos(direction, ts, anchor):
             "fee": 0.0, "rp": 0.0, "n": 0, "o": ts, "c": ts, "anchor": anchor, "liq": False}
 
 
-def reconstruct_walk(exchange, symbol, trades, funding_total=0.0):
-    """체결을 positionSide별 부호 walk → open→flat 포지션. 진행중 제외. (Binance/Gate 공용)"""
+def reconstruct_walk(exchange, symbol, trades, funding_events=None):
+    """체결을 positionSide별 부호 walk → open→flat 포지션. 진행중 제외. (Binance/Gate 공용)
+    funding_events: [(ts_ms, amount), ...] — 각 펀딩을 그 시각을 포함하는 포지션에 귀속(공백이면 마지막)."""
     buckets = {}
     for t in trades:
         buckets.setdefault(t.get("positionSide") or "BOTH", []).append(t)
-    out = []
+    out, windows = [], []  # windows[i] = (open_ms, close_ms) for out[i] — 펀딩 시각귀속용
     for fills in buckets.values():
         fills.sort(key=lambda t: (int(t["time"]), int(t["id"])))
         peak = max((abs(float(t["qty"])) for t in fills), default=1.0)
@@ -282,6 +283,7 @@ def reconstruct_walk(exchange, symbol, trades, funding_total=0.0):
                 leftover = q - close_q
                 if abs(net) <= tol:  # flat → emit
                     out.append(_finalize_pos(exchange, symbol, pos, str(t["id"])))
+                    windows.append((pos["o"], pos["c"]))
                     pos = None
                     if leftover > tol:  # 플립: 잔여로 반대 포지션 오픈
                         nd = "Long" if s > 0 else "Short"
@@ -290,8 +292,11 @@ def reconstruct_walk(exchange, symbol, trades, funding_total=0.0):
                         pos["fee"] = fee * (leftover / q); pos["n"] = 1
                         net = (1 if nd == "Long" else -1) * leftover
         # 루프 종료 후 pos가 남으면 진행중 → 제외
-    if out and funding_total:
-        out[-1]["funding"] = round(funding_total, 6)  # 펀딩 심볼합을 최근 포지션에 귀속(근사)
+    # 펀딩 귀속: 각 이벤트를 그 시각을 포함하는 포지션에, 어디에도 안 들면 마지막 포지션에
+    if out and funding_events:
+        for fts, amt in funding_events:
+            idx = next((i for i, (o, c) in enumerate(windows) if o <= fts <= c), len(out) - 1)
+            out[idx]["funding"] = round((out[idx].get("funding") or 0.0) + amt, 8)
     return out
 
 
@@ -311,11 +316,11 @@ def _finalize_pos(exchange, symbol, pos, closing_id):
 def fetch_binance(key, secret, lookback):
     ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
     try:
-        symbols, funding = _binance_symbols_and_funding(ex, lookback)
+        symbols, fevents = _binance_symbols_and_funding(ex, lookback)
         rows = []
         for sym in sorted(symbols):
             trades = _binance_user_trades(ex, sym, lookback)
-            rows += reconstruct_walk("binance", sym, trades, funding.get(sym, 0.0))
+            rows += reconstruct_walk("binance", sym, trades, fevents.get(sym))
         return rows
     except ccxt.BaseError:
         raise RuntimeError("binance 인증/조회 실패 — USDⓈ-M read-only 키·권한·시간동기를 확인하세요") from None

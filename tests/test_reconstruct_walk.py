@@ -85,12 +85,22 @@ def test_vwap_pnl_fallback_short():
     assert abs(out[0]["pnl"] - 20.0) < ROUND
 
 
-def test_funding_attributed_to_last():
+def test_funding_attributed_by_time():
     trades = [fill(1, "BUY", 100, 1, T0, pnl=5.0), fill(2, "SELL", 110, 1, T0 + 60_000, pnl=5.0),
               fill(3, "BUY", 200, 1, T0 + 120_000, pnl=5.0), fill(4, "SELL", 210, 1, T0 + 180_000, pnl=5.0)]
-    out = engine.reconstruct_walk("binance", "BTCUSDT", trades, funding_total=-1.23)
+    # pos0 윈도 [T0, T0+60k], pos1 윈도 [T0+120k, T0+180k]
+    events = [(T0 + 30_000, -1.0),    # pos0 안
+              (T0 + 150_000, -0.5),   # pos1 안
+              (T0 + 90_000, -0.2)]    # 두 포지션 사이(공백) → 마지막(pos1)
+    out = engine.reconstruct_walk("binance", "BTCUSDT", trades, funding_events=events)
     assert len(out) == 2
-    assert out[-1]["funding"] == -1.23
+    assert abs(out[0]["funding"] - (-1.0)) < ROUND
+    assert abs(out[1]["funding"] - (-0.7)) < ROUND  # -0.5 + -0.2
+
+
+def test_no_funding_events_zero():
+    trades = [fill(1, "BUY", 100, 1, T0, pnl=5.0), fill(2, "SELL", 110, 1, T0 + 60_000, pnl=5.0)]
+    out = engine.reconstruct_walk("binance", "BTCUSDT", trades)
     assert out[0].get("funding") == 0.0
 
 

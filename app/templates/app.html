@@ -147,10 +147,12 @@ function statCards(s){
   const n=s.n||0, dates=DATA.trades.map(t=>trDate(t)).filter(Boolean).sort();
   const range=dates.length?`${dates[0]} ~ ${dates[dates.length-1]}`:"청산 완료 기준";
   const avg=n?(s.total_pnl||0)/n:0;
+  const losses=(s.losses!=null)?s.losses:(n-(s.wins||0)), scratch=s.scratch||0;
+  const wlSub=n?`${s.wins||0}승 ${losses}패${scratch>0?` ${scratch}무`:''}`:"";
   const c=[
     ["총 거래",n+"건","",range],
     ["실현손익",money(s.total_pnl)+" USDT",(s.total_pnl||0)>=0?"pos":"neg","거래당 "+money(avg)],
-    ["승률",n?Math.round((s.win_rate||0)*100)+"%":"—","",n?(s.wins||0)+"승 "+(n-(s.wins||0))+"패":""],
+    ["승률",n?Math.round((s.win_rate||0)*100)+"%":"—","",wlSub],
     ["계획 미기입",(s.unplanned||0)+"건",(s.unplanned||0)>0?"neg":"",n?Math.round((s.unplanned||0)/n*100)+"% 미기입":""]];
   return `<div class="cards">`+c.map(x=>`<div class="card stat"><div class="label">${x[0]}</div><div class="val ${x[2]}">${x[1]}</div>${x[3]?`<div class="msub">${esc(x[3])}</div>`:""}</div>`).join("")+`</div>`;
 }
