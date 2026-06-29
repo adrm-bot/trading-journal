@@ -38,7 +38,7 @@ def _coin(ex, symbol):
     last = closes[-1]
     chg24 = (last / closes[-2] - 1) * 100 if len(closes) >= 2 else None
     chg7 = (last / closes[-8] - 1) * 100 if len(closes) >= 8 else None
-    trend = None
+    trend, e20, e50 = None, None, None
     if len(closes) >= 50:
         e20, e50 = _ema(closes, 20), _ema(closes, 50)
         if last > e20 > e50:
@@ -49,7 +49,9 @@ def _coin(ex, symbol):
             trend = "side"
     return {"price": round(last, 2), "trend": trend,
             "chg24": round(chg24, 2) if chg24 is not None else None,
-            "chg7": round(chg7, 2) if chg7 is not None else None}
+            "chg7": round(chg7, 2) if chg7 is not None else None,
+            "ema20": round(e20, 2) if e20 is not None else None,
+            "ema50": round(e50, 2) if e50 is not None else None}
 
 
 # 상대강도 비교군(메이저 알트). BTC 대비 7일 상대수익률로 강약 순위.
