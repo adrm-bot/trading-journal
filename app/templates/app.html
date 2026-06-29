@@ -503,6 +503,32 @@ function exitHabits(ts){
     +`</div>`;
   return cards+(rows?`<div class="card"><div class="sess">${rows}</div><div class="ccap muted">청산기준별 건수·손익 (Bybit 자동판별)</div></div>`:"");
 }
+function behaviorPanel(ts){
+  const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  let maxW=0,maxL=0,run=0,runSign=0;
+  ord.forEach(t=>{const s=(t.pnl||0)>0?1:((t.pnl||0)<0?-1:0);if(!s)return;
+    if(s===runSign)run++;else{runSign=s;run=1;} if(s>0)maxW=Math.max(maxW,run);else maxL=Math.max(maxL,run);});
+  let cur=0,curSign=0;
+  for(let i=ord.length-1;i>=0;i--){const s=(ord[i].pnl||0)>0?1:((ord[i].pnl||0)<0?-1:0);if(!s)continue;if(!curSign){curSign=s;cur=1;}else if(s===curSign)cur++;else break;}
+  let revenge=0;
+  for(let i=0;i<ord.length-1;i++){const a=ord[i],b=ord[i+1];
+    if((a.pnl||0)<0&&(b.pnl||0)<0&&a.closed_at&&b.closed_at){
+      const g=(new Date(b.closed_at.replace(' ','T')+'Z')-new Date(a.closed_at.replace(' ','T')+'Z'))/60000;if(g>=0&&g<=30)revenge++;}}
+  const tilt=Math.min(100,Math.round((curSign<0?cur*18:0)+revenge*15+maxL*4));
+  const curTxt=curSign>0?`${cur}연승`:(curSign<0?`${cur}연패`:"—");
+  return `<div class="mgrid">`
+    +mcard("현재 연속",curTxt,curSign>0?"pos":(curSign<0?"neg":""),"최근 청산 기준")
+    +mcard("최대 연승 / 연패",`${maxW} / ${maxL}`,"","전체 기간")
+    +mcard("리벤지 의심",revenge+"회",revenge>0?"neg":"","손실 직후 30분내 재손실")
+    +mcard("틸트 점수",tilt,tilt>=50?"neg":(tilt>=25?"":"pos"),"연패·리벤지 가중(참고)")
+    +`</div>`;
+}
+function tagStatsTable(ts){
+  const by={};ts.forEach(t=>{(t.setup||"").split(",").map(s=>s.trim()).filter(Boolean).forEach(tag=>{(by[tag]=by[tag]||{n:0,pnl:0,w:0});by[tag].n++;by[tag].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[tag].w++;});});
+  const ks=Object.entries(by).sort((a,b)=>b[1].pnl-a[1].pnl);if(!ks.length)return "";
+  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
+  return `<div class="table-wrap"><table><thead><tr><th>진입근거 태그</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
@@ -522,9 +548,12 @@ function renderInsights(el){
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
     +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
     +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)
+    +`<div class="section-title">심리 · 스트릭</div>`+behaviorPanel(ts)
     +`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음.</p>`)
     +(stratTbl?`<div class="section-title">전략별 성과 (수익 큰 순)</div>`+stratTbl
       :`<div class="section-title">전략별 성과</div><p class="muted">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)
+    +(tagStatsTable(ts)?`<div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts):"")
+    +(groupTable(t=>t.emotion,"감정",false)?`<div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false):"")
     +`<div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true);
 }
 const CONN_DEFS=[
