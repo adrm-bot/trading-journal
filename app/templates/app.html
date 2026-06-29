@@ -563,7 +563,7 @@ function calCard(ts){
   const mx=Math.max(...Object.values(by).map(v=>Math.abs(v)),1); let cells='';
   for(let d=new Date(s); d<=end; d.setUTCDate(d.getUTCDate()+1)){
     const k=d.toISOString().slice(0,10), v=by[k]; let bg='var(--card-2)', tt=k;
-    if(v!=null){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(59,191,166,${a})`:`rgba(228,109,76,${a})`;tt=`${k}: ${money(v)}`;}
+    if(v!=null){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(var(--pos-rgb),${a})`:`rgba(var(--neg-rgb),${a})`;tt=`${k}: ${money(v)}`;}
     cells+=`<div class="cal-cell" style="background:${bg}" title="${esc(tt)}"></div>`;
   }
   return `<div class="card"><div class="cal">${cells}</div><div class="ccap muted">초록=수익일 · 빨강=손실일 · 한국시간(KST) 기준</div></div>`;
@@ -573,7 +573,7 @@ function sessionCard(ts){
   ts.forEach(t=>{const h=trHour(t);if(h!=null){hp[h]+=num(t.pnl);hn[h]++;}});
   const mx=Math.max(...hp.map(v=>Math.abs(v)),1); let hours='';
   for(let h=0;h<24;h++){const v=hp[h];let bg='var(--card-2)',tt=`${String(h).padStart(2,'0')}:00 KST`;
-    if(hn[h]){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(59,191,166,${a})`:`rgba(228,109,76,${a})`;tt+=` · ${money(v)} (${hn[h]}건)`;}
+    if(hn[h]){const a=(.18+.62*Math.min(1,Math.abs(v)/mx)).toFixed(2);bg=v>=0?`rgba(var(--pos-rgb),${a})`:`rgba(var(--neg-rgb),${a})`;tt+=` · ${money(v)} (${hn[h]}건)`;}
     hours+=`<div class="hcell" style="background:${bg}" title="${esc(tt)}">${h}</div>`;}
   // 글로벌 장세를 KST 시각으로 매핑(미국장은 자정 넘김)
   const inR=(h,a,b)=>a<b?(h>=a&&h<b):(h>=a||h<b);
