@@ -190,7 +190,7 @@ function table(rows,opts){
   const th=TCOLS.map(c=>{
     if(!opts.sortable)return `<th class="${c[2]}">${c[1]}</th>`;
     const on=JT.sortKey===c[0], arr=on?(JT.sortDir==='desc'?'▼':'▲'):'';
-    return `<th class="${c[2]} sortable" data-sort="${c[0]}" tabindex="0" role="button" aria-sort="${on?(JT.sortDir==='desc'?'descending':'ascending'):'none'}">${c[1]}<span class="sarr">${arr}</span></th>`;
+    return `<th class="${c[2]} sortable" data-sort="${c[0]}" tabindex="0" aria-sort="${on?(JT.sortDir==='desc'?'descending':'ascending'):'none'}">${c[1]}<span class="sarr">${arr}</span></th>`;
   }).join('')+`<th></th>`;
   return `<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${tradeRows(rows)}</tbody></table></div>`;
 }

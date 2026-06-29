@@ -53,6 +53,16 @@ def test_no_sl_no_r():
     assert t["move_pct"] == 10.0
 
 
+def test_csv_cell_defangs_formula_but_keeps_numbers():
+    assert analytics.csv_cell("=SUM(A1)") == "'=SUM(A1)"
+    assert analytics.csv_cell("+1+1") == "'+1+1"
+    assert analytics.csv_cell("@cmd") == "'@cmd"
+    assert analytics.csv_cell("-FOO") == "'-FOO"   # 문자열 음수형 심볼 등
+    assert analytics.csv_cell(-360.0) == -360.0    # 숫자 음수는 보존(텍스트화 금지)
+    assert analytics.csv_cell("추세추종") == "추세추종"
+    assert analytics.csv_cell(None) == ""
+
+
 def test_rr_uses_abs_distance():
     t = analytics.enrich({"entry": 100, "exit": 100, "sl": 95, "tp": 115, "tp2": 130,
                           "qty": 1, "direction": "Long"})

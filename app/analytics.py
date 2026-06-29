@@ -9,6 +9,15 @@
 from datetime import datetime
 
 
+def csv_cell(v):
+    """CSV 수식 인젝션 방어 — 문자열이 =,+,-,@,탭,CR로 시작하면 앞에 ' 붙임. 숫자는 그대로(음수 보존)."""
+    if v is None:
+        return ""
+    if isinstance(v, str) and v[:1] in ("=", "+", "-", "@", "\t", "\r"):
+        return "'" + v
+    return v
+
+
 def enrich(t: dict) -> dict:
     """거래에 가격변동%·R·계획 R:R·리스크·보유시간·규율 파생값 추가."""
     e, x, sl, d, qty = t.get("entry"), t.get("exit"), t.get("sl"), t.get("direction"), t.get("qty")

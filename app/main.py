@@ -325,7 +325,7 @@ def api_export(request: Request):
     w = csv.writer(buf)
     w.writerow(_EXPORT_COLS)
     for t in (analytics.enrich(t) for t in trades):
-        w.writerow(["" if t.get(c) is None else t.get(c) for c in _EXPORT_COLS])
+        w.writerow([analytics.csv_cell(t.get(c)) for c in _EXPORT_COLS])
     body = "﻿" + buf.getvalue()  # BOM — Excel에서 한글 깨짐 방지
     return Response(content=body, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=trading-journal.csv"})
