@@ -3,7 +3,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>매매일지</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css">
 </head><body>
 <a class="sr-only" href="#main">본문 바로가기</a>
@@ -64,7 +64,7 @@ let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const EXCH=new Set(["bybit","binance"]);
+const EXCH=new Set(["bybit","binance","gate"]);
 let toastT;
 function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block";clearTimeout(toastT);toastT=setTimeout(()=>t.style.display="none",3200);}
 
@@ -397,6 +397,7 @@ function renderInsights(el){
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"binance",nm:"Binance",hint:"USDⓈ-M 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
+  {k:"gate",nm:"Gate.io",hint:"USDT 무기한 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"notion",nm:"Notion",hint:"일지를 Notion에 미러",soon:1,fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
   {k:"telegram",nm:"Telegram",hint:"행동 다이제스트 푸시",soon:1,fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
   {k:"sheets",nm:"Google Sheets",hint:"일지를 시트에 미러",soon:1,fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},

@@ -251,7 +251,7 @@ async def api_save_connection(request: Request):
     _csrf(request)
     b = await request.json()
     kind = b.get("kind")
-    if kind in ("bybit", "binance"):
+    if kind in ("bybit", "binance", "gate"):
         key, sec = (b.get("key") or "").strip(), (b.get("secret") or "").strip()
         if len(key) < 8 or len(sec) < 16:
             raise HTTPException(400, "유효한 API 키/시크릿이 필요합니다 (read-only 권장)")

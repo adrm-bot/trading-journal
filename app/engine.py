@@ -181,8 +181,8 @@ def _new_bpos(direction, ts, anchor):
             "fee": 0.0, "rp": 0.0, "n": 0, "o": ts, "c": ts, "anchor": anchor, "liq": False}
 
 
-def reconstruct_binance(symbol, trades, funding_total=0.0):
-    """userTrades(체결)를 positionSide별로 부호 walk → open→flat 포지션. 진행중은 제외."""
+def reconstruct_walk(exchange, symbol, trades, funding_total=0.0):
+    """체결을 positionSide별 부호 walk → open→flat 포지션. 진행중 제외. (Binance/Gate 공용)"""
     buckets = {}
     for t in trades:
         buckets.setdefault(t.get("positionSide") or "BOTH", []).append(t)
@@ -217,7 +217,7 @@ def reconstruct_binance(symbol, trades, funding_total=0.0):
                 net += (-close_q if net > 0 else close_q)  # net을 0쪽으로
                 leftover = q - close_q
                 if abs(net) <= tol:  # flat → emit
-                    out.append(_finalize_binance(symbol, pos, str(t["id"])))
+                    out.append(_finalize_pos(exchange, symbol, pos, str(t["id"])))
                     pos = None
                     if leftover > tol:  # 플립: 잔여로 반대 포지션 오픈
                         nd = "Long" if s > 0 else "Short"
@@ -231,15 +231,17 @@ def reconstruct_binance(symbol, trades, funding_total=0.0):
     return out
 
 
-def _finalize_binance(symbol, pos, closing_id):
+def _finalize_pos(exchange, symbol, pos, closing_id):
     eq, xq = pos["eq"], pos["xq"]
     entry = pos["en"] / eq if eq else 0.0
     exit_ = pos["xn"] / xq if xq else 0.0
-    tid = f"binance:pos:{symbol}:{closing_id}"
-    row = _position_row("binance", tid, symbol, pos["dir"], round(entry, 10), round(exit_, 10),
-                        round(eq, 10), round(pos["rp"], 8), pos["o"], pos["c"],
-                        fees=pos["fee"], fill_count=pos["n"], liquidated=pos["liq"])
-    return row
+    dsign = 1 if pos["dir"] == "Long" else -1
+    # 실현손익: 거래소 보고 합(rp) 우선, 없으면 vwap 계산으로 폴백(Gate 등 fill에 pnl 미포함 대비)
+    pnl = pos["rp"] if abs(pos["rp"]) > 1e-9 else dsign * (exit_ - entry) * xq - pos["fee"]
+    tid = f"{exchange}:pos:{symbol}:{closing_id}"
+    return _position_row(exchange, tid, symbol, pos["dir"], round(entry, 10), round(exit_, 10),
+                         round(eq, 10), round(pnl, 8), pos["o"], pos["c"],
+                         fees=pos["fee"], fill_count=pos["n"], liquidated=pos["liq"])
 
 
 def fetch_binance(key, secret, lookback):
@@ -249,13 +251,45 @@ def fetch_binance(key, secret, lookback):
         rows = []
         for sym in sorted(symbols):
             trades = _binance_user_trades(ex, sym, lookback)
-            rows += reconstruct_binance(sym, trades, funding.get(sym, 0.0))
+            rows += reconstruct_walk("binance", sym, trades, funding.get(sym, 0.0))
         return rows
     except ccxt.BaseError:
         raise RuntimeError("binance 인증/조회 실패 — USDⓈ-M read-only 키·권한·시간동기를 확인하세요") from None
 
 
-ADAPTERS = {"bybit": fetch_bybit, "binance": fetch_binance}
+# ---------- Gate.io: ccxt 통합 체결 → walk (로컬 키 없음, 방어적·라이브 검증 필요) ----------
+def _ccxt_to_fill(t):
+    """ccxt 통합 trade dict → walk용 정규화 fill."""
+    info = t.get("info") or {}
+    realized = info.get("pnl") or info.get("realised_pnl") or info.get("realizedPnl") or 0
+    return {"time": int(t.get("timestamp") or 0), "id": str(t.get("id") or t.get("order") or ""),
+            "side": str(t.get("side") or "").upper(), "price": float(t.get("price") or 0),
+            "qty": abs(float(t.get("amount") or 0)), "commission": float((t.get("fee") or {}).get("cost") or 0),
+            "realizedPnl": float(realized or 0), "positionSide": "BOTH"}
+
+
+def fetch_gate(key, secret, lookback):
+    gate_cls = getattr(ccxt, "gate", None) or getattr(ccxt, "gateio")
+    ex = gate_cls({"apiKey": key, "secret": secret, "enableRateLimit": True,
+                   "options": {"defaultType": "swap", "defaultSettle": "usdt"}})
+    now = ex.milliseconds()
+    start = now - lookback * 86_400_000
+    try:
+        ex.load_markets()
+        raw = ex.fetch_my_trades(None, start, None, {"type": "swap", "settle": "usdt"})
+        bysym = {}
+        for t in raw:
+            sym = t.get("symbol") or "?"
+            bysym.setdefault(sym, []).append(_ccxt_to_fill(t))
+        rows = []
+        for sym, fills in bysym.items():
+            rows += reconstruct_walk("gate", sym.replace("/", "").split(":")[0], fills)
+        return rows
+    except ccxt.BaseError:
+        raise RuntimeError("gate 인증/조회 실패 — USDT 무기한 read-only 키·권한을 확인하세요") from None
+
+
+ADAPTERS = {"bybit": fetch_bybit, "binance": fetch_binance, "gate": fetch_gate}
 
 
 def pull_user(uid):

@@ -1,38 +1,45 @@
-/* 매매일지 — Authkit "midnight blueprint" 디자인 시스템 */
+/* 매매일지 — Linear "midnight command deck" (acid-lime on obsidian) */
 :root{
-  /* Authkit palette */
-  --midnight:#05060f; --plate:#2f343e; --steel:#3f4959;
-  --fog:#81899b; --pebble:#9da7ba; --moonlight:#c7d3ea; --ice:#d1e4fa; --glacier:#d8ecf8; --frost:#b6d9fc;
-  --iris:#663af3; --iris-hi:#7a52f6; --ember:#e46d4c; --azure:#027dea; --mint:#3bbfa6; --mint-deep:#269684;
+  /* Linear palette */
+  --onyx:#08090a; --charcoal:#0f1011; --obsidian:#161718; --graphite:#23252a; --iron:#323334; --steel:#383b3f;
+  --slate:#62666d; --fog:#8a8f98; --mist:#d0d6e0; --platinum:#e5e5e6; --snow:#f7f8f8;
+  --acid-lime:#e4f222; --indigo:#5e6ad2; --emerald:#27a644; --crimson:#eb5757; --cyan:#02b8cc;
 
-  /* app surfaces — near-black canvas, matte; elevation from hairline+glow not fills */
-  --bg:var(--midnight);
-  --panel:#090b13;           /* sidebar / topbar — barely lifted */
-  --card:#0b0d16;            /* card/table surface */
-  --card-2:#111422;          /* hover / header */
-  --line:rgba(63,73,89,.45); /* steel hairline */
-  --line-2:#3f4959;
-  --text:var(--moonlight); --heading:var(--glacier); --muted:var(--fog); --dim:#7b8497;
+  /* surfaces — 4-step obsidian stack, elevation from inset border + drop shadow */
+  --bg:var(--onyx); --midnight:var(--onyx);
+  --panel:var(--charcoal);   /* nav / topbar */
+  --card:var(--charcoal);    /* card/table base */
+  --card-2:var(--obsidian);  /* hover / header / deep card */
+  --plate:var(--obsidian);   /* modal */
+  --line:var(--graphite);    /* hairline */
+  --line-2:var(--iron);
 
-  /* semantic (trading) — within palette */
-  --pos:var(--mint); --pos-soft:rgba(59,191,166,.13);
-  --neg:var(--ember); --neg-soft:rgba(228,109,76,.14);
-  --info:var(--azure); --info-soft:rgba(2,125,234,.16);
-  --warn:var(--ember); --warn-soft:rgba(228,109,76,.13);
-  --accent:var(--iris); --accent-soft:rgba(102,58,243,.16);
+  /* text */
+  --heading:var(--snow); --ice:var(--snow); --glacier:var(--snow);
+  --text:var(--mist); --moonlight:var(--mist); --pebble:var(--fog);
+  --muted:var(--fog); --dim:var(--slate); --frost:var(--indigo);
 
-  /* glow / inset elevation (no drop shadows) */
-  --glow:0 0 6px 0 rgba(186,207,247,.32);
-  --inset:inset 0 0 0 1px rgba(186,215,247,.07);
-  --card-elev:inset 0 1px 1px 0 rgba(199,211,234,.08), inset 0 0 64px 0 rgba(186,215,247,.018), 0 18px 30px 0 rgba(5,6,15,.6);
+  /* semantic — P&L green/red are functional; lime reserved for the single primary CTA */
+  --pos:#3fb950; --pos-soft:rgba(63,185,80,.13);
+  --neg:var(--crimson); --neg-soft:rgba(235,87,87,.13);
+  --info:var(--indigo); --info-soft:rgba(94,106,210,.16);
+  --warn:var(--crimson); --warn-soft:rgba(235,87,87,.11);
+  --accent:var(--acid-lime); --accent-soft:rgba(228,242,34,.12);
+  /* legacy aliases → Linear */
+  --iris:var(--acid-lime); --iris-hi:#eef85a; --ember:var(--crimson); --azure:var(--indigo); --mint:#3fb950;
 
-  /* type */
+  /* elevation — inset border + drop shadow, never fills */
+  --glow:0 0 0 1px rgba(94,106,210,.45);
+  --inset:inset 0 0 0 1px var(--graphite);
+  --card-elev:0 2px 4px 0 rgba(0,0,0,.4), inset 0 0 0 1px var(--graphite);
+
+  /* type — Inter Variable + Berkeley Mono */
   --f-body:'Inter',ui-sans-serif,system-ui,-apple-system,"Malgun Gothic",sans-serif;
-  --f-display:'Space Grotesk','Inter',system-ui,sans-serif;
-  --f-mono:'JetBrains Mono',ui-monospace,"Cascadia Code",Consolas,monospace;
+  --f-display:'Inter',ui-sans-serif,system-ui,sans-serif;
+  --f-mono:'Berkeley Mono','JetBrains Mono',ui-monospace,"Cascadia Code",Consolas,monospace;
 
-  /* radius — Authkit: buttons/inputs 2px, badges 6px, cards 10-16, pills 999 */
-  --r-btn:2px; --r-input:2px; --r-badge:6px; --r-card:12px; --r-pill:999px;
+  /* radius — Linear: cards 12, buttons/inputs/nav 6, badges 2, pills 9999 */
+  --r-btn:6px; --r-input:6px; --r-badge:2px; --r-card:12px; --r-pill:9999px;
 
   /* spacing */
   --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:20px;--s6:24px;--s8:32px;--s10:40px;
@@ -44,7 +51,7 @@ a{color:inherit;text-decoration:none}
 .pos{color:var(--pos)} .neg{color:var(--neg)} .muted{color:var(--muted)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 :focus-visible{outline:2px solid var(--frost);outline-offset:2px;border-radius:3px}
-::selection{background:rgba(102,58,243,.32)}
+::selection{background:rgba(94,106,210,.35)}
 
 /* eyebrow (dotDigital): structural labels */
 .eyebrow,.section-title{font-family:var(--f-mono);font-size:11.5px;font-weight:500;letter-spacing:.12em;text-transform:uppercase;color:var(--fog);font-variant-numeric:tabular-nums}
@@ -74,8 +81,8 @@ a{color:inherit;text-decoration:none}
 .btn{font:inherit;font-weight:500;cursor:pointer;border:none;box-shadow:var(--inset);background:transparent;color:var(--moonlight);
   padding:9px 15px;border-radius:var(--r-btn);display:inline-flex;align-items:center;gap:6px;transition:.12s;letter-spacing:-.01em}
 .btn:hover{box-shadow:inset 0 0 0 1px rgba(186,215,247,.22);color:var(--glacier)}
-.btn.primary{background:var(--iris);box-shadow:none;color:#fff;font-weight:600}
-.btn.primary:hover{background:var(--iris-hi);box-shadow:0 0 18px 0 rgba(102,58,243,.4)}
+.btn.primary{background:var(--acid-lime);box-shadow:var(--shadow-stack,none);color:#08090a;font-weight:510}
+.btn.primary:hover{background:#eef85a;box-shadow:none;color:#08090a}
 .btn.ghost{box-shadow:none;color:var(--muted)}
 .btn.ghost:hover{background:var(--card-2);color:var(--moonlight)}
 .btn.sm{padding:5px 11px;font-size:12.5px}
