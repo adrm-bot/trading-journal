@@ -69,7 +69,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false;
-let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25}, jtDebounce;
+let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -181,6 +181,34 @@ function table(rows,opts){
   return `<div class="table-wrap"><table><thead><tr>${th}</tr></thead><tbody>${tradeRows(rows)}</tbody></table></div>`;
 }
 function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
+/* ---------- 일지 피드(카드): 반성 내용을 클릭 없이 노출 ---------- */
+function tagChips(r){
+  const out=[];
+  if(r.strategy)out.push(`<span class="rtag strat">${esc(r.strategy)}</span>`);
+  (r.setup||"").split(",").map(s=>s.trim()).filter(Boolean).forEach(t=>out.push(`<span class="rtag">${esc(t)}</span>`));
+  if(r.emotion)out.push(`<span class="rtag emo">${esc(r.emotion)}</span>`);
+  return out.join("");
+}
+function tradeCard(r){
+  const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${esc(r.direction)}</span>`:"";
+  const liq=r.liquidated?` <span class="badge liq">⚡청산</span>`:"";
+  const rcell=r.r==null?"":` <span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
+  const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:"";
+  const pending=r.status==='의도 미기입';
+  let body;
+  if(pending){body=`<button class="btn sm jfill">✏️ 왜 들어갔는지 채우기</button>`;}
+  else{const t=tagChips(r);
+    body=(t?`<div class="jtags">${t}</div>`:"")
+      +(r.plan?`<div class="jplan">${esc(r.plan)}</div>`:"")
+      +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
+      +((!t&&!r.plan&&!r.memo)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
+  return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}">
+    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b> <span class="ex">${esc(r.exchange)}</span>${lev}${liq} <span class="jt">${esc((toKST(r.closed_at)||{}).str||'')}</span></div>
+      <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
+    ${body}</div>`;
+}
+function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
+function bindCards(){$$(".jcard").forEach(c=>c.onclick=()=>openModal(c.dataset.id));}
 
 /* ---------- 시장 컨텍스트 스트립 ---------- */
 const TREND={up:["▲","상승","pos"],down:["▼","하락","neg"],side:["▬","횡보","muted"]};
@@ -258,8 +286,8 @@ function renderDashboard(el){
   const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="posHost"></div>`;
   if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
   el.innerHTML=head+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
-    +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
-  bindEdit();ensureMarket();ensurePositions();
+    +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,5));
+  bindCards();ensureMarket();ensurePositions();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" ${JT[field]===v?'aria-current="page"':''}>${esc(label)}</button>`).join('');}
@@ -299,15 +327,17 @@ function applyJournal(){
   const pages=Math.max(1,Math.ceil(k/JT.size));
   if(JT.page>pages)JT.page=pages;
   const start=(JT.page-1)*JT.size;
-  $("#jt").innerHTML=k?table(rows.slice(start,start+JT.size),{sortable:true})
-    :`<div class="empty-sm muted">조건에 맞는 거래 없음 — 필터를 완화해보세요.</div>`;
+  const pageRows=rows.slice(start,start+JT.size);
+  if(!k)$("#jt").innerHTML=`<div class="empty-sm muted">조건에 맞는 거래 없음 — 필터를 완화해보세요.</div>`;
+  else $("#jt").innerHTML=(JT.view==='table')?table(pageRows,{sortable:true}):journalCards(pageRows);
   $("#jSummary").innerHTML=`결과 <b>${k}</b>건 · 합산손익 <b class="${total>=0?'pos':'neg'}">${money(total)}</b> USDT`;
   renderPager(k,pages);
-  bindEdit();
-  $$("#jt th.sortable").forEach(th=>th.onclick=()=>{const c=th.dataset.sort;
-    if(JT.sortKey===c)JT.sortDir=JT.sortDir==='desc'?'asc':'desc';
-    else{JT.sortKey=c;JT.sortDir=(c==='closed_at'||c==='pnl'||c==='r')?'desc':'asc';}
-    applyJournal();});
+  if(JT.view==='table'){bindEdit();
+    $$("#jt th.sortable").forEach(th=>th.onclick=()=>{const c=th.dataset.sort;
+      if(JT.sortKey===c)JT.sortDir=JT.sortDir==='desc'?'asc':'desc';
+      else{JT.sortKey=c;JT.sortDir=(c==='closed_at'||c==='pnl'||c==='r')?'desc':'asc';}
+      applyJournal();});}
+  else bindCards();
 }
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
@@ -323,6 +353,7 @@ function renderJournal(el){
       <select id="jSize" aria-label="페이지당 행수"><option value="25">25개</option><option value="50">50개</option><option value="100">100개</option></select>
       <button class="btn sm" id="jReset">초기화</button>
       <button class="btn sm" id="jBulk" hidden></button>
+      <span class="cgrp" id="jView" style="margin-left:auto"><button class="btn sm vbtn" data-v="cards">일지</button><button class="btn sm vbtn" data-v="table">표</button></span>
     </div>
     <div class="jbar">
       <span class="cgrp" id="jEx"></span><span class="cgrp" id="jDir"></span><span class="cgrp" id="jStat"></span>
@@ -337,12 +368,14 @@ function renderJournal(el){
   $("#jTo").onchange=e=>{JT.to=e.target.value;JT.page=1;applyJournal();};
   $("#jQ").oninput=e=>{clearTimeout(jtDebounce);const v=e.target.value;jtDebounce=setTimeout(()=>{JT.q=v;JT.page=1;applyJournal();},180);};
   $("#jSize").onchange=e=>{JT.size=Number(e.target.value);JT.page=1;applyJournal();};
-  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size};renderJournal(el);};
+  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
   $$(".jpreset").forEach(b=>b.onclick=()=>{const days=+b.dataset.d;JT.to=iso(new Date());JT.from=iso(new Date(Date.now()-days*86400000));JT.page=1;$("#jFrom").value=JT.from;$("#jTo").value=JT.to;applyJournal();});
   $$("#view-journal .fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
     $$(`#view-journal .fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");applyJournal();});
   const up=DATA.summary.unplanned||0, jb=$("#jBulk");
   if(jb){if(up>0){jb.hidden=false;jb.textContent=`미기입 ${up}건 일괄 기입`;jb.onclick=openBulk;}else jb.hidden=true;}
+  $$("#jView .vbtn").forEach(b=>{if(b.dataset.v===JT.view)b.setAttribute("aria-current","page");else b.removeAttribute("aria-current");
+    b.onclick=()=>{JT.view=b.dataset.v;$$("#jView .vbtn").forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");applyJournal();};});
   applyJournal();
 }
 function groupTable(keyFn,head,asc){
