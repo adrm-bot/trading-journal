@@ -209,6 +209,9 @@ textarea{resize:vertical;min-height:64px}
 .jbar{display:flex;flex-wrap:wrap;align-items:center;gap:var(--s2);margin-bottom:var(--s3)}
 .jbar.top{margin-bottom:var(--s2)} .jbar.top #jQ{flex:1;min-width:160px} .jbar.top #jView{flex:0 0 auto}
 .jbar.sub{margin-bottom:var(--s3)}
+.jviews{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:var(--s3)}
+.jview .vx{margin-left:6px;color:var(--dim);font-size:13px;line-height:1}
+.jview .vx:hover{color:var(--ember)}
 .btn.sm.on{box-shadow:inset 0 0 0 1px var(--frost);color:var(--glacier)}
 .jfilters{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--inset);padding:var(--s3) var(--s4);margin-bottom:var(--s3);display:flex;flex-direction:column;gap:var(--s2)}
 .jfilters[hidden]{display:none}
@@ -260,6 +263,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .mcard .mval.pos{color:var(--mint)} .mcard .mval.neg{color:var(--ember)}
 .mcard .msub{color:var(--dim);font-size:11px;margin-top:3px}
 .chartc{padding:var(--s4)} svg.eq{width:100%;height:150px;display:block}
+.eqhead{display:flex;justify-content:flex-end;margin-bottom:6px}
 svg.uw{width:100%;height:46px;display:block}
 .uwwrap{margin-top:3px;border-top:1px solid var(--line)}
 .ccap{font-size:11.5px;margin-top:8px;font-family:var(--f-mono)}

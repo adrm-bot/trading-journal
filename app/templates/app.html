@@ -373,6 +373,16 @@ function applyJournal(){
       th.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();doSort(th.dataset.sort);}};});}
   else bindCards();
 }
+/* 저장된 뷰 — 필터 프리셋을 localStorage에 (유저별 키) */
+function viewsKey(){return 'mmj_views_'+((ME&&ME.email)||'');}
+function getViews(){try{const v=JSON.parse(localStorage.getItem(viewsKey()));if(Array.isArray(v))return v;}catch(e){}return [{name:'계획 미기입',jt:{status:'pending'}}];}
+function setViews(a){try{localStorage.setItem(viewsKey(),JSON.stringify(a));}catch(e){}}
+function viewsBar(){return `<div class="jviews"><span class="flbl">뷰</span>`+getViews().map(v=>`<button class="btn sm jview" data-v="${esc(v.name)}">${esc(v.name)}<span class="vx" data-del="${esc(v.name)}" role="button" aria-label="${esc(v.name)} 삭제">×</span></button>`).join('')+`<button class="btn sm" id="jSaveView">+ 현재 필터 저장</button></div>`;}
+function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
+function saveCurrentView(){const name=(prompt('이 필터를 저장할 이름은?','내 뷰')||'').trim();if(!name)return;
+  const jt={from:JT.from,to:JT.to,q:JT.q,exchange:JT.exchange,dir:JT.dir,status:JT.status};
+  setViews([...getViews().filter(v=>v.name!==name),{name,jt}]);renderJournal($("#view-journal"));toast('뷰 저장됨 · '+name);}
+function delView(name){setViews(getViews().filter(v=>v.name!==name));renderJournal($("#view-journal"));}
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
   const exs=[...new Set(DATA.trades.map(t=>t.exchange).filter(Boolean))];
@@ -386,6 +396,7 @@ function renderJournal(el){
       <button class="btn sm" id="jBulk" hidden></button>
       <span class="jsum" id="jSummary"></span>
     </div>
+    ${viewsBar()}
     <div class="jfilters" id="jFilters" hidden>
       <div class="frow"><span class="flbl">기간</span>
         <button class="btn sm jpreset" data-d="0">오늘</button><button class="btn sm jpreset" data-d="7">7일</button><button class="btn sm jpreset" data-d="30">30일</button>
@@ -413,6 +424,10 @@ function renderJournal(el){
   if(jb){if(up>0){jb.hidden=false;jb.textContent=`계획 미기입 ${up}건 정리`;jb.onclick=openBulk;}else jb.hidden=true;}
   $$("#jView .vbtn").forEach(b=>{b.setAttribute("aria-pressed",b.dataset.v===JT.view?"true":"false");
     b.onclick=()=>{JT.view=b.dataset.v;$$("#jView .vbtn").forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");applyJournal();};});
+  $$("#view-journal .jview").forEach(b=>b.onclick=e=>{
+    if(e.target.classList.contains('vx')){e.stopPropagation();delView(e.target.dataset.del);return;}
+    const v=getViews().find(x=>x.name===b.dataset.v);if(v)applyView(v.jt);});
+  if($("#jSaveView"))$("#jSaveView").onclick=saveCurrentView;
   applyJournal();
 }
 function groupTable(keyFn,head,asc){
@@ -466,11 +481,15 @@ function metricsRow(m){
     +mcard('켈리 비중',(m.n>=20&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=20&&m.kelly>0)?'pos':'',m.n<20?'표본 부족(20건+ 필요)':(m.kelly>0?`½켈리만 권장 ${Math.round(m.kelly*50)}%`:'기댓값 0 이하 — 우위 없음'))
     +`</div>`;
 }
+let EQ_MODE='usdt';  // 자산곡선 모드: 'usdt' | 'r'(리스크 정규화)
 function equityPanel(ts){
-  const ord=[...ts].filter(t=>t.closed_at).sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
-  if(!ord.length)return `<div class="card chartc"><p class="muted">표시할 거래가 아직 없어요.</p></div>`;
+  const isR=EQ_MODE==='r', fmtV=isR?(v=>(v>=0?'+':'')+v.toFixed(2)+'R'):money;
+  const closedN=ts.filter(t=>t.closed_at).length;
+  const toggle=`<div class="eqhead"><span class="cgrp"><button class="btn sm eqbtn" data-eq="usdt" aria-pressed="${!isR}">USDT</button><button class="btn sm eqbtn" data-eq="r" aria-pressed="${isR}">R배수</button></span></div>`;
+  const ord=[...ts].filter(t=>t.closed_at&&(!isR||t.r!=null)).sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  if(!ord.length)return `<div class="card chartc">${toggle}<p class="muted">${isR?'R 입력 거래가 없어요 — 손절가(SL)를 채우면 리스크 정규화 곡선이 그려집니다.':'표시할 거래가 아직 없어요.'}</p></div>`;
   const tms=s=>{const d=new Date((s||'').replace(' ','T')+'Z');return isNaN(d)?0:d.getTime();};
-  let cum=0; const pts=ord.map(t=>({x:tms(t.closed_at),y:(cum+=num(t.pnl))}));
+  let cum=0; const pts=ord.map(t=>({x:tms(t.closed_at),y:(cum+=num(isR?t.r:t.pnl))}));
   const t0=pts[0].x, t1=pts[pts.length-1].x, tspan=(t1-t0)||1;
   // 누적 고점·낙폭 시계열·최대낙폭·최장 낙폭 지속시간(ms)
   let peak=0,peakT=t0,ddStart=null,maxUW=0,maxDD=0;
@@ -505,8 +524,29 @@ function equityPanel(ts){
   const uarea=uw+` L ${X(t1).toFixed(1)} ${UY(0).toFixed(1)} Z`;
   const under=`<svg class="uw" viewBox="0 0 ${W} ${UH}" preserveAspectRatio="none" role="img" aria-label="언더워터 곡선(고점 대비 낙폭)">
     <path d="${uarea}" fill="rgba(235,87,87,.18)" stroke="var(--neg)" stroke-width="1"/></svg>`;
-  return `<div class="card chartc">${main}<div class="uwwrap">${under}</div>
-    <div class="ccap muted">총 ${pts.length}건 · 실현 <b class="${endPos?'pos':'neg'}">${money(pts[pts.length-1].y)}</b> USDT · 점선=누적 고점 · 최대 낙폭 <b class="neg">${money(maxDD)}</b> · 최장 낙폭 지속 <b>${uwDays}일</b></div></div>`;
+  return `<div class="card chartc">${toggle}${main}<div class="uwwrap">${under}</div>
+    <div class="ccap muted">${isR?`R 입력 ${pts.length}/${closedN}건`:`총 ${pts.length}건`} · 실현 <b class="${endPos?'pos':'neg'}">${fmtV(pts[pts.length-1].y)}</b>${isR?'':' USDT'} · 점선=누적 고점 · 최대 낙폭 <b class="neg">${fmtV(maxDD)}</b> · 최장 낙폭 지속 <b>${uwDays}일</b>${isR?' · SL 입력 거래만(상향 편향 주의)':''}</div></div>`;
+}
+function bindEq(){$$("#eqHost .eqbtn").forEach(b=>b.onclick=()=>{EQ_MODE=b.dataset.eq;$("#eqHost").innerHTML=equityPanel(DATA.trades);bindEq();});}
+/* 낙폭 이력 · 회복 — 고점→저점→회복 에피소드 (자산곡선 좌표계 재사용) */
+function drawdownPanel(ts){
+  const tms=s=>{const d=new Date((s||'').replace(' ','T')+'Z');return isNaN(d)?0:d.getTime();};
+  const ord=[...ts].filter(t=>t.closed_at).sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  if(ord.length<2)return '';
+  let cum=0; const pts=ord.map(t=>({x:tms(t.closed_at),y:(cum+=num(t.pnl))}));
+  let peak=0,peakT=pts[0].x,eps=[],cur=null;
+  pts.forEach(p=>{
+    if(p.y>=peak){if(cur){cur.recoverT=p.x;cur.recovered=true;eps.push(cur);cur=null;}peak=p.y;peakT=p.x;}
+    else{if(!cur)cur={peak:peak,startT:peakT,trough:p.y,troughT:p.x};else if(p.y<cur.trough){cur.trough=p.y;cur.troughT=p.x;}}
+  });
+  if(cur){cur.recovered=false;cur.recoverT=pts[pts.length-1].x;eps.push(cur);}
+  if(!eps.length)return `<div class="card"><p class="muted" style="margin:0">낙폭 없음 — 줄곧 고점 갱신 중. 👍</p></div>`;
+  eps.forEach(e=>{e.depth=e.trough-e.peak;e.days=Math.max(0,Math.round((e.recoverT-e.startT)/86400000));});
+  const sorted=[...eps].sort((a,b)=>a.depth-b.depth), ongoing=eps.find(e=>!e.recovered);
+  const rows=sorted.slice(0,6).map(e=>`<div class="srow"><span class="snm">${e.recovered?'':'<span class="neg">● </span>'}<b class="neg">${money(e.depth)}</b> <span class="muted">· ${e.days}일</span></span><span class="muted num">${e.recovered?'회복':'진행 중'}</span></div>`).join('');
+  const deepest=sorted[0].depth;
+  const cap=`고점→저점→회복 ${eps.length}구간${ongoing?` · 현재 낙폭 <b class="neg">${money(ongoing.depth)}</b> (${ongoing.days}일째, 최대 대비 ${deepest?Math.round(ongoing.depth/deepest*100):0}%)`:' · 현재 낙폭 없음'}${eps.length<3?' · 표본 적음(참고용)':''}`;
+  return `<div class="card"><div class="sess">${rows}</div><div class="ccap muted">${cap}</div></div>`;
 }
 function feeCard(m){
   const row=(l,v,cls)=>`<div class="fbrow"><span>${l}</span><span class="num ${cls||''}">${money(v)}</span></div>`;
@@ -643,6 +683,7 @@ function trustBoard(ts){
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
+  const ddp=drawdownPanel(ts);
   const stratTbl=groupTable(t=>t.strategy,"전략",false);
   const caveat=m.n<20?`<p class="caveat">⚠ 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
   const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
@@ -661,7 +702,8 @@ function renderInsights(el){
   el.innerHTML=
      `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +trustBoard(ts)
-    +`<div class="section-title">자산 곡선 · 낙폭</div>`+equityPanel(ts)
+    +`<div class="section-title">자산 곡선 · 낙폭</div><div id="eqHost">`+equityPanel(ts)+`</div>`
+    +(ddp?`<div class="section-title">낙폭 이력 · 회복</div>`+ddp:'')
     +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
     +`<div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
@@ -674,6 +716,7 @@ function renderInsights(el){
     +(tagStatsTable(ts)?`<div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts):"")
     +(groupTable(t=>t.emotion,"감정",false)?`<div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false):"")
     +`<div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true);
+  bindEq();
 }
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
