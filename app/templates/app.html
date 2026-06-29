@@ -366,7 +366,7 @@ async function ensurePositions(){
 function renderDashboard(el){
   const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="posHost"></div>`;
   if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
-  el.innerHTML=head+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
+  el.innerHTML=head+`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,5));
   bindCards();ensureMarket();ensurePositions();
 }

@@ -111,7 +111,8 @@ a{color:inherit;text-decoration:none}
 /* ---- cards & grid ---- */
 .grid{display:grid;gap:var(--s3)}
 .cards{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3);align-items:start}
-#view-dashboard .cards{margin-top:var(--s6)}  /* 시장 컨텍스트와 내 통계 사이 일관된 섹션 여백 */
+#view-dashboard .cards{margin-top:var(--s6)}  /* 스켈레톤 등 라벨 없는 경우의 섹션 여백 */
+#view-dashboard .section-title + .cards{margin-top:0}  /* '핵심 지표' 라벨이 앞서면 라벨 마진(24/0/12)이 간격 담당 — 이중 여백 방지 */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}
 .stat .label{color:var(--muted);font-size:var(--fs-xs)}
 .stat .val{font-family:var(--f-display);font-size:22px;font-weight:510;margin-top:6px;color:var(--ice);letter-spacing:-.02em;white-space:nowrap}
