@@ -205,10 +205,13 @@ function tradeCard(r){
       +(r.plan?`<div class="jplan">${esc(r.plan)}</div>`:"")
       +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
       +((!t&&!r.plan&&!r.memo)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
+  const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
+  const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>`:"";
+  const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}</div>`;
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b> <span class="ex">${esc(r.exchange)}</span>${lev}${liq}${xr} <span class="jt">${esc((toKST(r.closed_at)||{}).str||'')}</span></div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
-    ${body}</div>`;
+    ${stats}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
 function bindCards(){$$(".jcard").forEach(c=>c.onclick=()=>openModal(c.dataset.id));}
