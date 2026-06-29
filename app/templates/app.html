@@ -76,7 +76,7 @@
 
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
-let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
+let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
 let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
@@ -128,7 +128,7 @@ function pullActions(){return `<button class="btn" id="pullBtn">↻ 불러오기
 async function loadAll(){
   const [me,data,conn]=await Promise.all([
     api("/api/me").then(r=>r.json()), api("/api/data").then(r=>r.json()), api("/api/connections").then(r=>r.json())]);
-  $("#email").textContent=me.email||""; DATA=data; CONN=conn.connected||[];
+  $("#email").textContent=me.email||""; DATA=data; CONN=conn.connected||[]; ME=me||{};
 }
 function route(){
   const v=(location.hash.replace("#","")||"dashboard"); const view=VIEWS[v]?v:"dashboard";
@@ -618,7 +618,13 @@ function renderSettings(el){
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         <a class="btn sm" href="/api/export">데이터 내보내기 (CSV)</a>
         <button class="btn sm danger" id="delAcctBtn">계정·데이터 삭제</button>
-      </div></div>`;
+      </div></div>
+    <div class="section-title">플랜 · 문의</div><div class="card"><div class="conn">
+      <div><div class="nm">현재 플랜 · ${ME.plan==='pro'?'Pro':'무료 (베타)'}</div>
+        <div class="hint">${ME.billing_enabled?'유료 플랜으로 더 많은 기능을 잠금 해제하세요.':'베타 기간 — 모든 기능을 무료로 쓸 수 있어요.'}</div></div>
+      ${ME.support_email?`<a class="btn sm" href="mailto:${esc(ME.support_email)}">문의하기</a>`:`<button class="btn sm" disabled>문의 준비 중</button>`}</div>
+      ${ME.billing_enabled?`<button class="btn primary sm" id="upgradeBtn" style="margin-top:12px">Pro로 업그레이드</button>`:`<button class="btn sm" disabled style="margin-top:12px">결제 준비 중</button>`}
+    </div>`;
   $("#acctEmail").textContent=$("#email").textContent;
   $$(".connForm").forEach(f=>f.onsubmit=async e=>{e.preventDefault();
     const k=f.dataset.k, wasNew=!CONN.includes(k);
@@ -634,6 +640,9 @@ function renderSettings(el){
     catch(err){toast("연결 해제에 실패했어요 — 잠시 후 다시 시도해 주세요");b.disabled=false;}});
   $$(".ackchk").forEach(c=>c.onchange=()=>{const b=c.closest("form").querySelector("button[type=submit]");if(b)b.disabled=!c.checked;});
   const da=$("#delAcctBtn");if(da)da.onclick=openDelAcct;
+  const up=$("#upgradeBtn");if(up)up.onclick=async()=>{
+    try{await postJSON("/api/billing/checkout",{});}
+    catch(e){toast(e&&e.message&&e.message.indexOf("http ")!==0?e.message:"결제는 준비 중입니다");}};
 }
 
 /* ---------- actions ---------- */

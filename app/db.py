@@ -27,7 +27,8 @@ def init():
     with conn() as c:
         c.executescript("""
         CREATE TABLE IF NOT EXISTS users(
-          id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, created INTEGER);
+          id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, created INTEGER,
+          plan TEXT DEFAULT 'free', stripe_customer_id TEXT);
         CREATE TABLE IF NOT EXISTS connections(
           user_id INTEGER, kind TEXT, data_enc TEXT, updated INTEGER,
           PRIMARY KEY(user_id, kind));
@@ -48,6 +49,11 @@ def init():
                           ("exit_reason", "TEXT")):
             if name not in cols:
                 c.execute(f"ALTER TABLE trades ADD COLUMN {name} {typ}")
+        # users 마이그레이션: 결제 스캐폴드 컬럼(멱등)
+        ucols = {r[1] for r in c.execute("PRAGMA table_info(users)")}
+        for name, typ in (("plan", "TEXT DEFAULT 'free'"), ("stripe_customer_id", "TEXT")):
+            if name not in ucols:
+                c.execute(f"ALTER TABLE users ADD COLUMN {name} {typ}")
         # 백필: 기존 강제청산 행에 청산기준 부여(멱등)
         c.execute("UPDATE trades SET exit_reason='liquidation' WHERE exit_reason IS NULL AND liquidated=1")
         # 컷오버: 포지션 단위(v2) 이전의 '닫는 주문 1건=1행' 레거시 거래소 행 제거.
@@ -62,6 +68,12 @@ def upsert_user(email, name):
         c.execute("INSERT OR IGNORE INTO users(email,name,created) VALUES(?,?,?)",
                   (email, name, int(time.time())))
         return c.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()["id"]
+
+
+def get_user_plan(uid):
+    with conn() as c:
+        r = c.execute("SELECT plan FROM users WHERE id=?", (uid,)).fetchone()
+    return (r["plan"] if r and r["plan"] else "free")
 
 
 def delete_user(uid):

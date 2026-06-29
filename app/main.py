@@ -37,6 +37,10 @@ EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io",
 PULL_COOLDOWN = int(os.getenv("PULL_COOLDOWN_SEC", "30"))
 _pull_at: dict[int, float] = {}
 
+# 결제 스캐폴드 — 기본 비활성(코드만 준비, 실제 과금 X). 켜려면 BILLING_ENABLED=true + Stripe 키.
+BILLING_ENABLED = os.getenv("BILLING_ENABLED", "false").lower() == "true"
+SUPPORT_EMAIL = os.getenv("SUPPORT_EMAIL", "").strip()
+
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
 
@@ -175,8 +179,9 @@ def app_shell(request: Request):
 # --- api ---
 @app.get("/api/me")
 def api_me(request: Request):
-    _require(request)
-    return {"email": request.session.get("email", "")}
+    uid = _require(request)
+    return {"email": request.session.get("email", ""), "plan": db.get_user_plan(uid),
+            "billing_enabled": BILLING_ENABLED, "support_email": SUPPORT_EMAIL}
 
 
 @app.get("/api/data")
@@ -324,6 +329,17 @@ def api_export(request: Request):
     body = "﻿" + buf.getvalue()  # BOM — Excel에서 한글 깨짐 방지
     return Response(content=body, media_type="text/csv; charset=utf-8",
                     headers={"Content-Disposition": "attachment; filename=trading-journal.csv"})
+
+
+# 결제 스캐폴드 (플래그 뒤 비활성) — Stripe 붙일 준비만. 실제 과금 없음.
+@app.post("/api/billing/checkout")
+async def api_billing_checkout(request: Request):
+    _require(request)
+    _csrf(request)
+    if not BILLING_ENABLED:
+        raise HTTPException(503, "결제는 준비 중입니다 — 곧 제공됩니다")
+    # TODO(billing): stripe 지연 import + Checkout 세션 생성(STRIPE_SECRET_KEY·PRICE_ID 필요).
+    raise HTTPException(503, "결제 설정이 완료되지 않았습니다")
 
 
 @app.post("/api/account/delete")
