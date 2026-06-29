@@ -182,6 +182,8 @@ function table(rows,opts){
 }
 function bindEdit(){$$(".editBtn").forEach(b=>b.onclick=()=>openModal(b.dataset.id));}
 /* ---------- 일지 피드(카드): 반성 내용을 클릭 없이 노출 ---------- */
+const EXR={sl_hit:["⛔ SL적중","neg"],tp_hit:["🎯 TP적중","pos"],trailing:["🎯 트레일링","pos"],manual:["✋ 수동","muted"],liquidation:["⚡ 강제청산","neg"]};
+function exitBadge(r){const x=EXR[r.exit_reason];return x?`<span class="badge xr ${x[1]}">${x[0]}</span>`:"";}
 function tagChips(r){
   const out=[];
   if(r.strategy)out.push(`<span class="rtag strat">${esc(r.strategy)}</span>`);
@@ -191,7 +193,8 @@ function tagChips(r){
 }
 function tradeCard(r){
   const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${esc(r.direction)}</span>`:"";
-  const liq=r.liquidated?` <span class="badge liq">⚡청산</span>`:"";
+  const liq=(r.liquidated&&!r.exit_reason)?` <span class="badge liq">⚡청산</span>`:"";
+  const xr=exitBadge(r)?" "+exitBadge(r):"";
   const rcell=r.r==null?"":` <span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
   const lev=r.leverage?` <span class="ex">${r.leverage}x</span>`:"";
   const pending=r.status==='의도 미기입';
@@ -203,7 +206,7 @@ function tradeCard(r){
       +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
       +((!t&&!r.plan&&!r.memo)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}">
-    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b> <span class="ex">${esc(r.exchange)}</span>${lev}${liq} <span class="jt">${esc((toKST(r.closed_at)||{}).str||'')}</span></div>
+    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b> <span class="ex">${esc(r.exchange)}</span>${lev}${liq}${xr} <span class="jt">${esc((toKST(r.closed_at)||{}).str||'')}</span></div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
     ${body}</div>`;
 }
@@ -485,6 +488,21 @@ function rHist(ts){
   return `<div class="card chartc"><svg class="rh" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="R 분포 히스토그램">${bars}</svg>`
     +`<div class="ccap muted">SL 입력 ${rs.length}건 · 평균 ${(avg>=0?'+':'')+avg.toFixed(2)}R · 빨강=손실 / 초록=수익</div></div>`;
 }
+function exitHabits(ts){
+  const closed=ts.filter(t=>t.exit_reason&&t.exit_reason!=='unknown');
+  const overLoss=ts.reduce((s,t)=>s+((t.over_loss>0)?t.over_loss:0),0);
+  const moneyLeft=ts.reduce((s,t)=>s+(t.money_left||0),0);
+  if(!closed.length&&!overLoss&&!moneyLeft)return `<p class="muted">청산기준 데이터가 아직 없어요 — Bybit는 자동 판별, 예상 손절/익절가를 입력하면 규율 지표가 쌓입니다.</p>`;
+  const dist={};closed.forEach(t=>{const k=t.exit_reason;(dist[k]=dist[k]||{n:0,pnl:0});dist[k].n++;dist[k].pnl+=(t.pnl||0);});
+  const LBL={sl_hit:"⛔ SL 적중",tp_hit:"🎯 TP 적중",trailing:"🎯 트레일링",manual:"✋ 수동 청산",liquidation:"⚡ 강제청산"};
+  const rows=Object.entries(dist).sort((a,b)=>b[1].n-a[1].n).map(([k,v])=>
+    `<div class="srow"><span class="snm">${LBL[k]||esc(k)}</span><span class="muted num">${v.n}건</span><span class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</span></div>`).join("");
+  const cards=`<div class="mgrid" style="margin-bottom:var(--s3)">`
+    +mcard("스탑 안 지켜 더 잃음",overLoss>0?money(-overLoss):"—",overLoss>0?"neg":"","계획 손절 너머 청산 누적")
+    +mcard("두고 온 이익",moneyLeft>0?"$"+Math.round(moneyLeft).toLocaleString():"—","","계획 익절 전 조기청산 누적")
+    +`</div>`;
+  return cards+(rows?`<div class="card"><div class="sess">${rows}</div><div class="ccap muted">청산기준별 건수·손익 (Bybit 자동판별)</div></div>`:"");
+}
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
@@ -500,6 +518,7 @@ function renderInsights(el){
      `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +`<div class="section-title">누적 손익 곡선</div><div class="card chartc">${equitySVG(ts)}<div class="ccap muted">총 ${m.n}건 · 실현 ${money(m.sum)} USDT</div></div>`
     +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
+    +`<div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
     +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
     +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)

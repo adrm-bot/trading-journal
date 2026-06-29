@@ -10,7 +10,7 @@ DB_PATH = os.getenv("APP_DB_PATH", os.path.join(os.path.dirname(__file__), "data
 
 TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "opened_at", "closed_at", "fees", "funding", "leverage", "fill_count",
-              "liquidated", "status", "plan", "setup", "sl", "emotion", "memo"]
+              "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo"]
 _INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "emotion", "memo", "status"}
 
 
@@ -35,7 +35,7 @@ def init():
           user_id INTEGER, trade_id TEXT,
           exchange TEXT, symbol TEXT, direction TEXT, entry REAL, exit REAL, qty REAL, pnl REAL,
           opened_at TEXT, closed_at TEXT, fees REAL, funding REAL, leverage REAL,
-          fill_count INTEGER, liquidated INTEGER DEFAULT 0,
+          fill_count INTEGER, liquidated INTEGER DEFAULT 0, exit_reason TEXT,
           status TEXT DEFAULT '의도 미기입',
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, emotion TEXT, memo TEXT,
           PRIMARY KEY(user_id, trade_id));
@@ -44,9 +44,12 @@ def init():
         cols = {r[1] for r in c.execute("PRAGMA table_info(trades)")}
         for name, typ in (("tp", "REAL"), ("strategy", "TEXT"), ("tp2", "REAL"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
-                          ("leverage", "REAL"), ("fill_count", "INTEGER"), ("liquidated", "INTEGER")):
+                          ("leverage", "REAL"), ("fill_count", "INTEGER"), ("liquidated", "INTEGER"),
+                          ("exit_reason", "TEXT")):
             if name not in cols:
                 c.execute(f"ALTER TABLE trades ADD COLUMN {name} {typ}")
+        # 백필: 기존 강제청산 행에 청산기준 부여(멱등)
+        c.execute("UPDATE trades SET exit_reason='liquidation' WHERE exit_reason IS NULL AND liquidated=1")
         # 컷오버: 포지션 단위(v2) 이전의 '닫는 주문 1건=1행' 레거시 거래소 행 제거.
         # 새 키는 'exchange:pos:...' 형태라 LIKE로 구분. 사후 의도는 거의 없던 초기 데이터.
         c.execute("DELETE FROM trades WHERE (trade_id LIKE 'bybit:%' OR trade_id LIKE 'binance:%') "

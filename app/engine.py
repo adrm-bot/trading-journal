@@ -36,14 +36,14 @@ def _ts_str(ms):
 
 def _position_row(exchange, trade_id, symbol, direction, entry, exit_, qty, pnl,
                   opened_ms, closed_ms, fees=0.0, funding=0.0, leverage=0.0,
-                  fill_count=0, liquidated=False):
+                  fill_count=0, liquidated=False, exit_reason="unknown"):
     return {
         "trade_id": trade_id, "exchange": exchange, "symbol": symbol, "direction": direction,
         "entry": entry, "exit": exit_, "qty": qty, "pnl": pnl,
         "opened_at": _ts_str(opened_ms), "closed_at": _ts_str(closed_ms),
         "fees": round(fees, 6), "funding": round(funding, 6),
         "leverage": leverage or None, "fill_count": fill_count or None,
-        "liquidated": 1 if liquidated else 0, "status": "의도 미기입",
+        "liquidated": 1 if liquidated else 0, "exit_reason": exit_reason, "status": "의도 미기입",
     }
 
 
@@ -73,8 +73,60 @@ def _bybit_closed_pnl(ex, lookback):
     return rows
 
 
-def reconstruct_bybit(rows):
-    """closed-pnl 레코드들을 포지션(open→flat 사이클)으로 그룹핑."""
+def _bybit_executions(ex, lookback):
+    """청산기준 라벨용 보강 소스: orderId → stopOrderType 맵. 권한/조회 실패 시 빈 맵(graceful degrade)."""
+    now = ex.milliseconds()
+    start = now - lookback * 86_400_000
+    chunk = 7 * 86_400_000
+    out = {}
+    try:
+        w = start
+        while w < now:
+            e = min(w + chunk, now)
+            cursor = None
+            while True:
+                p = {"category": "linear", "startTime": w, "endTime": e, "limit": 100}
+                if cursor:
+                    p["cursor"] = cursor
+                res = ex.private_get_v5_execution_list(p).get("result", {})
+                for f in res.get("list", []):
+                    oid, st = f.get("orderId"), (f.get("stopOrderType") or "")
+                    if not oid:
+                        continue
+                    if st:
+                        out[oid] = st          # stopOrderType 있으면 채택(우선)
+                    else:
+                        out.setdefault(oid, "")  # 확인된 주문(수동)
+                cursor = res.get("nextPageCursor")
+                if not cursor:
+                    break
+                time.sleep(0.12)
+            w = e
+    except ccxt.BaseError:
+        return {}
+    return out
+
+
+def _exit_reason(liquidated, oid, exec_map):
+    """청산기준 라벨: liquidation > sl_hit/tp_hit/trailing(stopOrderType) > manual(주문확인됨) > unknown."""
+    if liquidated:
+        return "liquidation"
+    if not exec_map:
+        return "unknown"
+    st = str(exec_map.get(oid, None) if oid in exec_map else "__none__").lower()
+    if st == "__none__":
+        return "unknown"
+    if "trailing" in st:
+        return "trailing"
+    if "stoploss" in st or st == "stop":
+        return "sl_hit"
+    if "takeprofit" in st or "profit" in st:
+        return "tp_hit"
+    return "manual"
+
+
+def reconstruct_bybit(rows, exec_map=None):
+    """closed-pnl 레코드들을 포지션(open→flat 사이클)으로 그룹핑. exec_map={orderId:stopOrderType}로 청산기준 라벨."""
     for r in rows:
         r["_ct"] = int(r.get("createdTime") or r.get("updatedTime") or 0)
         r["_ut"] = int(r.get("updatedTime") or r.get("createdTime") or 0)
@@ -111,10 +163,12 @@ def reconstruct_bybit(rows):
                          or str(r.get("execType", "")).lower() == "adltrade" for r in rs)
         # 멱등키 = 가장 최근 청산주문 id (재풀링해도 안정: 마지막 청산이 윈도에서 가장 늦게 사라짐)
         last_row = max(rs, key=lambda r: r["_ut"])
-        tid = f"bybit:pos:{g['symbol']}:{last_row.get('orderId', '')}"
+        oid = last_row.get("orderId", "")
+        tid = f"bybit:pos:{g['symbol']}:{oid}"
         out.append(_position_row("bybit", tid, g["symbol"], g["dir"], round(entry, 10),
                                  round(exit_, 10), cs, round(pnl, 8), g["first"], g["last"],
-                                 fees=fees, leverage=leverage, fill_count=fill_count, liquidated=liquidated))
+                                 fees=fees, leverage=leverage, fill_count=fill_count, liquidated=liquidated,
+                                 exit_reason=_exit_reason(liquidated, oid, exec_map)))
     return out
 
 
@@ -124,7 +178,8 @@ def fetch_bybit(key, secret, lookback):
         rows = _bybit_closed_pnl(ex, lookback)
     except ccxt.BaseError:
         raise RuntimeError("bybit 인증/조회 실패 — read-only 키·권한을 확인하세요") from None
-    return reconstruct_bybit(rows)
+    exec_map = _bybit_executions(ex, lookback)  # 청산기준 보강(실패해도 graceful)
+    return reconstruct_bybit(rows, exec_map)
 
 
 # ---------- Binance: userTrades 부호 walk ----------

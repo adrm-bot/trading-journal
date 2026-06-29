@@ -83,6 +83,24 @@ def test_zero_size_group_skipped():
     assert engine.reconstruct_bybit(rows) == []
 
 
+def test_exit_reason_unknown_without_execmap():
+    rows = [cpnl("o1", "BTCUSDT", "Sell", 100, 110, 1, 5.0, C0)]
+    assert engine.reconstruct_bybit(rows)[0]["exit_reason"] == "unknown"
+
+
+def test_exit_reason_sl_tp_manual():
+    base = cpnl("oX", "BTCUSDT", "Sell", 100, 95, 1, -5.0, C0)
+    assert engine.reconstruct_bybit([dict(base)], {"oX": "StopLoss"})[0]["exit_reason"] == "sl_hit"
+    assert engine.reconstruct_bybit([dict(base)], {"oX": "TakeProfit"})[0]["exit_reason"] == "tp_hit"
+    assert engine.reconstruct_bybit([dict(base)], {"oX": ""})[0]["exit_reason"] == "manual"
+
+
+def test_exit_reason_liquidation_priority():
+    base = cpnl("oL", "BTCUSDT", "Sell", 100, 90, 1, -10.0, C0, exec_type="BustTrade")
+    # 강제청산이면 stopOrderType이 있어도 liquidation 우선
+    assert engine.reconstruct_bybit([dict(base)], {"oL": "StopLoss"})[0]["exit_reason"] == "liquidation"
+
+
 def test_order_independent():
     base = [cpnl("a", "BTCUSDT", "Sell", 100, 110, 1, 10.0, C0, updated=C0),
             cpnl("b", "BTCUSDT", "Sell", 100, 120, 1, 20.0, C0 + 3600_000, updated=C0 + 3600_000)]

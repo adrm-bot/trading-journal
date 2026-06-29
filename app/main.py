@@ -121,6 +121,20 @@ def _enrich(t):
             t["hold_min"] = round((datetime.fromisoformat(ca) - datetime.fromisoformat(oa)).total_seconds() / 60)
         except (TypeError, ValueError):
             pass
+    # 규율: 계획(예상) SL/TP vs 실제 청산 대조 (계획값 입력 거래만)
+    r = t.get("r")
+    if e and x and sl and r is not None:
+        if r < 0:  # 손실: 계획 손절 너머로 청산했나(스탑 미준수)
+            violated = (x < sl) if not short else (x > sl)
+            t["stop_violated"] = bool(violated)
+            if violated and t.get("risk_usd"):
+                t["over_loss"] = round(abs(t.get("pnl") or 0) - t["risk_usd"], 2)  # 스탑 안 지켜 더 잃은 액수
+        elif r > 0 and tp:  # 이익: 계획 익절 못 미쳐 조기청산했나
+            early = (x < tp) if not short else (x > tp)
+            if early and qty:
+                t["money_left"] = round(abs(tp - x) * qty, 2)  # 테이블에 두고 온 이익
+    if t.get("rr"):
+        t["exit_eff"] = round(r / t["rr"], 2) if r is not None else None
     return t
 
 
