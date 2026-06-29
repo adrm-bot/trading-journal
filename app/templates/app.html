@@ -414,7 +414,9 @@ function perfMetrics(ts){
   const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
   let cum=0,peak=0,mdd=0; ord.forEach(t=>{cum+=num(t.pnl);peak=Math.max(peak,cum);mdd=Math.min(mdd,cum-peak);});
   const fees=ts.reduce((a,t)=>a+num(t.fees),0), funding=ts.reduce((a,t)=>a+num(t.funding),0);
-  return {n,sum,winRate:n?wins.length/n:0,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding};
+  const wr=n?wins.length/n:0, payoff=avgLoss?Math.abs(avgWin/avgLoss):0;
+  const kelly=payoff?(wr-(1-wr)/payoff):0;  // 최적 베팅비중(프랙셔널 켈리 권장)
+  return {n,sum,winRate:wr,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding,payoff,kelly};
 }
 function mcard(l,v,cls,sub){return `<div class="mcard"><div class="ml">${l}</div><div class="mval ${cls||''}">${v}</div>${sub?`<div class="msub">${sub}</div>`:''}</div>`;}
 function metricsRow(m){
@@ -425,6 +427,7 @@ function metricsRow(m){
     +mcard('Profit Factor',!isFinite(m.pf)?(m.n>=3?'∞':'—'):m.pf.toFixed(2),(isFinite(m.pf)&&m.pf>=1)?'pos':(isFinite(m.pf)?'neg':''),!isFinite(m.pf)?'무손실 · 표본부족':'총이익 ÷ 총손실')
     +mcard('최대 낙폭(MDD)',money(m.mdd),'neg','누적 고점 대비')
     +mcard('순손익',money(m.net),m.net>=0?'pos':'neg',m.funding?'펀딩 포함':'수수료 반영')
+    +mcard('켈리 비중',m.kelly>0?Math.round(m.kelly*100)+'%':'—',m.kelly>0?'pos':'',m.kelly>0?`½켈리 권장 ${Math.round(m.kelly*50)}%`:'양의 기대 없음')
     +`</div>`;
 }
 function equitySVG(ts){

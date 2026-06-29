@@ -306,6 +306,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
   .nav .ic{width:auto;font-size:19px}
   .content{padding-bottom:78px} .cards,.market{grid-template-columns:1fr}
   .rsrow{grid-template-columns:96px 1fr 52px}
+  .btn.sm,.chips .fchip{min-height:40px} .banner .bx{min-width:36px;min-height:36px}
 }
 #toast{transition:bottom .2s}
 @media(max-width:560px){#toast{bottom:90px!important}}
