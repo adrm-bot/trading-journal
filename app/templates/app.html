@@ -264,14 +264,14 @@ function chgTxt(v){return v==null?"":`<span class="${v>=0?'pos':'neg'}">${(v>=0?
 function usd(n){return n==null?"—":"$"+Number(n).toLocaleString(undefined,{maximumFractionDigits:n<10?4:0});}
 function fngKo(v){if(v==null)return["—","muted"];if(v<25)return["극단적 공포","neg"];if(v<45)return["공포","neg"];if(v<=55)return["중립","muted"];if(v<=75)return["탐욕","pos"];return["극단적 탐욕","pos"];}
 function mchip(label,main,sub,cls,tip){return `<div class="mchip"${tip?` data-tip="${esc(tip)}"`:''}><div class="mk">${label}</div><div class="mv ${cls||''}">${main}</div>${sub?`<div class="ms">${sub}</div>`:""}</div>`;}
-const trendBasis=c=>(c&&c.trend)?({up:"EMA20>EMA50 정배열(상승)",down:"EMA20<EMA50 역배열(하락)",side:"EMA 혼조(횡보)"}[c.trend]):"일봉 50일 미만 — 미판정";
+const trendBasis=c=>(c&&c.trend)?({up:"EMA50>EMA200 정배열(상승)",down:"EMA50<EMA200 역배열(하락)",side:"EMA 혼조(횡보)"}[c.trend]):"일봉 200일 미만 — 미판정";
 function marketStrip(m){
   if(!m)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 불러오는 중…</div></div>`;
   const chips=[];
   if(m.btc){const t=TREND[m.btc.trend]||["·","—","muted"];
-    const tip=`판단: 일봉 ${trendBasis(m.btc)}${m.btc.ema20!=null?` · EMA20 ${usd(m.btc.ema20)} · EMA50 ${usd(m.btc.ema50)}`:''} · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
+    const tip=`판단: 일봉 ${trendBasis(m.btc)}${m.btc.ema50!=null?` · EMA50 ${usd(m.btc.ema50)} · EMA200 ${usd(m.btc.ema200)}`:''} · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
     chips.push(mchip("비트코인 추세",`<span class="${t[2]}">${t[0]} ${t[1]}</span>`,`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`,"",tip));}
-  if(m.eth)chips.push(mchip("이더리움",usd(m.eth.price),`24h ${chgTxt(m.eth.chg24)} · 7d ${chgTxt(m.eth.chg7)}`,"",`판단: 일봉 ${trendBasis(m.eth)}${m.eth.ema20!=null?` · EMA20 ${usd(m.eth.ema20)} · EMA50 ${usd(m.eth.ema50)}`:''} · 24h ${m.eth.chg24}% · 7d ${m.eth.chg7}%`));
+  if(m.eth)chips.push(mchip("이더리움",usd(m.eth.price),`24h ${chgTxt(m.eth.chg24)} · 7d ${chgTxt(m.eth.chg7)}`,"",`판단: 일봉 ${trendBasis(m.eth)}${m.eth.ema50!=null?` · EMA50 ${usd(m.eth.ema50)} · EMA200 ${usd(m.eth.ema200)}`:''} · 24h ${m.eth.chg24}% · 7d ${m.eth.chg7}%`));
   if(m.fng){const f=fngKo(m.fng.value);chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,"시장 심리 (alt.me)","","공포·탐욕 지수(alt.me) · 0-24 극단공포 / 25-44 공포 / 45-55 중립 / 56-75 탐욕 / 76-100 극단탐욕"));}
   if(m.dom)chips.push(mchip("도미넌스",`BTC ${m.dom.btc}%`,`ETH ${m.dom.eth}% · 기타 ${m.dom.others}% · 시총 24h ${chgTxt(m.dom.mcap_chg)}`,"",`BTC ${m.dom.btc}% · ETH ${m.dom.eth}% · 기타(상위 제외) ${m.dom.others}% · 24h 전체시총 ${m.dom.mcap_chg}% · 도미넌스↑=BTC로, ↓=알트로 자금 (현재값 스냅샷 · 추세는 상대강도 패널 참고)`));
   if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없어요</div></div>`;
