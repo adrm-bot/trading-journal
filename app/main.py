@@ -5,12 +5,15 @@
 배포:  uvicorn app.main:app --host 0.0.0.0 --port $PORT --proxy-headers --forwarded-allow-ips="*" --workers 1
 시크릿은 SQLite에 봉투암호화로만 저장. read-only 거래소 키 권장.
 """
+import csv
+import io
 import logging
 import os
 import secrets
+import time
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.sessions import SessionMiddleware
@@ -29,6 +32,10 @@ from . import db, engine, crypto, market, analytics  # noqa: E402
 
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io",
               "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
+
+# /api/pull 유저별 쿨다운(초) — 거래소 키 throttle/ban 방지 + 단일 워커 보호 (in-memory, 재시작 시 초기화)
+PULL_COOLDOWN = int(os.getenv("PULL_COOLDOWN_SEC", "30"))
+_pull_at: dict[int, float] = {}
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
@@ -199,6 +206,11 @@ def api_positions(request: Request):
 def api_pull(request: Request):
     uid = _require(request)
     _csrf(request)
+    now = time.time()
+    wait = PULL_COOLDOWN - (now - _pull_at.get(uid, 0))
+    if wait > 0:
+        raise HTTPException(429, f"너무 자주 불러왔어요 — {int(wait) + 1}초 뒤에 다시 시도해 주세요")
+    _pull_at[uid] = now
     try:
         results = engine.pull_user(uid)  # {exchange: {added, error}} — 거래소별 결과
     except Exception:  # noqa: BLE001
@@ -288,4 +300,34 @@ async def api_del_connection(request: Request):
     uid = _require(request)
     _csrf(request)
     db.delete_connection(uid, (await request.json()).get("kind"))
+    return {"ok": True}
+
+
+# 데이터 권리(PIPA/GDPR): 내보내기 + 계정·데이터 완전 삭제
+_EXPORT_COLS = ["closed_at", "opened_at", "exchange", "symbol", "direction", "entry", "exit", "qty",
+                "pnl", "r", "rr", "risk_usd", "leverage", "fees", "funding", "hold_min", "status",
+                "strategy", "setup", "sl", "tp", "tp2", "emotion", "plan", "memo", "exit_reason", "liquidated"]
+
+
+@app.get("/api/export")
+def api_export(request: Request):
+    uid = _require(request)
+    _, trades = engine.analyze_user(uid)
+    buf = io.StringIO()
+    w = csv.writer(buf)
+    w.writerow(_EXPORT_COLS)
+    for t in (analytics.enrich(t) for t in trades):
+        w.writerow(["" if t.get(c) is None else t.get(c) for c in _EXPORT_COLS])
+    body = "﻿" + buf.getvalue()  # BOM — Excel에서 한글 깨짐 방지
+    return Response(content=body, media_type="text/csv; charset=utf-8",
+                    headers={"Content-Disposition": "attachment; filename=trading-journal.csv"})
+
+
+@app.post("/api/account/delete")
+async def api_account_delete(request: Request):
+    uid = _require(request)
+    _csrf(request)
+    db.delete_user(uid)  # trades·connections·user 전부 삭제 (되돌릴 수 없음)
+    request.session.clear()
+    logger.info("account deleted uid=%s", uid)
     return {"ok": True}

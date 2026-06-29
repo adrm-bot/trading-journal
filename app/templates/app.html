@@ -64,6 +64,14 @@
   <div class="modal-actions"><button class="btn ghost" id="bulkCancel">취소</button><button class="btn primary" id="bulkSave">전부 기록 완료로</button></div>
 </div></div>
 
+<div class="modal-bg" id="delAcctBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="delAcctTitle">
+  <button type="button" class="mclose" id="delAcctClose" aria-label="닫기">×</button>
+  <h3 id="delAcctTitle">계정·데이터를 삭제할까요?</h3>
+  <p class="muted" style="font-size:13px;line-height:1.65;margin:0 0 14px">모든 거래 기록·연동 키·계정 정보가 영구히 삭제됩니다. <b class="neg">되돌릴 수 없습니다.</b><br>계속하려면 아래에 <b>삭제</b>를 입력하세요.</p>
+  <div class="field"><label class="sr-only" for="delConfirm">확인 입력</label><input id="delConfirm" placeholder="삭제" autocomplete="off"></div>
+  <div class="modal-actions"><button class="btn ghost" id="delAcctCancel">취소</button><button class="btn danger" id="delAcctDo" disabled>영구 삭제</button></div>
+</div></div>
+
 <div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--plate);border:1px solid var(--line-2);color:var(--ice);padding:10px 16px;border-radius:8px;box-shadow:var(--card-elev);display:none;z-index:50;font-size:13px"></div>
 
 <script>
@@ -603,7 +611,11 @@ function renderSettings(el){
   }).join("")+`</div>
     <div class="section-title">계정</div><div class="card"><div class="conn">
       <div><div class="nm" id="acctEmail"></div><div class="hint">키·시크릿은 암호화되어 저장됩니다 (평문 미저장).</div></div>
-      <a class="btn sm" href="/logout">로그아웃</a></div></div>`;
+      <a class="btn sm" href="/logout">로그아웃</a></div>
+      <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
+        <a class="btn sm" href="/api/export">데이터 내보내기 (CSV)</a>
+        <button class="btn sm danger" id="delAcctBtn">계정·데이터 삭제</button>
+      </div></div>`;
   $("#acctEmail").textContent=$("#email").textContent;
   $$(".connForm").forEach(f=>f.onsubmit=async e=>{e.preventDefault();
     const k=f.dataset.k, wasNew=!CONN.includes(k);
@@ -617,6 +629,7 @@ function renderSettings(el){
     b.disabled=true;
     try{await postJSON("/api/connections/delete",{kind:b.dataset.k});await loadAll();route();}
     catch(err){toast("연결 해제에 실패했어요 — 잠시 후 다시 시도해 주세요");b.disabled=false;}});
+  const da=$("#delAcctBtn");if(da)da.onclick=openDelAcct;
 }
 
 /* ---------- actions ---------- */
@@ -692,12 +705,20 @@ async function pull(opt){opt=opt||{};
       if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건`:`최근 거래 없음 — 새 거래가 잡히면 자동 반영`);
       else if(!opt.silent) toast(ok.length?`불러옴: ${ok.map(([k,v])=>`${EXN(k)} +${v.added}`).join(' · ')}`:`연결된 거래소 없음`);
     }else{errBanner(esc(res.error||"거래를 불러오지 못했어요"));}
-  }catch(err){errBanner("거래를 불러오지 못했어요 — API 키와 연결을 확인해 주세요");}
+  }catch(err){const m=err&&err.message;
+    if(m&&m.indexOf("http ")!==0)toast(m);  /* 쿨다운(429) 등 명확한 메시지는 토스트로 */
+    else errBanner("거래를 불러오지 못했어요 — API 키와 연결을 확인해 주세요");}
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 불러오기";}}
 }
 
 function openBulk(){setChips("cb_emo",[]);$("#bulkMeta").textContent=`계획 미기입 ${DATA.summary.unplanned||0}건에 적용`;$("#shell").inert=true;$("#bulkBg").classList.add("show");$("#b_plan").focus();}
 function closeBulk(){$("#bulkBg").classList.remove("show");$("#shell").inert=false;}
+function openDelAcct(){$("#delConfirm").value="";$("#delAcctDo").disabled=true;$("#shell").inert=true;$("#delAcctBg").classList.add("show");$("#delConfirm").focus();}
+function closeDelAcct(){$("#delAcctBg").classList.remove("show");$("#shell").inert=false;}
+async function doDelAcct(){const btn=$("#delAcctDo");btn.disabled=true;
+  try{const res=await(await postJSON("/api/account/delete",{})).json();
+    if(res.ok)location.href="/login";else{toast("삭제하지 못했어요 — 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
+  catch(e){toast("삭제하지 못했어요 — 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
 async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
   try{const res=await(await postJSON("/api/intent/bulk",{plan:$("#b_plan").value,emotion:getChips("cb_emo")[0]||""})).json();
     closeBulk();await loadAll();route();toast(`${res.filled||0}건 정리 완료`);}
@@ -710,8 +731,11 @@ chipsInto("cb_emo",EMOS,false);
 $("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
+$("#delAcctClose").onclick=closeDelAcct;$("#delAcctCancel").onclick=closeDelAcct;$("#delAcctDo").onclick=doDelAcct;
+$("#delConfirm").oninput=e=>{$("#delAcctDo").disabled=e.target.value.trim()!=="삭제";};
+$("#delAcctBg").onclick=e=>{if(e.target===$("#delAcctBg"))closeDelAcct();};
 /* 열린 모달의 .modal 엘리먼트 (없으면 null) */
-function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):null);}
+function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):null));}
 /* 포커스 트랩 — Tab이 모달 밖(브라우저 크롬)으로 새지 않게 첫↔끝 순환 */
 function trapTab(e){const m=openModalEl();if(!m)return;
   const f=[...m.querySelectorAll('button,[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
@@ -721,7 +745,7 @@ function trapTab(e){const m=openModalEl();if(!m)return;
 document.addEventListener("keydown",e=>{
   if(e.key==="Tab"){trapTab(e);return;}
   if(e.key!=="Escape")return;
-  if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();});
+  if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
 window.addEventListener("hashchange",route);
 (async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em">⚠️</div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">새로고침</button></div>';}})();
 </script></body></html>

@@ -1,5 +1,10 @@
-"""bulk_fill_unplanned 정직성 — 일괄 기입이 전략/셋업을 세탁하지 못하게 막는다."""
-from app import db
+"""bulk_fill_unplanned 정직성 + delete_user 카스케이드."""
+import os
+from cryptography.fernet import Fernet
+
+os.environ.setdefault("APP_SECRET_KEY", Fernet.generate_key().decode())  # set_connection 암호화용 임시 키
+
+from app import db  # noqa: E402
 
 
 def _fresh(tmp_path):
@@ -39,3 +44,13 @@ def test_bulk_fill_only_touches_unplanned(tmp_path):
     rows = {r["trade_id"]: r for r in db.get_trades(uid)}
     assert rows["done1"]["strategy"] == "눌림목"  # 기존 기록완료 거래는 건드리지 않음
     assert rows["pend1"]["status"] == "기록완료"
+
+
+def test_delete_user_cascades(tmp_path):
+    uid = _fresh(tmp_path)
+    db.set_connection(uid, "bybit", {"key": "k" * 10, "secret": "s" * 20})
+    db.upsert_trade(uid, {"trade_id": "x1", "exchange": "bybit", "symbol": "BTCUSDT",
+                          "direction": "Long", "entry": 1, "exit": 2, "qty": 1, "pnl": 1})
+    db.delete_user(uid)
+    assert db.get_trades(uid) == []
+    assert db.list_connections(uid) == []

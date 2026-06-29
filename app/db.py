@@ -64,6 +64,14 @@ def upsert_user(email, name):
         return c.execute("SELECT id FROM users WHERE email=?", (email,)).fetchone()["id"]
 
 
+def delete_user(uid):
+    """계정·데이터 완전 삭제 (PIPA/GDPR 삭제권). 거래·연동·유저 전부 제거 — 되돌릴 수 없음."""
+    with conn() as c:
+        c.execute("DELETE FROM trades WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM connections WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM users WHERE id=?", (uid,))
+
+
 # --- connections (암호화) ---
 def set_connection(uid, kind, data: dict):
     enc = crypto.encrypt(json.dumps(data))
