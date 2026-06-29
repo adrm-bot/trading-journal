@@ -1,0 +1,4 @@
+-r requirements.txt
+pytest>=8.0
+# app.engine 은 top-level에서 `import ccxt` 하므로 ccxt(requirements.txt)가 설치돼야 import 가능.
+# crypto/db 는 import-time 부작용 없음(키·DB 접근은 함수 호출 시점) — 순수함수 테스트엔 키/DB/네트워크 불필요.
