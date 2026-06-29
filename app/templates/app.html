@@ -102,11 +102,22 @@ async function refresh(){try{await loadAll();route();}catch(e){toast("불러오�
 
 /* ---------- views ---------- */
 function statCards(s){
-  const c=[["총 거래",(s.n||0)+"건",""],["실현손익",money(s.total_pnl)+" USDT",(s.total_pnl||0)>=0?"pos":"neg"],
-    ["승률",s.n?Math.round((s.win_rate||0)*100)+"% ("+(s.wins||0)+"/"+s.n+")":"—",""],["의도 미기입",(s.unplanned||0)+"건",(s.unplanned||0)>0?"neg":""]];
-  return `<div class="cards">`+c.map(x=>`<div class="card stat"><div class="label">${x[0]}</div><div class="val ${x[2]}">${x[1]}</div></div>`).join("")+`</div>`;
+  const n=s.n||0, dates=DATA.trades.map(t=>trDate(t)).filter(Boolean).sort();
+  const range=dates.length?`${dates[0]} ~ ${dates[dates.length-1]}`:"청산 완료 기준";
+  const avg=n?(s.total_pnl||0)/n:0;
+  const c=[
+    ["총 거래",n+"건","",range],
+    ["실현손익",money(s.total_pnl)+" USDT",(s.total_pnl||0)>=0?"pos":"neg","거래당 "+money(avg)],
+    ["승률",n?Math.round((s.win_rate||0)*100)+"%":"—","",n?(s.wins||0)+"승 "+(n-(s.wins||0))+"패":""],
+    ["의도 미기입",(s.unplanned||0)+"건",(s.unplanned||0)>0?"neg":"",n?Math.round((s.unplanned||0)/n*100)+"% 미기입":""]];
+  return `<div class="cards">`+c.map(x=>`<div class="card stat"><div class="label">${x[0]}</div><div class="val ${x[2]}">${x[1]}</div>${x[3]?`<div class="msub">${esc(x[3])}</div>`:""}</div>`).join("")+`</div>`;
 }
-function flagsBlock(s){return (s.flags||[]).length?`<div class="flags">`+s.flags.map(f=>`<div class="flag">${esc(f)}</div>`).join("")+`</div>`:"";}
+function flagsBlock(s){
+  const fl=s.flags||[]; if(!fl.length)return"";
+  return `<div class="flags">`+fl.map(f=>{const o=(typeof f==='string')?{level:'warn',text:f}:f;
+    const ic=o.level==='warn'?'⚠':o.level==='good'?'✓':'•';
+    return `<div class="flag ${esc(o.level||'info')}"><span class="fi" aria-hidden="true">${ic}</span><span>${esc(o.text)}</span></div>`;}).join("")+`</div>`;
+}
 function onboarding(){
   const hasExch=CONN.some(k=>EXCH.has(k));
   return `<div class="empty"><div class="em" aria-hidden="true">${hasExch?"🌱":"🔌"}</div>
@@ -393,6 +404,21 @@ function sessionCard(ts){
     return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} KST</span></span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span><span class="muted num">${n}건</span></div>`;}).join('');
   return `<div class="card"><div class="hours">${hours}</div><div class="sess">${rows}</div><div class="ccap muted">한국시간(KST·UTC+9) 기준 · 위 칸 숫자=시(0~23시)</div></div>`;
 }
+function rHist(ts){
+  const rs=ts.map(t=>t.r).filter(r=>r!=null);
+  if(rs.length<3)return `<p class="muted">R 입력 거래가 적습니다 — 손절가(SL)를 채우면 R 분포가 그려집니다.</p>`;
+  const B=[["≤-2",-1e9,-2],["-2~-1",-2,-1],["-1~0",-1,0],["0~1",0,1],["1~2",1,2],["2~3",2,3],[">3",3,1e9]];
+  const cnt=B.map(([l,lo,hi])=>rs.filter(r=>r>lo&&r<=hi).length);
+  const mx=Math.max(...cnt,1), W=600,H=170,pad=26,bw=(W-2*pad)/B.length;
+  const bars=B.map((b,i)=>{const h=cnt[i]/mx*(H-2*pad-12),x=pad+i*bw,y=H-pad-h,neg=b[2]<=0;
+    return `<rect x="${(x+5).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw-10).toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="2" fill="${neg?'var(--neg)':'var(--pos)'}" opacity="0.85"/>`
+      +`<text x="${(x+bw/2).toFixed(1)}" y="${H-pad+14}" text-anchor="middle" class="hx">${b[0]}</text>`
+      +(cnt[i]?`<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" class="hn">${cnt[i]}</text>`:"");
+  }).join("");
+  const avg=rs.reduce((a,b)=>a+b,0)/rs.length;
+  return `<div class="card chartc"><svg class="rh" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="R 분포 히스토그램">${bars}</svg>`
+    +`<div class="ccap muted">SL 입력 ${rs.length}건 · 평균 ${(avg>=0?'+':'')+avg.toFixed(2)}R · 빨강=손실 / 초록=수익</div></div>`;
+}
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
@@ -407,6 +433,7 @@ function renderInsights(el){
   el.innerHTML=
      `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +`<div class="section-title">누적 손익 곡선</div><div class="card chartc">${equitySVG(ts)}<div class="ccap muted">총 ${m.n}건 · 실현 ${money(m.sum)} USDT</div></div>`
+    +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
     +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
     +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)

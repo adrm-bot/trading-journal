@@ -26,14 +26,14 @@ def analyze(rows: list[dict]) -> dict:
     res["unplanned"] = len(unplanned)
     res["unplanned_pnl"] = sum(_pnl(r) for r in unplanned)
     if unplanned:
-        res["flags"].append(f"⚠️ 무계획 진입 {len(unplanned)}건 (합 {res['unplanned_pnl']:+.2f}) — 계획 채워라")
+        res["flags"].append({"level": "warn", "text": f"무계획 진입 {len(unplanned)}건 (합 {res['unplanned_pnl']:+.2f} USDT) — 사후 계획을 채워보세요"})
 
     # 한 종목·방향 집중 (방향 None은 종목만으로)
     c = Counter((r.get("심볼"), r.get("방향")) for r in rows)
     (sym, dir_), cnt = c.most_common(1)[0]
     if cnt >= 3 and cnt / n >= 0.5:
         label = f"{sym} {dir_}".strip() if dir_ else f"{sym}"
-        res["flags"].append(f"🔁 한 종목 집중: {label} {cnt}/{n}건")
+        res["flags"].append({"level": "info", "text": f"한 종목 집중 — {label} {cnt}/{n}건"})
 
     # 손실 청산 연속 (시간순, 안정 정렬: 시각→심볼→trade_id)
     ordered = sorted(rows, key=lambda r: (r.get("청산시각") or datetime.min, r.get("심볼") or "", r.get("거래ID") or r.get("trade_id") or ""))
@@ -46,7 +46,7 @@ def analyze(rows: list[dict]) -> dict:
             streak = 0
     res["losing_streak"] = mx
     if mx >= 3:
-        res["flags"].append(f"📉 손실 청산 연속 {mx}")
+        res["flags"].append({"level": "warn", "text": f"손실 청산 {mx}연속 — 과매매·리벤지 주의"})
 
     # 손실 후 근접(≤30분) 연속 거래 — 분할청산 or 뇌동
     quick = 0
@@ -57,6 +57,6 @@ def analyze(rows: list[dict]) -> dict:
                 quick += 1
     res["quick_reentry"] = quick
     if quick >= 2:
-        res["flags"].append(f"⚡ 근접(≤30분) 연속 거래 {quick}회 — 분할청산 or 뇌동 (execution으로 구분 가능)")
+        res["flags"].append({"level": "info", "text": f"근접(≤30분) 연속 거래 {quick}회 — 분할청산인지 충동매매인지 점검"})
 
     return res
