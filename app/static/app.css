@@ -89,10 +89,11 @@ a{color:inherit;text-decoration:none}
 .side .foot a:hover{background:var(--card-2);color:var(--ember)}
 
 .main{display:flex;flex-direction:column;min-width:0}
-.topbar{display:flex;align-items:center;justify-content:space-between;padding:var(--s5) var(--s8);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
-.topbar h1{margin:0;font-family:var(--f-display);font-size:var(--fs-xl);font-weight:510;color:var(--glacier);letter-spacing:-.014em}
-.topbar .desc{color:var(--muted);font-size:var(--fs-sm);margin-top:3px}
-.content{padding:var(--s6) var(--s8);max-width:1120px;width:100%}
+.topbar{display:flex;align-items:flex-end;justify-content:space-between;padding:var(--s6) var(--s8);border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:5}
+.tb-eyebrow{margin-bottom:6px;color:var(--muted)}
+.topbar h1{margin:0;font-family:var(--f-display);font-size:28px;font-weight:600;color:var(--glacier);letter-spacing:-.022em;line-height:1.05}
+.topbar .desc{color:var(--muted);font-size:var(--fs-sm);margin-top:5px}
+.content{padding:var(--s8);max-width:1120px;width:100%}
 
 /* ---- buttons (sharp 2px) ---- */
 .btn{font:inherit;font-weight:500;cursor:pointer;border:1px solid var(--line-2);box-shadow:none;background:transparent;color:var(--moonlight);
@@ -116,7 +117,7 @@ a{color:inherit;text-decoration:none}
 .stat.hero .val{font-size:33px;margin-top:8px}
 .stat .val.neg{color:var(--ember)} .stat .val.pos{color:var(--mint)}
 .section-title{margin:var(--s6) 0 var(--s3)}
-.group-title{font-family:var(--f-display);font-weight:510;font-size:var(--fs-md);color:var(--glacier);letter-spacing:-.01em;margin:var(--s8) 0 var(--s2);padding-top:var(--s5);border-top:1px solid var(--line-2)}
+.group-title{font-family:var(--f-display);font-weight:600;font-size:20px;color:var(--glacier);letter-spacing:-.018em;margin:var(--s10) 0 var(--s2);padding-top:var(--s5);border-top:1px solid var(--line-2)}
 .group-title:first-child{margin-top:var(--s2);padding-top:0;border-top:none}
 .group-title + .section-title{margin-top:var(--s3)}
 .ins-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s5)}
