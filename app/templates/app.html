@@ -590,7 +590,7 @@ function renderInsights(el){
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"binance",nm:"Binance",hint:"USDⓈ-M 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
-  {k:"gate",nm:"Gate.io",hint:"USDT 무기한 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
+  {k:"gate",nm:"Gate.io",hint:"USDT 무기한 선물 read-only 키",read:1,ack:"이 키는 '읽기 전용'입니다 — Gate는 권한 자동 검증이 불가해 직접 확인합니다",fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"notion",nm:"Notion",hint:"일지를 Notion으로 내보내기",soon:1,fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
   {k:"telegram",nm:"Telegram",hint:"행동 요약 알림 받기",soon:1,fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
   {k:"sheets",nm:"Google Sheets",hint:"일지를 Google Sheets로 내보내기",soon:1,fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},
@@ -606,7 +606,8 @@ function renderSettings(el){
     return `<div class="card">${head}
       <form class="connForm" data-k="${d.k}" style="margin-top:14px">
         ${d.fields.map((f,fi)=>{const id=`c_${d.k}_${f[0]}`;return `<label class="sr-only" for="${id}">${d.nm} ${f[1]}</label><input id="${id}" name="${f[0]}" type="${f[2]||'text'}" placeholder="${f[1]}" autocomplete="off">`;}).join("")}
-        <button class="btn primary sm" type="submit">${on?'키 교체':'연결'}</button>
+        ${d.ack?`<label class="ackrow"><input type="checkbox" name="ack_readonly" class="ackchk"><span>${d.ack}</span></label>`:""}
+        <button class="btn primary sm" type="submit" ${d.ack?'disabled':''}>${on?'키 교체':'연결'}</button>
       </form></div>`;
   }).join("")+`</div>
     <div class="section-title">계정</div><div class="card"><div class="conn">
@@ -620,7 +621,7 @@ function renderSettings(el){
   $$(".connForm").forEach(f=>f.onsubmit=async e=>{e.preventDefault();
     const k=f.dataset.k, wasNew=!CONN.includes(k);
     const btn=f.querySelector("button");const body={kind:k};
-    [...f.elements].forEach(i=>{if(i.name)body[i.name]=i.value;});
+    [...f.elements].forEach(i=>{if(!i.name)return;body[i.name]=(i.type==='checkbox')?i.checked:i.value;});
     btn.disabled=true;const orig=btn.textContent;btn.textContent="저장 중…";
     try{const res=await postJSON("/api/connections",body).then(r=>r.json());await loadAll();route();toast(res&&res.warn?res.warn:"연결 저장됨");
       if(wasNew&&EXCH.has(k)){location.hash="#dashboard";pull({silent:true,banner:"최근 90일치 거래를 불러오는 중…"});}}
@@ -629,6 +630,7 @@ function renderSettings(el){
     b.disabled=true;
     try{await postJSON("/api/connections/delete",{kind:b.dataset.k});await loadAll();route();}
     catch(err){toast("연결 해제에 실패했어요 — 잠시 후 다시 시도해 주세요");b.disabled=false;}});
+  $$(".ackchk").forEach(c=>c.onchange=()=>{const b=c.closest("form").querySelector("button[type=submit]");if(b)b.disabled=!c.checked;});
   const da=$("#delAcctBtn");if(da)da.onclick=openDelAcct;
 }
 

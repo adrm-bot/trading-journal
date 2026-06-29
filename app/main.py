@@ -265,7 +265,10 @@ async def api_save_connection(request: Request):
         key, sec = (b.get("key") or "").strip(), (b.get("secret") or "").strip()
         if len(key) < 8 or len(sec) < 16:
             raise HTTPException(400, "API 키와 시크릿을 다시 확인해 주세요 — read-only 키를 권장합니다")
-        # read-only 권한 강제 — 거래/출금 권한 있으면 저장 거부
+        # Gate는 API로 키 권한을 조회할 수 없어 자동검증 불가 → 사용자 명시 확인 요구(정직성)
+        if kind == "gate" and not b.get("ack_readonly"):
+            raise HTTPException(400, "Gate는 키 권한 자동 검증이 불가합니다 — '읽기 전용 키임을 확인' 체크 후 등록해 주세요")
+        # read-only 권한 강제 — 거래/출금 권한 있으면 저장 거부 (Bybit/Binance는 실제 검증)
         try:
             warn = engine.probe_readonly(kind, key, sec).get("warn")
         except RuntimeError as e:
