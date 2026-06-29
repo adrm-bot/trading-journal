@@ -118,7 +118,8 @@ def _dominance():
 def _sectors():
     """크립토 섹터(카테고리) 24h 시총변화 — '지금 강한/약한 섹터'. CoinGecko categories."""
     cats = _get_json("https://api.coingecko.com/api/v3/coins/categories")
-    rows = [c for c in cats if isinstance(c.get("market_cap_change_24h"), (int, float)) and (c.get("market_cap") or 0) > 0]
+    # 시총 하한($1B): 초소형·노이즈 카테고리(ERC404·밈 파생 등)가 24h 변동률로 1등 먹는 것 방지 → 의미 있는 섹터만
+    rows = [c for c in cats if isinstance(c.get("market_cap_change_24h"), (int, float)) and (c.get("market_cap") or 0) > 1e9]
     rows.sort(key=lambda c: c["market_cap_change_24h"], reverse=True)
 
     def _row(c):
