@@ -102,8 +102,28 @@ def _fng():
 
 def _dominance():
     g = _get_json("https://api.coingecko.com/api/v3/global")["data"]
-    return {"btc": round(g["market_cap_percentage"]["btc"], 1),
-            "mcap_chg": round(g.get("market_cap_change_percentage_24h_usd") or 0, 2)}
+    mcp = g.get("market_cap_percentage", {}) or {}
+    total = (g.get("total_market_cap", {}) or {}).get("usd") or 0
+    btc_d = mcp.get("btc", 0) or 0
+    eth_d = mcp.get("eth", 0) or 0
+    others_d = max(0.0, 100 - sum(v for v in mcp.values() if isinstance(v, (int, float))))
+    return {"btc": round(btc_d, 1), "eth": round(eth_d, 1), "others": round(others_d, 1),
+            "mcap_chg": round(g.get("market_cap_change_percentage_24h_usd") or 0, 2),
+            "total": total,
+            "total2": total * (1 - btc_d / 100),               # BTC 제외 시총
+            "total3": total * (1 - (btc_d + eth_d) / 100),       # BTC+ETH 제외 시총
+            "others_usd": total * others_d / 100}                # 상위 제외(알트 잔여)
+
+
+def _sectors():
+    """크립토 섹터(카테고리) 24h 시총변화 — '지금 강한/약한 섹터'. CoinGecko categories."""
+    cats = _get_json("https://api.coingecko.com/api/v3/coins/categories")
+    rows = [c for c in cats if isinstance(c.get("market_cap_change_24h"), (int, float)) and (c.get("market_cap") or 0) > 0]
+    rows.sort(key=lambda c: c["market_cap_change_24h"], reverse=True)
+
+    def _row(c):
+        return {"name": c.get("name") or "?", "chg24": round(c["market_cap_change_24h"], 2)}
+    return {"top": [_row(c) for c in rows[:5]], "bottom": [_row(c) for c in rows[-3:]]}
 
 
 def get_context(force=False):
@@ -112,8 +132,8 @@ def get_context(force=False):
         return _CACHE["data"]
     md = _market_data()
     data = {"btc": md["btc"], "eth": md["eth"], "rs": md["rs"], "src": md["src"],
-            "fng": None, "dom": None, "ts": int(now)}
-    for key, fn in (("fng", _fng), ("dom", _dominance)):
+            "fng": None, "dom": None, "sectors": None, "ts": int(now)}
+    for key, fn in (("fng", _fng), ("dom", _dominance), ("sectors", _sectors)):
         try:
             data[key] = fn()
         except Exception:  # noqa: BLE001

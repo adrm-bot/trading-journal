@@ -270,7 +270,7 @@ function marketStrip(m){
     chips.push(mchip("비트코인 추세",`<span class="${t[2]}">${t[0]} ${t[1]}</span>`,`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`));}
   if(m.eth)chips.push(mchip("이더리움",usd(m.eth.price),`24h ${chgTxt(m.eth.chg24)} · 7d ${chgTxt(m.eth.chg7)}`));
   if(m.fng){const f=fngKo(m.fng.value);chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,"시장 심리 (alt.me)"));}
-  if(m.dom)chips.push(mchip("BTC 도미넌스",`${m.dom.btc}%`,`전체 시총 24h ${chgTxt(m.dom.mcap_chg)}`));
+  if(m.dom)chips.push(mchip("도미넌스",`BTC ${m.dom.btc}%`,`ETH ${m.dom.eth}% · 기타 ${m.dom.others}% · 시총 24h ${chgTxt(m.dom.mcap_chg)}`));
   if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없어요</div></div>`;
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
@@ -296,9 +296,29 @@ function rsPanel(m){
     <div class="rsbody">${rows}</div>
     <div class="ccap muted">BTC 대비 7일 상대수익률 · 위=강세(롱 후보) 아래=약세(숏 후보) · ${rs.outperform}/${rs.n} 알트가 BTC 우위</div></div>`;
 }
+/* 자금 흐름(TOTAL2/3/OTHERS) + 섹터 강도 */
+function fmtBig(n){if(n==null)return"—";const t=n/1e12;if(Math.abs(t)>=1)return"$"+t.toFixed(2)+"T";return "$"+Math.round(n/1e9).toLocaleString()+"B";}
+function flowm(label,val,sub){return `<div class="flowm"><div class="mk">${label}</div><div class="mv">${val}</div><div class="ms">${sub}</div></div>`;}
+function secRows(arr){return arr.map(x=>`<div class="secrow"><span class="secn">${esc(x.name)}</span><span class="num ${x.chg24>=0?'pos':'neg'}">${(x.chg24>=0?'+':'')+x.chg24}%</span></div>`).join("");}
+function flowPanel(m){
+  const d=m&&m.dom, s=m&&m.sectors;
+  if(!d&&!(s&&s.top&&s.top.length))return "";
+  let html=`<div class="section-title">자금 흐름 · 섹터</div><div class="card flowcard">`;
+  if(d&&d.total2)html+=`<div class="flowrow">`
+    +flowm("TOTAL2",fmtBig(d.total2),"BTC 제외 시총")
+    +flowm("TOTAL3",fmtBig(d.total3),"BTC+ETH 제외")
+    +flowm("OTHERS",fmtBig(d.others_usd),`상위 제외 · ${d.others}%`)
+    +`</div>`;
+  if(s&&s.top&&s.top.length)html+=`<div class="secwrap">`
+    +`<div class="seccol"><div class="seclbl">강한 섹터 · 24h</div>${secRows(s.top)}</div>`
+    +(s.bottom&&s.bottom.length?`<div class="seccol"><div class="seclbl">약한 섹터</div>${secRows(s.bottom)}</div>`:"")
+    +`</div>`;
+  return html+`<div class="ccap muted">시총 기준 · 알트로 자금 회전 시 TOTAL2/3·OTHERS↑ (CoinGecko)</div></div>`;
+}
 function paintMarket(){
   const e=$("#marketStrip"); if(e)e.outerHTML=marketStrip(MARKET);
   const h=$("#rsHost"); if(h)h.innerHTML=rsPanel(MARKET);
+  const f=$("#flowHost"); if(f)f.innerHTML=flowPanel(MARKET);
 }
 async function ensureMarket(){
   if(!$("#marketStrip"))return;
@@ -333,7 +353,7 @@ async function ensurePositions(){
 }
 
 function renderDashboard(el){
-  const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="posHost"></div>`;
+  const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="posHost"></div>`;
   if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
   el.innerHTML=head+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,5));

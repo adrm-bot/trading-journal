@@ -286,6 +286,18 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .rsbar.pos{left:50%;background:var(--mint)} .rsbar.neg{right:50%;background:var(--ember)}
 .rsrow .num{text-align:right}
 
+/* ---- 자금 흐름 · 섹터 ---- */
+.flowcard{padding:var(--s4) var(--s5)}
+.flowrow{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4);padding-bottom:var(--s3);margin-bottom:var(--s3);border-bottom:1px solid var(--line)}
+.flowm .mk{font-family:var(--f-mono);font-size:var(--fs-micro);letter-spacing:.08em;text-transform:uppercase;color:var(--fog)}
+.flowm .mv{font-family:var(--f-display);font-size:var(--fs-lg);font-weight:510;color:var(--ice);letter-spacing:-.01em;margin:2px 0;font-variant-numeric:tabular-nums}
+.flowm .ms{font-size:var(--fs-xs);color:var(--muted);font-family:var(--f-mono)}
+.secwrap{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s5)}
+.seclbl{font-family:var(--f-mono);font-size:var(--fs-micro);letter-spacing:.06em;text-transform:uppercase;color:var(--fog);margin:0 0 4px}
+.secrow{display:flex;justify-content:space-between;gap:var(--s3);padding:5px 0;font-size:var(--fs-sm);border-bottom:1px solid var(--line)}
+.secrow:last-child{border-bottom:none} .secn{color:var(--moonlight);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:560px){.flowrow{grid-template-columns:1fr;gap:var(--s2)}.secwrap{grid-template-columns:1fr;gap:var(--s3)}}
+
 /* ---- 성과 분석 (인사이트) ---- */
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3)}
 .mcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}
