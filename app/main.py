@@ -251,10 +251,19 @@ async def api_save_connection(request: Request):
     _csrf(request)
     b = await request.json()
     kind = b.get("kind")
+    warn = None
     if kind in ("bybit", "binance", "gate"):
         key, sec = (b.get("key") or "").strip(), (b.get("secret") or "").strip()
         if len(key) < 8 or len(sec) < 16:
             raise HTTPException(400, "유효한 API 키/시크릿이 필요합니다 (read-only 권장)")
+        # read-only 권한 강제 — 거래/출금 권한 있으면 저장 거부
+        try:
+            warn = engine.probe_readonly(kind, key, sec).get("warn")
+        except RuntimeError as e:
+            raise HTTPException(400, str(e)) from None
+        except Exception:  # noqa: BLE001
+            logger.warning("키 프로빙 실패 kind=%s uid=%s", kind, uid)
+            raise HTTPException(400, f"{kind} 키 권한 확인 실패 — 잠시 후 다시 시도하세요") from None
         data = {"key": key, "secret": sec}
     elif kind == "notion":
         tok = (b.get("token") or "").strip()
@@ -274,7 +283,7 @@ async def api_save_connection(request: Request):
     else:
         raise HTTPException(400, "unknown kind")
     db.set_connection(uid, kind, data)
-    return {"ok": True}
+    return {"ok": True, "warn": warn}
 
 
 @app.post("/api/connections/delete")

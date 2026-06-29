@@ -289,6 +289,70 @@ def fetch_gate(key, secret, lookback):
         raise RuntimeError("gate 인증/조회 실패 — USDT 무기한 read-only 키·권한을 확인하세요") from None
 
 
+# ---------- 키 저장 전 read-only 권한 프로빙 (거래/출금 권한 있으면 거부) ----------
+PROBE_TIMEOUT = int(os.getenv("PROBE_TIMEOUT_MS", "10000"))
+
+
+def _probe_bybit(key, secret):
+    ex = ccxt.bybit({"apiKey": key, "secret": secret, "enableRateLimit": True, "timeout": PROBE_TIMEOUT})
+    try:
+        resp = ex.private_get_v5_user_query_api({})
+    except ccxt.BaseError:
+        raise RuntimeError("bybit 키 검증 실패 — 키/시크릿/IP 화이트리스트를 확인하세요") from None
+    if str(resp.get("retCode")) != "0":
+        raise RuntimeError("bybit 키 검증 실패 — 권한 조회가 거부되었습니다") from None
+    res = resp.get("result", {}) or {}
+    perms = res.get("permissions", {}) or {}
+    trade_groups = ["ContractTrade", "Spot", "Derivatives", "Options", "CopyTrading", "Exchange", "NFT"]
+    has_trade = any(perms.get(g) for g in trade_groups)
+    wallet = [str(x).lower() for x in (perms.get("Wallet") or [])]
+    has_withdraw = any("withdraw" in w for w in wallet)
+    read_only_flag = str(res.get("readOnly")) in ("1", "True", "true")
+    if has_withdraw:
+        raise RuntimeError("이 키에는 출금 권한이 있습니다. 출금 권한이 없는 read-only 키를 발급해 다시 시도하세요.")
+    if has_trade or (res.get("readOnly") is not None and not read_only_flag):
+        raise RuntimeError("이 키에는 거래/주문 권한이 있습니다. '읽기 전용(read-only)' 키만 등록할 수 있습니다.")
+    return {"ok": True, "warn": None}
+
+
+def _probe_binance(key, secret):
+    ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True, "timeout": PROBE_TIMEOUT})
+    try:
+        r = ex.sapiGetAccountApiRestrictions()
+    except ccxt.BaseError:
+        raise RuntimeError("binance 키 검증 실패 — USDⓈ-M(또는 동일 마스터) read-only 키·IP·시간동기를 확인하세요") from None
+
+    def _t(v):
+        return v is True or str(v).lower() == "true"
+    if _t(r.get("enableWithdrawals")):
+        raise RuntimeError("이 키에는 출금 권한이 있습니다. 출금 권한이 없는 read-only 키를 발급해 다시 시도하세요.")
+    if _t(r.get("enableSpotAndMarginTrading")) or _t(r.get("enableFutures")) or _t(r.get("enableMargin")) or _t(r.get("enableInternalTransfer")):
+        raise RuntimeError("이 키에는 거래/선물/이체 권한이 있습니다. '읽기 전용(read-only)' 키만 등록할 수 있습니다.")
+    return {"ok": True, "warn": None}
+
+
+def _probe_gate(key, secret):
+    gate_cls = getattr(ccxt, "gate", None) or getattr(ccxt, "gateio")
+    ex = gate_cls({"apiKey": key, "secret": secret, "enableRateLimit": True, "timeout": PROBE_TIMEOUT,
+                   "options": {"defaultType": "swap", "defaultSettle": "usdt"}})
+    try:
+        ex.fetch_balance({"type": "swap", "settle": "usdt"})
+    except ccxt.BaseError:
+        raise RuntimeError("gate 키 검증 실패 — USDT 무기한 read-only 키·권한·IP를 확인하세요") from None
+    return {"ok": True, "warn": "Gate는 권한 자동검증이 제한적입니다 — 반드시 '읽기 전용' 키를 사용하세요."}
+
+
+_PROBES = {"bybit": _probe_bybit, "binance": _probe_binance, "gate": _probe_gate}
+
+
+def probe_readonly(kind, key, secret):
+    """키 저장 전 read-only 강제. 거래/출금 권한 있으면 RuntimeError(사용자 메시지). 반환 {ok,warn}."""
+    fn = _PROBES.get(kind)
+    if not fn:
+        return {"ok": True, "warn": None}
+    return fn(key, secret)
+
+
 ADAPTERS = {"bybit": fetch_bybit, "binance": fetch_binance, "gate": fetch_gate}
 
 

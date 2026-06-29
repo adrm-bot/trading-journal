@@ -71,7 +71,7 @@ function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block
 async function api(path,opt){
   const r=await fetch(path,opt);
   if(r.status===401){location.href="/login";throw new Error("auth");}
-  if(!r.ok) throw new Error("http "+r.status);
+  if(!r.ok){let msg="http "+r.status;try{const j=await r.clone().json();if(j&&j.detail)msg=j.detail;}catch(_){}throw new Error(msg);}
   return r;
 }
 function postJSON(path,body){return api(path,{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"fetch"},body:JSON.stringify(body||{})});}
@@ -424,8 +424,8 @@ function renderSettings(el){
     const btn=f.querySelector("button");const body={kind:f.dataset.k};
     [...f.elements].forEach(i=>{if(i.name)body[i.name]=i.value;});
     btn.disabled=true;const orig=btn.textContent;btn.textContent="저장 중…";
-    try{await postJSON("/api/connections",body);await loadAll();route();toast("연결 저장됨");}
-    catch(err){toast("저장 실패 — 입력값을 확인하세요");btn.disabled=false;btn.textContent=orig;}});
+    try{const res=await postJSON("/api/connections",body).then(r=>r.json());await loadAll();route();toast(res&&res.warn?res.warn:"연결 저장됨");}
+    catch(err){toast(err&&err.message&&err.message.indexOf("http ")!==0?err.message:"저장 실패 — 입력값을 확인하세요");btn.disabled=false;btn.textContent=orig;}});
   $$(".delBtn").forEach(b=>b.onclick=async()=>{
     b.disabled=true;
     try{await postJSON("/api/connections/delete",{kind:b.dataset.k});await loadAll();route();}
