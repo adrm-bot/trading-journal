@@ -207,6 +207,16 @@ def api_market(request: Request):
     return JSONResponse(market.get_context())
 
 
+@app.get("/api/positions")
+def api_positions(request: Request):
+    uid = _require(request)
+    try:
+        return {"positions": engine.fetch_open_positions(uid)}
+    except Exception:  # noqa: BLE001
+        logger.exception("positions 실패 uid=%s", uid)
+        return JSONResponse({"positions": [], "error": "보유 포지션 조회 실패"}, status_code=200)
+
+
 @app.post("/api/pull")
 def api_pull(request: Request):
     uid = _require(request)

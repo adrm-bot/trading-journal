@@ -136,13 +136,22 @@ def _binance_symbols_and_funding(ex, lookback):
     cur = start
     while cur < now:
         e = min(cur + week, now)
-        for inc in ex.fapiPrivateGetIncome({"startTime": cur, "endTime": e, "limit": 1000}):
-            typ = inc.get("incomeType")
-            sym = inc.get("symbol") or ""
-            if typ == "REALIZED_PNL" and sym:
-                symbols.add(sym)
-            elif typ == "FUNDING_FEE" and sym:
-                funding[sym] = funding.get(sym, 0.0) + _f(inc, "income")
+        ws = cur
+        while True:  # 윈도 내 페이지네이션(1000 초과 시 최근 거래 누락 방지)
+            batch = ex.fapiPrivateGetIncome({"startTime": ws, "endTime": e, "limit": 1000})
+            if not batch:
+                break
+            for inc in batch:
+                typ = inc.get("incomeType")
+                sym = inc.get("symbol") or ""
+                # 심볼 발견: 거래가 있었으면 REALIZED_PNL이든 COMMISSION이든 잡는다(누락 방지)
+                if sym and typ in ("REALIZED_PNL", "COMMISSION", "FUNDING_FEE"):
+                    symbols.add(sym)
+                if typ == "FUNDING_FEE" and sym:
+                    funding[sym] = funding.get(sym, 0.0) + _f(inc, "income")
+            if len(batch) < 1000:
+                break
+            ws = int(batch[-1].get("time") or ws) + 1
         cur = e
     return symbols, funding
 
@@ -373,6 +382,49 @@ def pull_user(uid):
             logger.exception("pull %s 예외 uid=%s", kind, uid)
             results[kind] = {"added": 0, "error": f"{kind} 적재 중 알 수 없는 오류"}
     return results
+
+
+# ---------- 보유 중(미청산) 포지션 — 일지엔 닫힌 거래만 들어가므로 현재 보유는 별도 조회 ----------
+def _open_positions(kind, key, secret):
+    if kind == "bybit":
+        ex = ccxt.bybit({"apiKey": key, "secret": secret, "enableRateLimit": True})
+        poss = ex.fetch_positions(None, {"category": "linear"})
+    elif kind == "binance":
+        ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
+        poss = ex.fetch_positions()
+    elif kind == "gate":
+        gate_cls = getattr(ccxt, "gate", None) or getattr(ccxt, "gateio")
+        ex = gate_cls({"apiKey": key, "secret": secret, "enableRateLimit": True,
+                       "options": {"defaultType": "swap", "defaultSettle": "usdt"}})
+        poss = ex.fetch_positions(None, {"settle": "usdt"})
+    else:
+        return []
+    rows = []
+    for p in poss:
+        contracts = _f(p, "contracts")
+        if not contracts:
+            continue
+        side = str(p.get("side") or "").lower()
+        sym = (p.get("symbol") or "").split(":")[0].replace("/", "")
+        rows.append({"exchange": kind, "symbol": sym,
+                     "direction": "Long" if side == "long" else ("Short" if side == "short" else None),
+                     "entry": _f(p, "entryPrice"), "qty": contracts, "leverage": _f(p, "leverage") or None,
+                     "upnl": _f(p, "unrealizedPnl"), "mark": _f(p, "markPrice")})
+    return rows
+
+
+def fetch_open_positions(uid):
+    """연결된 거래소의 현재 보유(미청산) 포지션. 일지(닫힌 거래)와 별개의 참고 정보."""
+    out = []
+    for kind in db.list_connections(uid):
+        if kind not in ADAPTERS:
+            continue
+        cred = db.get_connection(uid, kind)
+        try:
+            out += _open_positions(kind, cred["key"], cred["secret"])
+        except Exception:  # noqa: BLE001
+            logger.warning("보유포지션 %s 조회 실패 uid=%s", kind, uid)
+    return out
 
 
 def _parse(s):

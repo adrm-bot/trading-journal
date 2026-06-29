@@ -59,7 +59,7 @@
 <script>
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], EDIT=null, LAST_FOCUS=null, SAVING=false;
-let MARKET=null, MKT_LOADING=false;
+let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false;
 let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25}, jtDebounce;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
@@ -192,12 +192,33 @@ async function ensureMarket(){
   MKT_LOADING=false; paintMarket();
 }
 
+/* 보유 중(미청산) 포지션 — 일지는 닫힌 거래만, 현재 보유는 거래소에서 실시간 조회 */
+function posSection(list){
+  if(!list||!list.length)return `<div id="posHost"></div>`;
+  const rows=list.map(p=>{
+    const dir=p.direction?`<span class="badge ${p.direction==='Long'?'long':'short'}">${esc(p.direction)}</span>`:"—";
+    const up=p.upnl==null?'<span class="muted">—</span>':`<span class="${p.upnl>=0?'pos':'neg'}">${money(p.upnl)}</span>`;
+    const lev=p.leverage?` <span class="ex">${p.leverage}x</span>`:"";
+    return `<tr><td>${esc(p.symbol)} <span class="ex">${esc(p.exchange)}</span>${lev}</td><td>${dir}</td>
+      <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td></tr>`;
+  }).join("");
+  return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간, 일지엔 청산 후 들어옴)</span></div>
+    <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+async function ensurePositions(){
+  const h=$("#posHost"); if(!h)return;
+  if(OPENPOS!==null){h.outerHTML=posSection(OPENPOS);return;}
+  if(POS_LOADING)return; POS_LOADING=true;
+  try{OPENPOS=(await(await api("/api/positions")).json()).positions||[];}catch(e){OPENPOS=[];}
+  POS_LOADING=false; const h2=$("#posHost"); if(h2)h2.outerHTML=posSection(OPENPOS);
+}
+
 function renderDashboard(el){
-  const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div>`;
-  if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();return;}
+  const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="posHost"></div>`;
+  if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
   el.innerHTML=head+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="muted">플래그 없음 — 깔끔합니다.</p>`)
     +`<div class="section-title">최근 거래</div>`+table(DATA.trades.slice(0,6));
-  bindEdit();ensureMarket();
+  bindEdit();ensureMarket();ensurePositions();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" ${JT[field]===v?'aria-current="page"':''}>${esc(label)}</button>`).join('');}
