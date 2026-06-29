@@ -107,6 +107,7 @@ const ICONS={
   warn:_sv+'<path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg>',
   good:_sv+'<path d="M20 6 9 17l-5-5"/></svg>',
   info:_sv+'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
+  pencil:_sv+'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
 };
 /* 의도 입력 칩(탭 선택형) taxonomy */
 const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)","역추세(리버설)","레인지(박스)","스캘핑","뉴스·이벤트","기타"];
@@ -186,7 +187,10 @@ function flagsBlock(s){
 }
 function onboarding(){
   const hasExch=CONN.some(k=>EXCH.has(k));
-  return `<div class="empty"><div class="em" aria-hidden="true">${hasExch?"🌱":"🔌"}</div>
+  const emIc=hasExch
+    ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M12 20V9"/><path d="M12 9C12 6 9.5 4 6 4c0 3.5 2.5 5 6 5z"/><path d="M12 11c0-2.6 2.2-4.5 5-4.5 0 2.8-2.2 4.5-5 4.5z"/></svg>'
+    :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v5M15 2v5"/><path d="M6 7h12v3a6 6 0 0 1-12 0z"/><path d="M12 16v6"/></svg>';
+  return `<div class="empty"><div class="em" aria-hidden="true">${emIc}</div>
     <h2>${hasExch?"아직 거래가 없어요":"거래소를 연결하면 시작돼요"}</h2>
     <p>${hasExch?"최근 거래가 잡히면 여기 자동으로 들어옵니다. 지금 불러올까요?":"조회 전용(read-only) 키만 연결하면 청산된 거래가 자동으로 일지에 들어오고, 계획 미기입 거래는 따로 모아둡니다."}</p>
     ${hasExch?`<button class="btn primary" id="emptyPull">↻ 거래 불러오기</button>`:`<a class="btn primary" href="#settings">거래소 연결하기</a>`}</div>`;
@@ -233,7 +237,7 @@ function tradeCard(r){
   const rcell=r.r==null?"":` <span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
   const pending=r.status==='의도 미기입';
   let body;
-  if(pending){body=`<span class="btn sm jfill">✏️ 왜 들어갔는지 채우기</span>`;}
+  if(pending){body=`<span class="btn sm jfill">${ICONS.pencil} 왜 들어갔는지 채우기</span>`;}
   else{const t=tagChips(r);
     body=(t?`<div class="jtags">${t}</div>`:"")
       +(r.plan?`<div class="jplan">${esc(r.plan)}</div>`:"")
@@ -306,7 +310,7 @@ async function ensureMarket(){
 /* 보유 중(미청산) 포지션 — 일지는 닫힌 거래만, 현재 보유는 거래소에서 실시간 조회 */
 function retryPositions(){OPENPOS=null;POS_ERR=null;ensurePositions();}
 function posSection(list){
-  if(POS_ERR&&(!list||!list.length))return `<div id="posHost"><div class="empty-sm" style="display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap"><span class="neg">⚠ ${esc(POS_ERR)}</span><button class="btn sm" onclick="retryPositions()">다시 시도</button></div></div>`;
+  if(POS_ERR&&(!list||!list.length))return `<div id="posHost"><div class="empty-sm" style="display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap"><span class="neg">${ICONS.warn} ${esc(POS_ERR)}</span><button class="btn sm" onclick="retryPositions()">다시 시도</button></div></div>`;
   if(!list||!list.length)return `<div id="posHost"></div>`;
   const rows=list.map(p=>{
     const dir=p.direction?`<span class="badge ${p.direction==='Long'?'long':'short'}">${dirKo(p.direction)}</span>`:"—";
@@ -527,15 +531,15 @@ function equityPanel(ts){
   const main=`<svg class="eq" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="시간축 누적 손익 곡선">
     <line x1="${pad}" y1="${Y(0).toFixed(1)}" x2="${W-pad}" y2="${Y(0).toFixed(1)}" stroke="var(--line-2)" stroke-dasharray="3 3"/>
     <path d="${area}" fill="${fill}" stroke="none"/>
-    <path d="${pk}" fill="none" stroke="var(--line-2)" stroke-width="1" stroke-dasharray="2 3" opacity="0.85"/>
-    <path d="${eq}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    <path d="${pk}" fill="none" stroke="var(--line-2)" stroke-width="1" stroke-dasharray="2 3" opacity="0.85" vector-effect="non-scaling-stroke"/>
+    <path d="${eq}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" vector-effect="non-scaling-stroke"/></svg>`;
   // 언더워터(고점 대비 낙폭, 항상 ≤0)
   const UH=46, dmin=Math.min(-1,...dd.map(d=>d.v)), UY=v=>2+(v/dmin)*(UH-4);
   let uw=`M ${X(t0).toFixed(1)} ${UY(0).toFixed(1)}`, up=0;
   dd.forEach(d=>{uw+=` L ${X(d.x).toFixed(1)} ${UY(up).toFixed(1)} L ${X(d.x).toFixed(1)} ${UY(d.v).toFixed(1)}`;up=d.v;});
   const uarea=uw+` L ${X(t1).toFixed(1)} ${UY(0).toFixed(1)} Z`;
   const under=`<svg class="uw" viewBox="0 0 ${W} ${UH}" preserveAspectRatio="none" role="img" aria-label="언더워터 곡선(고점 대비 낙폭)">
-    <path d="${uarea}" fill="rgba(235,87,87,.18)" stroke="var(--neg)" stroke-width="1"/></svg>`;
+    <path d="${uarea}" fill="rgba(var(--neg-rgb),.18)" stroke="var(--neg)" stroke-width="1" vector-effect="non-scaling-stroke"/></svg>`;
   return `<div class="card chartc">${toggle}${main}<div class="uwwrap">${under}</div>
     <div class="ccap muted">${isR?`R 입력 ${pts.length}/${closedN}건`:`총 ${pts.length}건`} · 실현 <b class="${endPos?'pos':'neg'}">${fmtV(pts[pts.length-1].y)}</b>${isR?'':' USDT'} · 점선=누적 고점 · 최대 낙폭 <b class="neg">${fmtV(maxDD)}</b> · 최장 낙폭 지속 <b>${uwDays}일</b>${isR?' · SL 입력 거래만(상향 편향 주의)':''}</div></div>`;
 }
@@ -606,7 +610,7 @@ function rHist(ts){
       +(cnt[i]?`<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" class="hn">${cnt[i]}</text>`:"");
   }).join("");
   const avg=rs.reduce((a,b)=>a+b,0)/rs.length;
-  return `<div class="card chartc"><svg class="rh" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="R 분포 히스토그램">${bars}</svg>`
+  return `<div class="card chartc"><svg class="rh" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="R 분포 히스토그램"><line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--line-2)" stroke-width="1" vector-effect="non-scaling-stroke"/>${bars}</svg>`
     +`<div class="ccap muted">SL 입력 ${rs.length}건 · 평균 ${(avg>=0?'+':'')+avg.toFixed(2)}R · 빨강=손실 / 초록=수익 · SL 입력한 거래만이라 상향 편향될 수 있음</div></div>`;
 }
 function exitHabits(ts){
@@ -697,7 +701,7 @@ function renderInsights(el){
   const ts=DATA.trades, m=perfMetrics(ts);
   const ddp=drawdownPanel(ts);
   const stratTbl=groupTable(t=>t.strategy,"전략",false);
-  const caveat=m.n<20?`<p class="caveat">⚠ 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
+  const caveat=m.n<20?`<p class="caveat">${ICONS.warn} 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
   const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
     <dl><dt>실현 R (R배수)</dt><dd>청산 후 결과 손익을 <b>진입~손절 거리(1R)</b>로 나눈 값. +2R = 각오한 손실의 2배를 벌었다는 뜻. 사이즈가 달라도 거래 잘잘못을 같은 잣대로 비교.</dd>
     <dt>목표 R:R (계획)</dt><dd>진입 전 목표 손익비 = 목표이익 ÷ 각오한 손실(진입~손절). 실현 R은 끝난 결과, R:R은 들어가기 전 계획.</dd>
@@ -812,7 +816,7 @@ function updateRR(){
   $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
 }
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
-  const liq=r.liquidated?' · ⚡강제청산':'';
+  const liq=r.liquidated?' · 강제청산':'';
   $("#modalMeta").textContent=`${EXN(r.exchange)} · ${r.symbol} ${r.direction?dirKo(r.direction):''} · ${(toKST(r.closed_at)||{}).str||''} KST${liq}`;
   renderFacts(r);
   $("#f_plan").value=r.plan||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_memo").value=r.memo||"";
@@ -835,7 +839,7 @@ async function saveIntent(){
 function setBanner(html){const el=$("#pullbanner");if(el)el.innerHTML=html||'';}
 function infoBanner(msg){setBanner(`<div class="banner info"><span class="spin"></span>${esc(msg)}</div>`);}
 function errBanner(innerHTML){  /* 영구 에러 배너 + 다시 시도(toast는 사라지지만 배너는 남음) */
-  setBanner(`<div class="banner err">⚠ ${innerHTML}<button class="btn sm" id="pullRetry" style="margin-left:auto">다시 시도</button><button class="bx" aria-label="닫기">×</button></div>`);
+  setBanner(`<div class="banner err">${ICONS.warn} ${innerHTML}<button class="btn sm" id="pullRetry" style="margin-left:auto">다시 시도</button><button class="bx" aria-label="닫기">×</button></div>`);
   const bx=$("#pullbanner .bx");if(bx)bx.onclick=()=>setBanner('');
   const rt=$("#pullRetry");if(rt)rt.onclick=()=>pull();
 }
@@ -951,5 +955,5 @@ document.addEventListener("keydown",e=>{
   if($("#cmdkBg").classList.contains("show"))closeCmdk();
   else if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
 window.addEventListener("hashchange",route);
-(async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em">⚠️</div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">새로고침</button></div>';}})();
+(async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>

@@ -185,7 +185,8 @@ textarea{resize:vertical;min-height:64px}
 /* ---- empty / onboarding ---- */
 .empty{text-align:center;padding:var(--s10) var(--s6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--inset)}
 .empty-inline{padding:13px 16px;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--inset);color:var(--muted);font-size:13px;margin:0;line-height:1.5}
-.empty .em{font-size:32px;filter:drop-shadow(var(--glow))} .empty h2{font-family:var(--f-display);font-weight:510;color:var(--glacier);margin:var(--s4) 0 var(--s2);font-size:19px}
+.empty .em{color:var(--indigo);display:flex;justify-content:center} .empty .em svg{width:42px;height:42px}
+.empty h2{font-family:var(--f-display);font-weight:510;color:var(--glacier);margin:var(--s4) 0 var(--s2);font-size:19px}
 .empty p{color:var(--muted);margin:0 auto var(--s5);max-width:400px}
 
 /* ---- modal ---- */
@@ -307,6 +308,7 @@ svg.uw{width:100%;height:46px;display:block}
 
 /* ---- 표본 경고 · 용어집 · 곧 제공 ---- */
 .caveat{background:var(--warn-soft);border:1px solid rgba(210,153,34,.3);border-radius:var(--r-badge);padding:9px 13px;font-size:12.5px;color:var(--ice);margin:0 0 var(--s3)}
+.caveat .ic-xs{color:var(--warn);margin-right:3px}
 .glossary{margin:var(--s3) 0 0;border:1px solid var(--line);border-radius:var(--r-card);background:var(--card);box-shadow:var(--inset)}
 .glossary>summary{cursor:pointer;padding:11px var(--s5);font-size:13px;color:var(--moonlight);font-weight:500;list-style:none}
 .glossary>summary::-webkit-details-marker{display:none}
