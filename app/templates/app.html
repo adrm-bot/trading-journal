@@ -598,6 +598,48 @@ function tagStatsTable(ts){
   const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0}%</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>진입근거 태그</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* ---------- 정직성 신뢰 보드 ---------- */
+function trustBoard(ts){
+  const n=ts.length; if(!n)return '';
+  const k$=v=>'$'+Math.round(v).toLocaleString();
+  // ① 내 습관의 가격표(반사실) — 전부 실제 계산값
+  const overLoss=ts.reduce((s,t)=>s+((t.over_loss>0)?t.over_loss:0),0);
+  const moneyLeft=ts.reduce((s,t)=>s+(t.money_left||0),0);
+  const ord=[...ts].filter(t=>t.closed_at).sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  let revPnl=0,revN=0;
+  for(let i=1;i<ord.length;i++){const a=ord[i-1],b=ord[i];
+    if(oc(a)==='loss'&&oc(b)==='loss'&&a.closed_at&&b.closed_at){
+      const g=(new Date(b.closed_at.replace(' ','T')+'Z')-new Date(a.closed_at.replace(' ','T')+'Z'))/60000;
+      if(g>=0&&g<=30){revPnl+=num(b.pnl);revN++;}}}
+  const cf=[];
+  if(overLoss>0)cf.push(mcard('스탑 미준수 초과손실','-'+k$(overLoss),'neg','손절만 지켰다면 덜 잃은 금액'));
+  if(revN>0)cf.push(mcard(`복수매매 의심 ${revN}건`,money(revPnl),revPnl<0?'neg':'','손실 직후 30분내 재진입 손익'));
+  if(moneyLeft>0)cf.push(mcard('두고 온 이익',k$(moneyLeft),'','계획 익절 전 조기청산 누적'));
+  const cfBlock=cf.length?`<div class="mgrid">${cf.join('')}</div>`
+    :`<p class="muted">아직 교정 신호 없음 — 예상 손절/익절가를 채우면 '습관의 가격표'가 쌓입니다.</p>`;
+  // ② 데이터 신뢰도 점수
+  const planned=(n-ts.filter(t=>t.status==='의도 미기입').length)/n;
+  const slok=ts.filter(t=>t.r!=null).length/n;
+  const exok=ts.filter(t=>t.exit_reason&&t.exit_reason!=='unknown').length/n;
+  const samp=Math.min(1,n/30);
+  const score=Math.round((planned+slok+exok+samp)/4*100);
+  const bar=(l,v)=>`<div class="trow"><span class="tl">${l}</span><span class="tbar"><span class="tfill" style="width:${Math.round(v*100)}%"></span></span><span class="tv">${Math.round(v*100)}%</span></div>`;
+  const trust=`<div class="card trustcard"><div class="tscore"><span class="tnum">${score}</span><span class="tlabel">데이터 신뢰도<br><span class="muted">통계가 얼마나 믿을 만한지</span></span></div>
+    ${bar('계획 기입률',planned)}${bar('SL 유효율',slok)}${bar('청산방식 판별',exok)}${bar('표본 충분도',samp)}
+    <div class="ccap muted">미기입 채우기·예상 손절/익절가 입력·표본 누적 → 위 항목이 오를수록 모든 통계가 정확해집니다${n<30?` (현재 표본 ${n}/30)`:''}.</div></div>`;
+  // ③ 생존편향: SL 기입 vs 미기입
+  const has=t=>t.sl!=null&&t.sl!=='';
+  const grp=arr=>{const w=arr.filter(t=>oc(t)==='win').length,l=arr.filter(t=>oc(t)==='loss').length,p=arr.reduce((s,t)=>s+num(t.pnl),0);
+    return {n:arr.length,wr:(w+l)?Math.round(w/(w+l)*100):0,avg:arr.length?p/arr.length:0};};
+  const a=grp(ts.filter(has)),b=grp(ts.filter(t=>!has(t)));
+  const sb=`<div class="table-wrap"><table><thead><tr><th>그룹</th><th class="num">건수</th><th class="num">승률</th><th class="num">평균손익</th></tr></thead><tbody>
+    <tr><td>SL 기입</td><td class="num">${a.n}</td><td class="num">${a.wr}%</td><td class="num ${a.avg>=0?'pos':'neg'}">${money(a.avg)}</td></tr>
+    <tr><td>SL 미기입</td><td class="num">${b.n}</td><td class="num">${b.wr}%</td><td class="num ${b.avg>=0?'pos':'neg'}">${money(b.avg)}</td></tr>
+    </tbody></table></div><div class="ccap muted">두 군의 승률이 크게 다르면 — 이긴 거래에 SL을 더 자주 채워 평균R이 과대평가됐을 수 있음(선택편향).</div>`;
+  return `<div class="section-title">내 습관의 가격표 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 반사실(실제 데이터)</span></div>${cfBlock}
+    <div class="section-title">데이터 신뢰도</div>${trust}
+    <div class="section-title">생존편향 점검 · SL 기입 vs 미기입</div>${sb}`;
+}
 function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
@@ -618,6 +660,7 @@ function renderInsights(el){
     <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b> — 본절이 패배로 둔갑하지 않게.</dd></dl></details>`;
   el.innerHTML=
      `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
+    +trustBoard(ts)
     +`<div class="section-title">자산 곡선 · 낙폭</div>`+equityPanel(ts)
     +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
     +`<div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)

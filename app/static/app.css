@@ -263,6 +263,15 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 svg.uw{width:100%;height:46px;display:block}
 .uwwrap{margin-top:3px;border-top:1px solid var(--line)}
 .ccap{font-size:11.5px;margin-top:8px;font-family:var(--f-mono)}
+.trustcard{padding:var(--s4) var(--s5)}
+.tscore{display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3);padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
+.tnum{font-family:var(--f-display);font-size:40px;font-weight:510;color:var(--glacier);letter-spacing:-.02em;line-height:1}
+.tlabel{font-size:13px;color:var(--moonlight);line-height:1.4}
+.trow{display:grid;grid-template-columns:90px 1fr 44px;gap:10px;align-items:center;font-size:12.5px;margin:7px 0}
+.trow .tl{color:var(--moonlight)}
+.trow .tbar{height:7px;background:var(--card-2);border-radius:4px;overflow:hidden}
+.trow .tfill{display:block;height:100%;background:var(--frost);border-radius:4px}
+.trow .tv{font-family:var(--f-mono);text-align:right;color:var(--mist)}
 .feebd{padding:var(--s2) var(--s5)}
 .fbrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
 .fbrow:last-child{border-bottom:none}
