@@ -260,6 +260,8 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .mcard .mval.pos{color:var(--mint)} .mcard .mval.neg{color:var(--ember)}
 .mcard .msub{color:var(--dim);font-size:11px;margin-top:3px}
 .chartc{padding:var(--s4)} svg.eq{width:100%;height:150px;display:block}
+svg.uw{width:100%;height:46px;display:block}
+.uwwrap{margin-top:3px;border-top:1px solid var(--line)}
 .ccap{font-size:11.5px;margin-top:8px;font-family:var(--f-mono)}
 .feebd{padding:var(--s2) var(--s5)}
 .fbrow{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}

@@ -466,17 +466,47 @@ function metricsRow(m){
     +mcard('켈리 비중',(m.n>=20&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=20&&m.kelly>0)?'pos':'',m.n<20?'표본 부족(20건+ 필요)':(m.kelly>0?`½켈리만 권장 ${Math.round(m.kelly*50)}%`:'기댓값 0 이하 — 우위 없음'))
     +`</div>`;
 }
-function equitySVG(ts){
-  const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
-  let cum=0; const pts=ord.map(t=>cum+=num(t.pnl));
-  if(!pts.length)return'';
-  const W=600,H=150,pad=10, min=Math.min(0,...pts), max=Math.max(0,...pts), rng=(max-min)||1;
-  const X=i=>pad+(pts.length<=1?0:i/(pts.length-1)*(W-2*pad)), Y=v=>H-pad-((v-min)/rng)*(H-2*pad);
-  const line=pts.map((v,i)=>`${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join(' ');
-  const col=pts[pts.length-1]>=0?'var(--mint)':'var(--ember)';
-  return `<svg class="eq" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="누적 손익 곡선">
+function equityPanel(ts){
+  const ord=[...ts].filter(t=>t.closed_at).sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  if(!ord.length)return `<div class="card chartc"><p class="muted">표시할 거래가 아직 없어요.</p></div>`;
+  const tms=s=>{const d=new Date((s||'').replace(' ','T')+'Z');return isNaN(d)?0:d.getTime();};
+  let cum=0; const pts=ord.map(t=>({x:tms(t.closed_at),y:(cum+=num(t.pnl))}));
+  const t0=pts[0].x, t1=pts[pts.length-1].x, tspan=(t1-t0)||1;
+  // 누적 고점·낙폭 시계열·최대낙폭·최장 낙폭 지속시간(ms)
+  let peak=0,peakT=t0,ddStart=null,maxUW=0,maxDD=0;
+  const dd=pts.map(p=>{
+    if(p.y>=peak){peak=p.y;peakT=p.x;if(ddStart!=null){maxUW=Math.max(maxUW,p.x-ddStart);ddStart=null;}}
+    else{if(ddStart==null)ddStart=peakT;maxDD=Math.min(maxDD,p.y-peak);}
+    return {x:p.x,v:p.y-peak};
+  });
+  if(ddStart!=null)maxUW=Math.max(maxUW,t1-ddStart);  // 진행 중 낙폭 포함
+  const uwDays=Math.round(maxUW/86400000);
+  const W=600,H=140,pad=8;
+  const ys=pts.map(p=>p.y), min=Math.min(0,...ys), max=Math.max(0,...ys), rng=(max-min)||1;
+  const X=t=>pad+(t-t0)/tspan*(W-2*pad), Y=v=>H-pad-((v-min)/rng)*(H-2*pad);
+  // 계단형 자산 곡선(거래 사이=평평 → 무거래 기간 정직 표시)
+  let eq=`M ${X(t0).toFixed(1)} ${Y(0).toFixed(1)}`, prev=0;
+  pts.forEach(p=>{eq+=` L ${X(p.x).toFixed(1)} ${Y(prev).toFixed(1)} L ${X(p.x).toFixed(1)} ${Y(p.y).toFixed(1)}`;prev=p.y;});
+  // 누적 고점 계단선
+  let pk=`M ${X(t0).toFixed(1)} ${Y(0).toFixed(1)}`, pp=0;
+  pts.forEach(p=>{const np=Math.max(pp,p.y);pk+=` L ${X(p.x).toFixed(1)} ${Y(pp).toFixed(1)} L ${X(p.x).toFixed(1)} ${Y(np).toFixed(1)}`;pp=np;});
+  const baseY=Y(min).toFixed(1);
+  const area=eq+` L ${X(t1).toFixed(1)} ${baseY} L ${X(t0).toFixed(1)} ${baseY} Z`;
+  const endPos=pts[pts.length-1].y>=0, col=endPos?'var(--pos)':'var(--neg)', fill=endPos?'rgba(63,185,80,.12)':'rgba(235,87,87,.12)';
+  const main=`<svg class="eq" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="시간축 누적 손익 곡선">
     <line x1="${pad}" y1="${Y(0).toFixed(1)}" x2="${W-pad}" y2="${Y(0).toFixed(1)}" stroke="var(--line-2)" stroke-dasharray="3 3"/>
-    <polyline points="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+    <path d="${area}" fill="${fill}" stroke="none"/>
+    <path d="${pk}" fill="none" stroke="var(--line-2)" stroke-width="1" stroke-dasharray="2 3" opacity="0.85"/>
+    <path d="${eq}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round"/></svg>`;
+  // 언더워터(고점 대비 낙폭, 항상 ≤0)
+  const UH=46, dmin=Math.min(-1,...dd.map(d=>d.v)), UY=v=>2+(v/dmin)*(UH-4);
+  let uw=`M ${X(t0).toFixed(1)} ${UY(0).toFixed(1)}`, up=0;
+  dd.forEach(d=>{uw+=` L ${X(d.x).toFixed(1)} ${UY(up).toFixed(1)} L ${X(d.x).toFixed(1)} ${UY(d.v).toFixed(1)}`;up=d.v;});
+  const uarea=uw+` L ${X(t1).toFixed(1)} ${UY(0).toFixed(1)} Z`;
+  const under=`<svg class="uw" viewBox="0 0 ${W} ${UH}" preserveAspectRatio="none" role="img" aria-label="언더워터 곡선(고점 대비 낙폭)">
+    <path d="${uarea}" fill="rgba(235,87,87,.18)" stroke="var(--neg)" stroke-width="1"/></svg>`;
+  return `<div class="card chartc">${main}<div class="uwwrap">${under}</div>
+    <div class="ccap muted">총 ${pts.length}건 · 실현 <b class="${endPos?'pos':'neg'}">${money(pts[pts.length-1].y)}</b> USDT · 점선=누적 고점 · 최대 낙폭 <b class="neg">${money(maxDD)}</b> · 최장 낙폭 지속 <b>${uwDays}일</b></div></div>`;
 }
 function feeCard(m){
   const row=(l,v,cls)=>`<div class="fbrow"><span>${l}</span><span class="num ${cls||''}">${money(v)}</span></div>`;
@@ -588,7 +618,7 @@ function renderInsights(el){
     <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b> — 본절이 패배로 둔갑하지 않게.</dd></dl></details>`;
   el.innerHTML=
      `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
-    +`<div class="section-title">누적 손익 곡선</div><div class="card chartc">${equitySVG(ts)}<div class="ccap muted">총 ${m.n}건 · 실현 ${money(m.sum)} USDT</div></div>`
+    +`<div class="section-title">자산 곡선 · 낙폭</div>`+equityPanel(ts)
     +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
     +`<div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
