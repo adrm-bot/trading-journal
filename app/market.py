@@ -30,7 +30,26 @@ def _ema(vals, n):
     return e
 
 
-def _coin(ex, symbol):
+def _trend(closes):
+    """EMA50/EMA200 정·역배열로 추세 판정. 200봉 미만이면 (None, None, None)."""
+    if len(closes) < 200:
+        return None, None, None
+    e50, e200 = _ema(closes, 50), _ema(closes, 200)
+    last = closes[-1]
+    if last > e50 > e200:
+        t = "up"
+    elif last < e50 < e200:
+        t = "down"
+    else:
+        t = "side"
+    return t, e50, e200
+
+
+# 멀티 타임프레임(BTC): 단기 1h · 중기 4h · 주추세 1d 정렬을 한눈에
+_TFS = ("1h", "4h", "1d")
+
+
+def _coin(ex, symbol, mtf=False):
     oh = ex.fetch_ohlcv(symbol, "1d", limit=300)  # EMA200 워밍업 위해 일봉 300개
     closes = [c[4] for c in oh if c and c[4]]
     if len(closes) < 10:
@@ -38,20 +57,26 @@ def _coin(ex, symbol):
     last = closes[-1]
     chg24 = (last / closes[-2] - 1) * 100 if len(closes) >= 2 else None
     chg7 = (last / closes[-8] - 1) * 100 if len(closes) >= 8 else None
-    trend, e50, e200 = None, None, None
-    if len(closes) >= 200:  # 일봉 EMA50/EMA200(골든/데드 크로스) = 주추세
-        e50, e200 = _ema(closes, 50), _ema(closes, 200)
-        if last > e50 > e200:
-            trend = "up"
-        elif last < e50 < e200:
-            trend = "down"
-        else:
-            trend = "side"
-    return {"price": round(last, 2), "trend": trend,
-            "chg24": round(chg24, 2) if chg24 is not None else None,
-            "chg7": round(chg7, 2) if chg7 is not None else None,
-            "ema50": round(e50, 2) if e50 is not None else None,
-            "ema200": round(e200, 2) if e200 is not None else None}
+    trend, e50, e200 = _trend(closes)  # 일봉 EMA50/EMA200(골든/데드 크로스) = 주추세
+    out = {"price": round(last, 2), "trend": trend,
+           "chg24": round(chg24, 2) if chg24 is not None else None,
+           "chg7": round(chg7, 2) if chg7 is not None else None,
+           "ema50": round(e50, 2) if e50 is not None else None,
+           "ema200": round(e200, 2) if e200 is not None else None}
+    if mtf:  # 1h·4h·1d 각각 EMA50/200 추세 (1d는 이미 받은 캔들 재사용)
+        tf = {}
+        for t in _TFS:
+            try:
+                cl = closes if t == "1d" else [
+                    x[4] for x in ex.fetch_ohlcv(symbol, t, limit=300) if x and x[4]]
+                tr, a, b = _trend(cl)
+                tf[t] = {"trend": tr,
+                         "ema50": round(a, 2) if a is not None else None,
+                         "ema200": round(b, 2) if b is not None else None}
+            except Exception:  # noqa: BLE001
+                tf[t] = {"trend": None, "ema50": None, "ema200": None}
+        out["tf"] = tf
+    return out
 
 
 # 상대강도 비교군(메이저 알트). BTC 대비 7일 상대수익률로 강약 순위.
@@ -79,7 +104,7 @@ def _market_data():
     for name in ("bybit", "binance"):
         try:
             ex = getattr(ccxt, name)({"enableRateLimit": True})
-            btc = _coin(ex, "BTC/USDT")
+            btc = _coin(ex, "BTC/USDT", mtf=True)  # BTC만 1h/4h/1d 멀티TF
             if not btc:
                 continue
             eth, board = None, []

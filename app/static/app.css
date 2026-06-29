@@ -132,6 +132,10 @@ a{color:inherit;text-decoration:none}
 .mchip .mk{font-family:var(--f-mono);font-size:var(--fs-cap);letter-spacing:.08em;text-transform:uppercase;color:var(--fog)}
 .mchip .mv{font-family:var(--f-display);font-size:var(--fs-lg);font-weight:510;color:var(--ice);letter-spacing:-.01em}
 .mchip .ms{font-size:var(--fs-xs);color:var(--muted);font-family:var(--f-mono)}
+.mchip .mv .tfrow{display:flex;gap:14px;align-items:baseline}
+.mchip .tfb{display:inline-flex;align-items:baseline;gap:4px}
+.mchip .tfb i{font-style:normal;font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--fog);letter-spacing:.04em}
+.mchip .tfb b{font-weight:600;font-size:var(--fs-md)}
 .mchip.skel{align-items:center;color:var(--muted);font-size:var(--fs-sm)}
 .mchip[data-tip]{cursor:help}
 

@@ -265,12 +265,20 @@ function usd(n){return n==null?"—":"$"+Number(n).toLocaleString(undefined,{max
 function fngKo(v){if(v==null)return["—","muted"];if(v<25)return["극단적 공포","neg"];if(v<45)return["공포","neg"];if(v<=55)return["중립","muted"];if(v<=75)return["탐욕","pos"];return["극단적 탐욕","pos"];}
 function mchip(label,main,sub,cls,tip){return `<div class="mchip"${tip?` data-tip="${esc(tip)}"`:''}><div class="mk">${label}</div><div class="mv ${cls||''}">${main}</div>${sub?`<div class="ms">${sub}</div>`:""}</div>`;}
 const trendBasis=c=>(c&&c.trend)?({up:"EMA50>EMA200 정배열(상승)",down:"EMA50<EMA200 역배열(하락)",side:"EMA 혼조(횡보)"}[c.trend]):"일봉 200일 미만 — 미판정";
+const TFL=[["1h","1H"],["4h","4H"],["1d","1D"]];
+/* 멀티 타임프레임 추세: 1H·4H·1D 각각 EMA50/200 화살표 한 줄. tf 없으면 단일 추세로 폴백 */
+function tfRow(c){
+  if(!c)return "—";
+  if(!c.tf){const t=TREND[c.trend]||["·","—","muted"];return `<span class="${t[2]}">${t[0]} ${t[1]}</span>`;}
+  return `<span class="tfrow">`+TFL.map(([k,lab])=>{const t=TREND[(c.tf[k]||{}).trend]||["·","","muted"];
+    return `<span class="tfb"><i>${lab}</i><b class="${t[2]}">${t[0]}</b></span>`;}).join("")+`</span>`;}
 function marketStrip(m){
   if(!m)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 불러오는 중…</div></div>`;
   const chips=[];
-  if(m.btc){const t=TREND[m.btc.trend]||["·","—","muted"];
-    const tip=`판단: 일봉 ${trendBasis(m.btc)}${m.btc.ema50!=null?` · EMA50 ${usd(m.btc.ema50)} · EMA200 ${usd(m.btc.ema200)}`:''} · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
-    chips.push(mchip("비트코인 추세",`<span class="${t[2]}">${t[0]} ${t[1]}</span>`,`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`,"",tip));}
+  if(m.btc){const tf=m.btc.tf;
+    const tfTxt=tf?TFL.map(([k,lab])=>`${lab} ${(TREND[(tf[k]||{}).trend]||["","미판정"])[1]}`).join(" · "):`일봉 ${trendBasis(m.btc)}`;
+    const tip=`판단: EMA50/EMA200 정·역배열 · ${tfTxt} · 세 봉 같은 방향=추세 강함, 엇갈리면 전환·횡보 · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
+    chips.push(mchip("비트코인 추세",tfRow(m.btc),`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`,"",tip));}
   if(m.eth)chips.push(mchip("이더리움",usd(m.eth.price),`24h ${chgTxt(m.eth.chg24)} · 7d ${chgTxt(m.eth.chg7)}`,"",`판단: 일봉 ${trendBasis(m.eth)}${m.eth.ema50!=null?` · EMA50 ${usd(m.eth.ema50)} · EMA200 ${usd(m.eth.ema200)}`:''} · 24h ${m.eth.chg24}% · 7d ${m.eth.chg7}%`));
   if(m.fng){const f=fngKo(m.fng.value);chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,"시장 심리 (alt.me)","","공포·탐욕 지수(alt.me) · 0-24 극단공포 / 25-44 공포 / 45-55 중립 / 56-75 탐욕 / 76-100 극단탐욕"));}
   if(m.dom)chips.push(mchip("도미넌스",`BTC ${m.dom.btc}%`,`ETH ${m.dom.eth}% · 기타 ${m.dom.others}% · 시총 24h ${chgTxt(m.dom.mcap_chg)}`,"",`BTC ${m.dom.btc}% · ETH ${m.dom.eth}% · 기타(상위 제외) ${m.dom.others}% · 24h 전체시총 ${m.dom.mcap_chg}% · 도미넌스↑=BTC로, ↓=알트로 자금 (현재값 스냅샷 · 추세는 상대강도 패널 참고)`));
