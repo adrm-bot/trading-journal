@@ -21,7 +21,10 @@
   <main class="main" id="main">
     <div class="topbar">
       <div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
-      <div id="actions"></div>
+      <div class="tbar-right">
+        <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)">🔍 검색 <span class="kbd">⌘K</span></button>
+        <div id="actions"></div>
+      </div>
     </div>
     <div id="pullbanner"></div>
     <div class="content">
@@ -70,6 +73,12 @@
   <p class="muted" style="font-size:13px;line-height:1.65;margin:0 0 14px">모든 거래 기록·연동 키·계정 정보가 영구히 삭제됩니다. <b class="neg">되돌릴 수 없습니다.</b><br>계속하려면 아래에 <b>삭제</b>를 입력하세요.</p>
   <div class="field"><label class="sr-only" for="delConfirm">확인 입력</label><input id="delConfirm" placeholder="삭제" autocomplete="off"></div>
   <div class="modal-actions"><button class="btn ghost" id="delAcctCancel">취소</button><button class="btn danger" id="delAcctDo" disabled>영구 삭제</button></div>
+</div></div>
+
+<div class="cmdk-bg" id="cmdkBg"><div class="cmdk" role="dialog" aria-modal="true" aria-label="명령 팔레트">
+  <input id="cmdkInput" type="text" role="combobox" aria-expanded="true" aria-controls="cmdkList" aria-autocomplete="list" autocomplete="off" placeholder="탭 이동 · 거래 불러오기 · 심볼·메모로 거래 찾기…">
+  <div class="cmdk-list" id="cmdkList" role="listbox"></div>
+  <div class="cmdk-foot"><span><kbd>↑</kbd><kbd>↓</kbd> 이동</span><span><kbd>↵</kbd> 실행</span><span><kbd>esc</kbd> 닫기</span></div>
 </div></div>
 
 <div id="toast" role="status" aria-live="polite" style="position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--plate);border:1px solid var(--line-2);color:var(--ice);padding:10px 16px;border-radius:8px;box-shadow:var(--card-elev);display:none;z-index:50;font-size:13px"></div>
@@ -736,6 +745,54 @@ async function doDelAcct(){const btn=$("#delAcctDo");btn.disabled=true;
   try{const res=await(await postJSON("/api/account/delete",{})).json();
     if(res.ok)location.href="/login";else{toast("삭제하지 못했어요 — 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
   catch(e){toast("삭제하지 못했어요 — 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
+
+/* ---------- 명령 팔레트 (⌘K / Ctrl+K) ---------- */
+let CMDK_ITEMS=[], CMDK_SEL=0;
+function cmdkBase(){
+  const cmds=[
+    {grp:'이동',label:'대시보드',run:()=>{location.hash='#dashboard';}},
+    {grp:'이동',label:'거래',run:()=>{location.hash='#journal';}},
+    {grp:'이동',label:'인사이트',run:()=>{location.hash='#insights';}},
+    {grp:'이동',label:'설정',run:()=>{location.hash='#settings';}},
+    {grp:'실행',label:'↻ 거래 불러오기',run:()=>pull()},
+    {grp:'실행',label:'새로고침',run:()=>refresh()},
+    {grp:'실행',label:'데이터 내보내기 (CSV)',run:()=>{location.href='/api/export';}},
+  ];
+  const up=(DATA.summary&&DATA.summary.unplanned)||0;
+  if(up>0)cmds.push({grp:'실행',label:`계획 미기입 ${up}건 정리`,run:openBulk});
+  return cmds;
+}
+function cmdkTradeHits(q){
+  const ql=q.toLowerCase();
+  return (DATA.trades||[]).filter(t=>[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion].join(' ').toLowerCase().includes(ql))
+    .slice(0,8).map(t=>({grp:'거래',label:`${t.symbol} ${dirKo(t.direction)}`,
+      sub:`${money(t.pnl)} · ${(toKST(t.closed_at)||{}).str||''}`,pos:(t.pnl||0)>=0,run:()=>openModal(t.trade_id)}));
+}
+function cmdkRender(q){
+  const cmds=cmdkBase().filter(c=>!q||c.label.toLowerCase().includes(q.toLowerCase()));
+  CMDK_ITEMS=[...cmds,...(q?cmdkTradeHits(q):[])];
+  if(CMDK_SEL>=CMDK_ITEMS.length)CMDK_SEL=Math.max(0,CMDK_ITEMS.length-1);
+  if(!CMDK_ITEMS.length){$("#cmdkList").innerHTML=`<div class="cmdk-empty muted">결과 없음</div>`;return;}
+  let html='',last='';
+  CMDK_ITEMS.forEach((it,i)=>{
+    if(it.grp!==last){html+=`<div class="cmdk-grp">${esc(it.grp)}</div>`;last=it.grp;}
+    const sub=it.sub?`<span class="cmdk-sub ${it.pos?'pos':'neg'}">${esc(it.sub)}</span>`:'';
+    html+=`<div class="cmdk-row${i===CMDK_SEL?' on':''}" role="option" aria-selected="${i===CMDK_SEL}" data-i="${i}"><span>${esc(it.label)}</span>${sub}</div>`;
+  });
+  $("#cmdkList").innerHTML=html;
+  $$("#cmdkList .cmdk-row").forEach(r=>{r.onmousemove=()=>{if(+r.dataset.i!==CMDK_SEL){CMDK_SEL=+r.dataset.i;cmdkHi();}};r.onclick=cmdkExec;});
+}
+function cmdkHi(){$$("#cmdkList .cmdk-row").forEach(r=>{const on=(+r.dataset.i===CMDK_SEL);r.classList.toggle('on',on);r.setAttribute('aria-selected',on);if(on)r.scrollIntoView({block:'nearest'});});}
+function cmdkExec(){const it=CMDK_ITEMS[CMDK_SEL];if(!it)return;closeCmdk();it.run();}
+function openCmdk(){if($("#cmdkBg").classList.contains('show'))return;LAST_FOCUS=document.activeElement;CMDK_SEL=0;$("#cmdkInput").value='';cmdkRender('');$("#shell").inert=true;$("#cmdkBg").classList.add('show');$("#cmdkInput").focus();}
+function closeCmdk(){$("#cmdkBg").classList.remove('show');$("#shell").inert=false;if(LAST_FOCUS)LAST_FOCUS.focus();}
+$("#cmdkBtn").onclick=openCmdk;
+$("#cmdkBg").onclick=e=>{if(e.target===$("#cmdkBg"))closeCmdk();};
+$("#cmdkInput").oninput=e=>{CMDK_SEL=0;cmdkRender(e.target.value.trim());};
+$("#cmdkInput").onkeydown=e=>{
+  if(e.key==='ArrowDown'){e.preventDefault();CMDK_SEL=Math.min(CMDK_SEL+1,CMDK_ITEMS.length-1);cmdkHi();}
+  else if(e.key==='ArrowUp'){e.preventDefault();CMDK_SEL=Math.max(CMDK_SEL-1,0);cmdkHi();}
+  else if(e.key==='Enter'){e.preventDefault();cmdkExec();}};
 async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
   try{const res=await(await postJSON("/api/intent/bulk",{plan:$("#b_plan").value,emotion:getChips("cb_emo")[0]||""})).json();
     closeBulk();await loadAll();route();toast(`${res.filled||0}건 정리 완료`);}
@@ -752,7 +809,7 @@ $("#delAcctClose").onclick=closeDelAcct;$("#delAcctCancel").onclick=closeDelAcct
 $("#delConfirm").oninput=e=>{$("#delAcctDo").disabled=e.target.value.trim()!=="삭제";};
 $("#delAcctBg").onclick=e=>{if(e.target===$("#delAcctBg"))closeDelAcct();};
 /* 열린 모달의 .modal 엘리먼트 (없으면 null) */
-function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):null));}
+function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):($("#cmdkBg").classList.contains("show")?$("#cmdkBg .cmdk"):null)));}
 /* 포커스 트랩 — Tab이 모달 밖(브라우저 크롬)으로 새지 않게 첫↔끝 순환 */
 function trapTab(e){const m=openModalEl();if(!m)return;
   const f=[...m.querySelectorAll('button,[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
@@ -760,9 +817,11 @@ function trapTab(e){const m=openModalEl();if(!m)return;
   if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus();}
   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
 document.addEventListener("keydown",e=>{
+  if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if($("#cmdkBg").classList.contains("show"))closeCmdk();else openCmdk();return;}
   if(e.key==="Tab"){trapTab(e);return;}
   if(e.key!=="Escape")return;
-  if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
+  if($("#cmdkBg").classList.contains("show"))closeCmdk();
+  else if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
 window.addEventListener("hashchange",route);
 (async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em">⚠️</div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">새로고침</button></div>';}})();
 </script></body></html>
