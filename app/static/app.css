@@ -245,6 +245,25 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .soon-tag{font-family:var(--f-mono);color:var(--azure);font-size:10px;font-weight:600;letter-spacing:.04em;margin-left:9px;padding:1px 7px;border-radius:var(--r-badge);background:var(--info-soft)}
 .card.soon{opacity:.78}
 
+/* ---- 로딩 스켈레톤 · info 배너 · 모달 상세 토글 ---- */
+.skel{position:relative;overflow:hidden;background:var(--card-2);border-radius:var(--r-badge)}
+.skel::after{content:"";position:absolute;inset:0;transform:translateX(-100%);background:linear-gradient(90deg,transparent,rgba(186,215,247,.06),transparent);animation:shimmer 1.25s infinite}
+@keyframes shimmer{100%{transform:translateX(100%)}}
+.skel-card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset);min-height:74px}
+.skel-card .skel-line{height:11px;margin:6px 0;border-radius:3px}
+.skel-line.lg{height:24px;width:55%;margin-bottom:12px} .skel-line.sm{width:40%}
+.skel-row{height:42px;border-bottom:1px solid var(--line)}
+.skel-rows{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--inset);overflow:hidden}
+.banner.info{background:var(--info-soft);color:#9db2ff;border-bottom-color:rgba(94,106,210,.3)}
+.banner.info .spin{display:inline-block;width:12px;height:12px;border:2px solid currentColor;border-right-color:transparent;border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{100%{transform:rotate(360deg)}}
+.modal .hh{color:var(--dim);font-size:11.5px;margin:-2px 0 var(--s4)}
+.more{margin:var(--s2) 0;border-top:1px solid var(--line)}
+.more>summary{cursor:pointer;list-style:none;padding:11px 0 4px;font-size:12.5px;color:var(--frost);font-weight:500;font-family:var(--f-mono)}
+.more>summary::-webkit-details-marker{display:none}
+.more>summary::before{content:"▸ ";font-size:10px} .more[open]>summary::before{content:"▾ "}
+@media(prefers-reduced-motion:reduce){.skel::after,.banner.info .spin{animation:none}}
+
 @media(max-width:860px){
   .hours{grid-template-columns:repeat(8,1fr)}
   .shell{grid-template-columns:1fr}

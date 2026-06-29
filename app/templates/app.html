@@ -37,20 +37,23 @@
   <h3 id="modalTitle">거래 상세 · 사후 의도</h3><div class="meta" id="modalMeta"></div>
   <div class="facts" id="modalFacts"></div>
   <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
-  <div class="row2">
-    <div class="field"><label for="f_strategy">진입전략</label><select id="f_strategy">
-      <option value="">—</option><option>추세추종</option><option>눌림목(되돌림)</option><option>돌파(브레이크아웃)</option><option>역추세(리버설)</option><option>레인지</option><option>스캘핑</option><option>뉴스·이벤트</option><option>기타</option></select></div>
-    <div class="field"><label for="f_setup">진입근거 / 셋업</label><input id="f_setup" placeholder="추세선 지지 · 4H 다이버전스 · 거래량"></div>
-  </div>
-  <div class="row3">
-    <div class="field"><label for="f_sl">손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
-    <div class="field"><label for="f_tp">익절가 1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
-    <div class="field"><label for="f_tp2">익절가 2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
-  </div>
-  <div class="rr-line" id="rrLine"></div>
+  <div class="hh">한 줄만 적어도 기록됩니다 — 나머지는 나중에 채워도 돼요.</div>
   <div class="field"><label for="f_emo">감정</label><select id="f_emo">
     <option value="">—</option><option>차분</option><option>확신</option><option>조급</option><option>공포</option><option>탐욕</option><option>지루함</option></select></div>
-  <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
+  <details class="more" id="moreFields"><summary>전략 · 근거 · 손절/익절 · 메모 추가</summary>
+    <div class="row2">
+      <div class="field"><label for="f_strategy">진입전략</label><select id="f_strategy">
+        <option value="">—</option><option>추세추종</option><option>눌림목(되돌림)</option><option>돌파(브레이크아웃)</option><option>역추세(리버설)</option><option>레인지</option><option>스캘핑</option><option>뉴스·이벤트</option><option>기타</option></select></div>
+      <div class="field"><label for="f_setup">진입근거 / 셋업</label><input id="f_setup" placeholder="추세선 지지 · 4H 다이버전스 · 거래량"></div>
+    </div>
+    <div class="row3">
+      <div class="field"><label for="f_sl">손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
+      <div class="field"><label for="f_tp">익절가 1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
+      <div class="field"><label for="f_tp2">익절가 2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
+    </div>
+    <div class="rr-line" id="rrLine"></div>
+    <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
+  </details>
   <div class="modal-actions"><button class="btn ghost" id="cancelBtn">취소</button><button class="btn primary" id="saveBtn">저장 · 기록완료</button></div>
 </div></div>
 
@@ -89,6 +92,13 @@ async function api(path,opt){
 }
 function postJSON(path,body){return api(path,{method:"POST",headers:{"Content-Type":"application/json","X-Requested-With":"fetch"},body:JSON.stringify(body||{})});}
 
+/* 로딩 스켈레톤 */
+function skelCards(n){return '<div class="cards">'+Array(n||4).fill('<div class="skel-card"><div class="skel skel-line sm"></div><div class="skel skel-line lg"></div></div>').join('')+'</div>';}
+function skelRows(n){return '<div class="skel-rows">'+Array(n||6).fill('<div class="skel skel-row"></div>').join('')+'</div>';}
+function skelMarket(){return '<div class="market">'+Array(4).fill('<div class="skel-card"><div class="skel skel-line sm"></div><div class="skel skel-line"></div></div>').join('')+'</div>';}
+function paintBootSkeleton(){const el=$("#view-dashboard");if(!el)return;el.hidden=false;el.innerHTML=skelMarket()+skelCards(4)+'<div class="section-title">최근 거래</div>'+skelRows(6);}
+const curView=()=>{const v=location.hash.replace("#","")||"dashboard";return (typeof VIEWS!=='undefined'&&VIEWS[v])?v:"dashboard";};
+
 const VIEWS={
   dashboard:{title:"대시보드",desc:"오늘의 거래와 행동 패턴 개요",actions:pullActions,render:renderDashboard},
   journal:{title:"거래",desc:"전체 거래 · 계획 사후 입력",actions:pullActions,render:renderJournal},
@@ -111,7 +121,8 @@ function route(){
   VIEWS[view].render($("#view-"+view));
   if($("#pullBtn"))$("#pullBtn").onclick=pull; if($("#refreshBtn"))$("#refreshBtn").onclick=refresh;
 }
-async function refresh(){try{await loadAll();route();}catch(e){toast("불러오기 실패 — 새로고침 해주세요");}}
+async function refresh(){const v=curView(),host=$("#view-"+v);if(host)host.innerHTML=v==='journal'?skelRows(8):skelCards(4)+skelRows(6);
+  try{await loadAll();route();}catch(e){toast("불러오기 실패 — 잠시 후 다시");}}
 
 /* ---------- views ---------- */
 function statCards(s){
@@ -485,10 +496,12 @@ function renderSettings(el){
       <a class="btn sm" href="/logout">로그아웃</a></div></div>`;
   $("#acctEmail").textContent=$("#email").textContent;
   $$(".connForm").forEach(f=>f.onsubmit=async e=>{e.preventDefault();
-    const btn=f.querySelector("button");const body={kind:f.dataset.k};
+    const k=f.dataset.k, wasNew=!CONN.includes(k);
+    const btn=f.querySelector("button");const body={kind:k};
     [...f.elements].forEach(i=>{if(i.name)body[i.name]=i.value;});
     btn.disabled=true;const orig=btn.textContent;btn.textContent="저장 중…";
-    try{const res=await postJSON("/api/connections",body).then(r=>r.json());await loadAll();route();toast(res&&res.warn?res.warn:"연결 저장됨");}
+    try{const res=await postJSON("/api/connections",body).then(r=>r.json());await loadAll();route();toast(res&&res.warn?res.warn:"연결 저장됨");
+      if(wasNew&&EXCH.has(k)){location.hash="#dashboard";pull({silent:true,banner:"최근 90일치 거래를 불러오는 중…"});}}
     catch(err){toast(err&&err.message&&err.message.indexOf("http ")!==0?err.message:"저장 실패 — 입력값을 확인하세요");btn.disabled=false;btn.textContent=orig;}});
   $$(".delBtn").forEach(b=>b.onclick=async()=>{
     b.disabled=true;
@@ -527,6 +540,7 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   renderFacts(r);
   $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_strategy").value=r.strategy||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
   updateRR();
+  const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.memo);
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
@@ -538,26 +552,30 @@ async function saveIntent(){
   }catch(err){toast("저장 실패 — 잠시 후 다시");}
   finally{SAVING=false;btn.disabled=false;}
 }
+function setBanner(html){const el=$("#pullbanner");if(el)el.innerHTML=html||'';}
+function infoBanner(msg){setBanner(`<div class="banner info"><span class="spin"></span>${esc(msg)}</div>`);}
 function setPullBanner(results){
-  const el=$("#pullbanner");if(!el)return;
   const errs=Object.entries(results||{}).filter(([k,v])=>v&&v.error);
-  if(!errs.length){el.innerHTML='';return;}
-  el.innerHTML=`<div class="banner err">⚠ ${errs.map(([k,v])=>`<b>${esc(k)}</b> ${esc(v.error)}`).join(' · ')}<button class="bx" aria-label="닫기">×</button></div>`;
-  el.querySelector('.bx').onclick=()=>{el.innerHTML='';};
+  if(!errs.length){setBanner('');return;}
+  setBanner(`<div class="banner err">⚠ ${errs.map(([k,v])=>`<b>${esc(k)}</b> ${esc(v.error)}`).join(' · ')}<button class="bx" aria-label="닫기">×</button></div>`);
+  const bx=$("#pullbanner .bx");if(bx)bx.onclick=()=>setBanner('');
 }
-async function pull(){
+async function pull(opt){opt=opt||{};
   const b=$("#pullBtn")||$("#emptyPull"); const orig=b?b.textContent:"";
-  if(b){b.disabled=true;b.textContent="적재 중…";}
+  if(b&&!opt.silent){b.disabled=true;b.textContent="적재 중…";}
+  if(opt.banner)infoBanner(opt.banner);
   try{
     const res=await(await postJSON("/api/pull",{})).json();
     if(res.ok){
       await loadAll();route();
-      const rs=res.results||{};
-      setPullBanner(rs);
-      const parts=Object.entries(rs).map(([k,v])=>v.error?`${k} 실패`:`${k} +${v.added}`);
-      toast(parts.length?`적재: ${parts.join(' · ')}`:`적재 완료 (신규 ${res.fetched??0}건) — 연결된 거래소 없음`);
-    }else toast(res.error||"적재 실패");
-  }catch(err){toast("적재 실패 — 키/연결을 확인하세요");}
+      const rs=res.results||{}; setPullBanner(rs);
+      const ok=Object.entries(rs).filter(([k,v])=>!v.error);
+      const added=ok.reduce((s,[k,v])=>s+(v.added||0),0);
+      const anyErr=Object.values(rs).some(v=>v.error);
+      if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건`:`최근 거래 없음 — 새 거래가 잡히면 자동 반영`);
+      else if(!opt.silent) toast(ok.length?`적재: ${ok.map(([k,v])=>`${k} +${v.added}`).join(' · ')}`:`연결된 거래소 없음`);
+    }else{setBanner('');toast(res.error||"적재 실패");}
+  }catch(err){setBanner('');toast("적재 실패 — 키/연결을 확인하세요");}
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 적재";}}
 }
 
@@ -575,5 +593,5 @@ $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
 document.addEventListener("keydown",e=>{if(e.key!=="Escape")return;if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();});
 window.addEventListener("hashchange",route);
-(async()=>{try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em">⚠️</div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">새로고침</button></div>';}})();
+(async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em">⚠️</div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">새로고침</button></div>';}})();
 </script></body></html>
