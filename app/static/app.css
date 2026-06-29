@@ -143,6 +143,8 @@ input:focus,textarea:focus,select:focus{border-color:var(--frost);outline:none;b
 input::placeholder,textarea::placeholder{color:var(--dim)}
 textarea{resize:vertical;min-height:64px}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:2px 0 4px}
+.chips .fchip{padding:6px 11px}
 
 /* ---- empty / onboarding ---- */
 .empty{text-align:center;padding:var(--s10) var(--s6);background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--card-elev)}

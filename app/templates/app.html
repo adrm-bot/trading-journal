@@ -37,19 +37,16 @@
   <h3 id="modalTitle">거래 상세 · 사후 의도</h3><div class="meta" id="modalMeta"></div>
   <div class="facts" id="modalFacts"></div>
   <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
-  <div class="hh">한 줄만 적어도 기록됩니다 — 나머지는 나중에 채워도 돼요.</div>
-  <div class="field"><label for="f_emo">감정</label><select id="f_emo">
-    <option value="">—</option><option>차분</option><option>확신</option><option>조급</option><option>공포</option><option>탐욕</option><option>지루함</option></select></div>
-  <details class="more" id="moreFields"><summary>전략 · 근거 · 손절/익절 · 메모 추가</summary>
-    <div class="row2">
-      <div class="field"><label for="f_strategy">진입전략</label><select id="f_strategy">
-        <option value="">—</option><option>추세추종</option><option>눌림목(되돌림)</option><option>돌파(브레이크아웃)</option><option>역추세(리버설)</option><option>레인지</option><option>스캘핑</option><option>뉴스·이벤트</option><option>기타</option></select></div>
-      <div class="field"><label for="f_setup">진입근거 / 셋업</label><input id="f_setup" placeholder="추세선 지지 · 4H 다이버전스 · 거래량"></div>
-    </div>
+  <div class="hh">한 줄만 적어도 기록됩니다 — 칩을 탭해서 빠르게 채워도 돼요.</div>
+  <div class="field"><label>감정</label><div class="chips" id="c_emo"></div></div>
+  <details class="more" id="moreFields"><summary>전략 · 근거 · 예상 손절/익절 · 메모 추가</summary>
+    <div class="field"><label>진입전략 <span class="muted">· 하나 선택</span></label><div class="chips" id="c_strategy"></div></div>
+    <div class="field"><label>진입근거 <span class="muted">· 여러 개 탭</span></label><div class="chips" id="c_setup"></div>
+      <input id="f_setup_etc" placeholder="기타 근거 직접 입력 (선택)" style="margin-top:6px"></div>
     <div class="row3">
-      <div class="field"><label for="f_sl">손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
-      <div class="field"><label for="f_tp">익절가 1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
-      <div class="field"><label for="f_tp2">익절가 2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
+      <div class="field"><label for="f_sl">예상 손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
+      <div class="field"><label for="f_tp">예상 익절가1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
+      <div class="field"><label for="f_tp2">예상 익절가2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
     </div>
     <div class="rr-line" id="rrLine"></div>
     <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
@@ -60,12 +57,8 @@
 <div class="modal-bg" id="bulkBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
   <h3 id="bulkTitle">미기입 거래 일괄 기입</h3><div class="meta" id="bulkMeta"></div>
   <div class="field"><label for="b_plan">계획/메모 — 전체에 동일 적용</label><textarea id="b_plan">사후 일괄 정리 — 당시 계획 미기록</textarea></div>
-  <div class="row2">
-    <div class="field"><label for="b_strategy">진입전략 (선택 — 비우면 전략통계 영향 없음)</label><select id="b_strategy">
-      <option value="">—</option><option>추세추종</option><option>눌림목(되돌림)</option><option>돌파(브레이크아웃)</option><option>역추세(리버설)</option><option>레인지</option><option>스캘핑</option><option>뉴스·이벤트</option><option>기타</option></select></div>
-    <div class="field"><label for="b_emotion">감정 (선택)</label><select id="b_emotion">
-      <option value="">—</option><option>차분</option><option>확신</option><option>조급</option><option>공포</option><option>탐욕</option><option>지루함</option></select></div>
-  </div>
+  <div class="field"><label>진입전략 <span class="muted">· 선택 (비우면 전략통계 영향 없음)</span></label><div class="chips" id="cb_strategy"></div></div>
+  <div class="field"><label>감정 <span class="muted">· 선택</span></label><div class="chips" id="cb_emo"></div></div>
   <p class="muted" style="font-size:12px;margin:2px 0 0">과거 미기입 거래를 한 번에 '기록완료'로 정리합니다. 정직한 통계를 위해 전략은 비워두길 권장 — 새 거래는 개별 기입하세요.</p>
   <div class="modal-actions"><button class="btn ghost" id="bulkCancel">취소</button><button class="btn primary" id="bulkSave">전체 적용</button></div>
 </div></div>
@@ -81,6 +74,19 @@ const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const EXCH=new Set(["bybit","binance","gate"]);
+/* 의도 입력 칩(탭 선택형) taxonomy */
+const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)","역추세(리버설)","레인지(박스)","스캘핑","뉴스·이벤트","기타"];
+const RATIONALES=["추세선","다이버전스","거래량 급증","캔들패턴","차트패턴","지지·저항","이평선(EMA존)","전고/전저","피보나치","오더블록·유동성","펀딩·롱숏비","상대강도(BTC대비)","뉴스·재료","직감·근거없음"];
+const EMOS=["차분","확신","조급(FOMO)","공포","탐욕","복수심","지루함","주저(망설임)"];
+function chipsInto(id,opts,multi){const el=$("#"+id);if(!el)return;el.dataset.multi=multi?"1":"0";
+  el.innerHTML=opts.map(v=>`<button type="button" class="btn sm fchip" data-val="${esc(v)}">${esc(v)}</button>`).join("");
+  el.onclick=ev=>{const b=ev.target.closest(".fchip");if(!b)return;
+    if(el.dataset.multi==="1"){if(b.getAttribute("aria-current"))b.removeAttribute("aria-current");else b.setAttribute("aria-current","page");}
+    else{const on=b.getAttribute("aria-current");el.querySelectorAll(".fchip").forEach(x=>x.removeAttribute("aria-current"));if(!on)b.setAttribute("aria-current","page");}};}
+function getChips(id){const el=$("#"+id);return el?[...el.querySelectorAll('.fchip[aria-current="page"]')].map(b=>b.dataset.val):[];}
+function setChips(id,vals){const el=$("#"+id);if(!el)return [];const set=new Set(vals||[]),known=new Set();
+  el.querySelectorAll(".fchip").forEach(b=>{if(set.has(b.dataset.val)){b.setAttribute("aria-current","page");known.add(b.dataset.val);}else b.removeAttribute("aria-current");});
+  return (vals||[]).filter(v=>!known.has(v));}
 let toastT;
 function toast(msg){const t=$("#toast");t.textContent=msg;t.style.display="block";clearTimeout(toastT);toastT=setTimeout(()=>t.style.display="none",3200);}
 
@@ -333,8 +339,8 @@ function renderJournal(el){
   $("#jSize").onchange=e=>{JT.size=Number(e.target.value);JT.page=1;applyJournal();};
   $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size};renderJournal(el);};
   $$(".jpreset").forEach(b=>b.onclick=()=>{const days=+b.dataset.d;JT.to=iso(new Date());JT.from=iso(new Date(Date.now()-days*86400000));JT.page=1;$("#jFrom").value=JT.from;$("#jTo").value=JT.to;applyJournal();});
-  $$(".fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
-    $$(`.fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");applyJournal();});
+  $$("#view-journal .fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
+    $$(`#view-journal .fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.removeAttribute("aria-current"));b.setAttribute("aria-current","page");applyJournal();});
   const up=DATA.summary.unplanned||0, jb=$("#jBulk");
   if(jb){if(up>0){jb.hidden=false;jb.textContent=`미기입 ${up}건 일괄 기입`;jb.onclick=openBulk;}else jb.hidden=true;}
   applyJournal();
@@ -538,14 +544,17 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   const liq=r.liquidated?' · ⚡강제청산':'';
   $("#modalMeta").textContent=`${r.exchange} · ${r.symbol} ${r.direction||''} · ${(toKST(r.closed_at)||{}).str||''} KST${liq}`;
   renderFacts(r);
-  $("#f_plan").value=r.plan||"";$("#f_setup").value=r.setup||"";$("#f_strategy").value=r.strategy||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_emo").value=r.emotion||"";$("#f_memo").value=r.memo||"";
+  $("#f_plan").value=r.plan||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_memo").value=r.memo||"";
+  setChips("c_strategy",r.strategy?[r.strategy]:[]);setChips("c_emo",r.emotion?[r.emotion]:[]);
+  const _etc=setChips("c_setup",(r.setup||"").split(",").map(s=>s.trim()).filter(Boolean));$("#f_setup_etc").value=_etc.join(", ");
   updateRR();
   const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.memo);
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
-  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:$("#f_setup").value,strategy:$("#f_strategy").value,sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,emotion:$("#f_emo").value,memo:$("#f_memo").value};
+  const _setup=getChips("c_setup");const _e=$("#f_setup_etc").value.trim();if(_e)_setup.push(_e);
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){closeModal();await loadAll();route();toast("저장됨");}else toast("저장 실패 — 거래를 찾지 못했어요");
@@ -579,15 +588,17 @@ async function pull(opt){opt=opt||{};
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 적재";}}
 }
 
-function openBulk(){$("#bulkMeta").textContent=`의도 미기입 ${DATA.summary.unplanned||0}건에 적용`;$("#shell").inert=true;$("#bulkBg").classList.add("show");$("#b_plan").focus();}
+function openBulk(){setChips("cb_strategy",[]);setChips("cb_emo",[]);$("#bulkMeta").textContent=`의도 미기입 ${DATA.summary.unplanned||0}건에 적용`;$("#shell").inert=true;$("#bulkBg").classList.add("show");$("#b_plan").focus();}
 function closeBulk(){$("#bulkBg").classList.remove("show");$("#shell").inert=false;}
 async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
-  try{const res=await(await postJSON("/api/intent/bulk",{plan:$("#b_plan").value,strategy:$("#b_strategy").value,emotion:$("#b_emotion").value})).json();
+  try{const res=await(await postJSON("/api/intent/bulk",{plan:$("#b_plan").value,strategy:getChips("cb_strategy")[0]||"",emotion:getChips("cb_emo")[0]||""})).json();
     closeBulk();await loadAll();route();toast(`${res.filled||0}건 일괄 기입 완료`);}
   catch(e){toast("일괄 기입 실패 — 잠시 후 다시");}finally{btn.disabled=false;}}
 
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;
 $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;
+chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);
+chipsInto("cb_strategy",STRATS,false);chipsInto("cb_emo",EMOS,false);
 $("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
