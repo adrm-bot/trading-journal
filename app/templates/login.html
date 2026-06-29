@@ -17,7 +17,7 @@
 <div class="login"><div class="lcard">
   <div class="logo" aria-hidden="true">📓</div>
   <h1>매매일지</h1>
-  <p>거래소 거래를 자동으로 기록하고<br>계획 없던 거래는 사후에 채웁니다.<br><span style="color:var(--dim)">read-only · 키는 암호화 저장</span></p>
+  <p>거래소 거래를 자동으로 기록하고<br>계획 미기입 거래는 사후에 채웁니다.<br><span style="color:var(--dim)">조회 전용(read-only) 키 권장 · 키는 암호화 저장</span></p>
   {% if error %}<div class="err" role="alert">로그인에 실패했어요. 다시 시도해 주세요.</div>{% endif %}
   {% if google %}<a class="lbtn g" href="/auth/google"><b aria-hidden="true">G</b>&nbsp;Google로 계속</a>{% endif %}
   {% if dev %}<a class="lbtn btn" href="/dev-login">개발 로그인 (dev)</a>{% endif %}
