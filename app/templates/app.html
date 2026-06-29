@@ -86,6 +86,7 @@ const EXCH=new Set(["bybit","binance","gate"]);
 const EXN_MAP={bybit:"Bybit",binance:"Binance",gate:"Gate.io",notion:"Notion",telegram:"Telegram",sheets:"Google Sheets"};
 const EXN=k=>EXN_MAP[k]||k;
 const dirKo=d=>d==='Long'?'롱':d==='Short'?'숏':'—';
+const oc=t=>t.outcome||((t.pnl||0)>0?'win':((t.pnl||0)<0?'loss':'be'));  // 승/패/본절 — 서버 enrich 판정 우선
 /* 의도 입력 칩(탭 선택형) taxonomy */
 const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)","역추세(리버설)","레인지(박스)","스캘핑","뉴스·이벤트","기타"];
 const RATIONALES=["추세선","다이버전스","거래량 급증","캔들패턴","차트패턴","지지·저항","이평선(EMA존)","전고/전저","피보나치","오더블록·유동성","펀딩·롱숏비","상대강도(BTC대비)","뉴스·재료","직감·근거없음"];
@@ -406,10 +407,10 @@ function renderJournal(el){
   applyJournal();
 }
 function groupTable(keyFn,head,asc){
-  const by={};DATA.trades.forEach(t=>{const k=keyFn(t);if(k==null)return;(by[k]=by[k]||{n:0,pnl:0,w:0});by[k].n++;by[k].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[k].w++;});
+  const by={};DATA.trades.forEach(t=>{const k=keyFn(t);if(k==null)return;(by[k]=by[k]||{n:0,pnl:0,w:0,l:0});const o=oc(t);by[k].n++;by[k].pnl+=(t.pnl||0);if(o==='win')by[k].w++;else if(o==='loss')by[k].l++;});
   const ks=Object.entries(by).sort((a,b)=>asc?a[1].pnl-b[1].pnl:b[1].pnl-a[1].pnl);
   if(!ks.length)return"";
-  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
+  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0}%</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>${head}</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /* ---------- 성과 분석 ---------- */
@@ -427,7 +428,9 @@ function trDate(t){const k=toKST(t.closed_at);return k?k.date:'';}
 function trHour(t){const k=toKST(t.closed_at);return k?k.hour:null;}
 function perfMetrics(ts){
   const pnls=ts.map(t=>num(t.pnl)), n=ts.length;
-  const wins=pnls.filter(p=>p>0), losses=pnls.filter(p=>p<0);
+  const wins=ts.filter(t=>oc(t)==='win').map(t=>num(t.pnl));
+  const losses=ts.filter(t=>oc(t)==='loss').map(t=>num(t.pnl));
+  const decided=wins.length+losses.length;  // 본절 제외(승률 분모)
   const sum=pnls.reduce((a,b)=>a+b,0);
   const avgWin=wins.length?wins.reduce((a,b)=>a+b,0)/wins.length:0;
   const avgLoss=losses.length?losses.reduce((a,b)=>a+b,0)/losses.length:0;
@@ -438,7 +441,7 @@ function perfMetrics(ts){
   const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
   let cum=0,peak=0,mdd=0; ord.forEach(t=>{cum+=num(t.pnl);peak=Math.max(peak,cum);mdd=Math.min(mdd,cum-peak);});
   const fees=ts.reduce((a,t)=>a+num(t.fees),0), funding=ts.reduce((a,t)=>a+num(t.funding),0);
-  const wr=n?wins.length/n:0, payoff=avgLoss?Math.abs(avgWin/avgLoss):0;
+  const wr=decided?wins.length/decided:0, payoff=avgLoss?Math.abs(avgWin/avgLoss):0;
   const kelly=payoff?(wr-(1-wr)/payoff):0;  // 최적 베팅비중(프랙셔널 켈리 권장)
   return {n,sum,winRate:wr,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding,payoff,kelly};
 }
@@ -533,13 +536,13 @@ function exitHabits(ts){
 function behaviorPanel(ts){
   const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
   let maxW=0,maxL=0,run=0,runSign=0;
-  ord.forEach(t=>{const s=(t.pnl||0)>0?1:((t.pnl||0)<0?-1:0);if(!s)return;
+  ord.forEach(t=>{const o=oc(t);const s=o==='win'?1:(o==='loss'?-1:0);if(!s)return;
     if(s===runSign)run++;else{runSign=s;run=1;} if(s>0)maxW=Math.max(maxW,run);else maxL=Math.max(maxL,run);});
   let cur=0,curSign=0;
-  for(let i=ord.length-1;i>=0;i--){const s=(ord[i].pnl||0)>0?1:((ord[i].pnl||0)<0?-1:0);if(!s)continue;if(!curSign){curSign=s;cur=1;}else if(s===curSign)cur++;else break;}
+  for(let i=ord.length-1;i>=0;i--){const o=oc(ord[i]);const s=o==='win'?1:(o==='loss'?-1:0);if(!s)continue;if(!curSign){curSign=s;cur=1;}else if(s===curSign)cur++;else break;}
   let revenge=0;
   for(let i=0;i<ord.length-1;i++){const a=ord[i],b=ord[i+1];
-    if((a.pnl||0)<0&&(b.pnl||0)<0&&a.closed_at&&b.closed_at){
+    if(oc(a)==='loss'&&oc(b)==='loss'&&a.closed_at&&b.closed_at){
       const g=(new Date(b.closed_at.replace(' ','T')+'Z')-new Date(a.closed_at.replace(' ','T')+'Z'))/60000;if(g>=0&&g<=30)revenge++;}}
   const tilt=Math.min(100,Math.round((curSign<0?cur*18:0)+revenge*15+maxL*4));
   const curTxt=curSign>0?`${cur}연승`:(curSign<0?`${cur}연패`:"—");
@@ -551,9 +554,9 @@ function behaviorPanel(ts){
     +`</div>`;
 }
 function tagStatsTable(ts){
-  const by={};ts.forEach(t=>{(t.setup||"").split(",").map(s=>s.trim()).filter(Boolean).forEach(tag=>{(by[tag]=by[tag]||{n:0,pnl:0,w:0});by[tag].n++;by[tag].pnl+=(t.pnl||0);if((t.pnl||0)>0)by[tag].w++;});});
+  const by={};ts.forEach(t=>{(t.setup||"").split(",").map(s=>s.trim()).filter(Boolean).forEach(tag=>{(by[tag]=by[tag]||{n:0,pnl:0,w:0,l:0});const o=oc(t);by[tag].n++;by[tag].pnl+=(t.pnl||0);if(o==='win')by[tag].w++;else if(o==='loss')by[tag].l++;});});
   const ks=Object.entries(by).sort((a,b)=>b[1].pnl-a[1].pnl);if(!ks.length)return "";
-  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${Math.round(v.w/v.n*100)}%</td></tr>`).join("");
+  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0}%</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>진입근거 태그</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 function renderInsights(el){
@@ -572,7 +575,8 @@ function renderInsights(el){
     <dt>펀딩(비)</dt><dd>무기한 선물 보유 중 롱·숏이 주기적으로 주고받는 수수료. 순손익에 ± 반영.</dd>
     <dt>상대강도</dt><dd>각 알트가 최근 7일 BTC보다 얼마나 더(또는 덜) 올랐는지. 위=강세(롱 후보), 아래=약세(숏 후보).</dd>
     <dt>청산 방식</dt><dd>포지션이 어떻게 닫혔나 — 손절(SL)·익절(TP)·트레일링·수동·강제청산. (Bybit 자동 판별)</dd>
-    <dt>복수매매 / 틸트</dt><dd>복수매매 = 손실 직후 만회하려 급히 재진입. 틸트 = 감정에 휘둘려 무너지는 상태(연패·복수매매로 추정).</dd></dl></details>`;
+    <dt>복수매매 / 틸트</dt><dd>복수매매 = 손실 직후 만회하려 급히 재진입. 틸트 = 감정에 휘둘려 무너지는 상태(연패·복수매매로 추정).</dd>
+    <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b> — 본절이 패배로 둔갑하지 않게.</dd></dl></details>`;
   el.innerHTML=
      `<div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +`<div class="section-title">누적 손익 곡선</div><div class="card chartc">${equitySVG(ts)}<div class="ccap muted">총 ${m.n}건 · 실현 ${money(m.sum)} USDT</div></div>`

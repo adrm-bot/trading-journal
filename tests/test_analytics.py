@@ -53,6 +53,22 @@ def test_no_sl_no_r():
     assert t["move_pct"] == 10.0
 
 
+def test_outcome_break_even_band():
+    # 명목가 3000(=100*30), 본절 밴드 0.1% = $3
+    assert analytics.outcome(50, 100, 30) == "win"    # 50/3000 = 1.67%
+    assert analytics.outcome(2, 100, 30) == "be"      # 2/3000 = 0.067% < 0.1% → 본절
+    assert analytics.outcome(-2, 100, 30) == "be"     # 소폭 음수도 본절
+    assert analytics.outcome(-50, 100, 30) == "loss"
+    assert analytics.outcome(0, 100, 30) == "be"
+    assert analytics.outcome(5, None, None) == "win"  # 명목가 모르면 부호로만
+    assert analytics.outcome(-5, 0, 0) == "loss"
+
+
+def test_enrich_sets_outcome():
+    assert analytics.enrich({"entry": 100, "exit": 120, "qty": 30, "pnl": 50, "direction": "Long"})["outcome"] == "win"
+    assert analytics.enrich({"entry": 100, "exit": 100.05, "qty": 30, "pnl": 1.5, "direction": "Long"})["outcome"] == "be"
+
+
 def test_csv_cell_defangs_formula_but_keeps_numbers():
     assert analytics.csv_cell("=SUM(A1)") == "'=SUM(A1)"
     assert analytics.csv_cell("+1+1") == "'+1+1"

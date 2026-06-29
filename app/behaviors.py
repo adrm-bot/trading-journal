@@ -6,6 +6,8 @@
 from collections import Counter
 from datetime import datetime
 
+from . import analytics
+
 
 def _pnl(r):
     return r.get("실현손익(USDT)") or 0.0
@@ -18,10 +20,14 @@ def analyze(rows: list[dict]) -> dict:
     if not n:
         return res
 
+    for r in rows:  # 단일 판정(승/패/본절) — analytics.outcome으로 통일
+        r["_oc"] = analytics.outcome(_pnl(r), r.get("entry"), r.get("qty"))
     total = sum(_pnl(r) for r in rows)
-    wins = sum(1 for r in rows if _pnl(r) > 0)
-    losses = sum(1 for r in rows if _pnl(r) < 0)
-    res.update(total_pnl=total, wins=wins, losses=losses, scratch=n - wins - losses, win_rate=wins / n)
+    wins = sum(1 for r in rows if r["_oc"] == "win")
+    losses = sum(1 for r in rows if r["_oc"] == "loss")
+    decided = wins + losses  # 승률 분모에서 본절 제외 — 본절이 패배로 둔갑하지 않게
+    res.update(total_pnl=total, wins=wins, losses=losses, scratch=n - wins - losses,
+               win_rate=(wins / decided if decided else 0.0))
 
     unplanned = [r for r in rows if r.get("상태") == "의도 미기입"]
     res["unplanned"] = len(unplanned)
@@ -40,11 +46,12 @@ def analyze(rows: list[dict]) -> dict:
     ordered = sorted(rows, key=lambda r: (r.get("청산시각") or datetime.min, r.get("심볼") or "", r.get("거래ID") or r.get("trade_id") or ""))
     streak = mx = 0
     for r in ordered:
-        if _pnl(r) < 0:
+        if r["_oc"] == "loss":
             streak += 1
             mx = max(mx, streak)
-        else:
+        elif r["_oc"] == "win":
             streak = 0
+        # 본절(be)은 연속을 끊지도 잇지도 않음(스킵)
     res["losing_streak"] = mx
     if mx >= 3:
         res["flags"].append({"level": "warn", "text": f"손실 청산 {mx}연속 — 과매매·복수매매 주의"})
@@ -52,7 +59,7 @@ def analyze(rows: list[dict]) -> dict:
     # 손실 후 근접(≤30분) 연속 거래 — 분할청산 or 뇌동
     quick = 0
     for a, b in zip(ordered, ordered[1:]):
-        if _pnl(a) < 0 and a.get("청산시각") and b.get("청산시각"):
+        if a["_oc"] == "loss" and a.get("청산시각") and b.get("청산시각"):
             gap = (b["청산시각"] - a["청산시각"]).total_seconds() / 60
             if 0 <= gap <= 30:
                 quick += 1

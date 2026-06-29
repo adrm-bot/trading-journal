@@ -497,7 +497,8 @@ def _parse(s):
 def analyze_user(uid):
     trades = db.get_trades(uid)
     rows = [{"실현손익(USDT)": t["pnl"], "상태": t["status"], "심볼": t["symbol"],
-             "방향": t["direction"], "청산시각": _parse(t["closed_at"]), "trade_id": t["trade_id"]} for t in trades]
+             "방향": t["direction"], "청산시각": _parse(t["closed_at"]), "trade_id": t["trade_id"],
+             "entry": t["entry"], "qty": t["qty"]} for t in trades]
     summary = behaviors.analyze(rows)
     summary = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in summary.items()}
     return summary, trades

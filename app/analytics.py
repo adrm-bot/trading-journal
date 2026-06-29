@@ -6,7 +6,25 @@
 - over_loss(스탑 미준수 초과손실)는 '손절 너머로 더 간 거리 × 수량'(가격 기준, 수수료 불포함)으로
   risk_usd와 동일한 기준에서 계산. (실현손익은 수수료·펀딩 포함이라 risk와 섞으면 구조적으로 과대.)
 """
+import os
 from datetime import datetime
+
+# 본절(break-even) 밴드: |실현손익| ÷ 명목가(진입×수량)가 이 비율 미만이면 무승부로 본다.
+# 기본 0.1% ≈ 선물 왕복 수수료 크기 — '거래비용보다 작은 결과 = 사실상 본절'. env BREAK_EVEN_PCT(%)로 조정.
+BE_PCT = float(os.getenv("BREAK_EVEN_PCT", "0.1")) / 100.0
+
+
+def outcome(pnl, entry, qty, be_pct=BE_PCT):
+    """승/패/본절 판정. 명목가 대비 손익이 밴드 이내면 'be'(본절). 명목가 모르면 부호로만."""
+    p = pnl or 0.0
+    notional = abs((entry or 0) * (qty or 0))
+    if notional > 0 and abs(p) < be_pct * notional:
+        return "be"
+    if p > 0:
+        return "win"
+    if p < 0:
+        return "loss"
+    return "be"
 
 
 def csv_cell(v):
@@ -23,6 +41,7 @@ def enrich(t: dict) -> dict:
     e, x, sl, d, qty = t.get("entry"), t.get("exit"), t.get("sl"), t.get("direction"), t.get("qty")
     tp, tp2 = t.get("tp"), t.get("tp2")
     short = d == "Short"
+    t["outcome"] = outcome(t.get("pnl"), e, qty)  # win/loss/be (본절 밴드)
     if e and x and e != 0:
         t["move_pct"] = round(((x - e) / e * 100) * (-1 if short else 1), 2)
     if e and x and sl and e != sl:
