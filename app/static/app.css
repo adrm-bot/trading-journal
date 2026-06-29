@@ -109,6 +109,9 @@ a{color:inherit;text-decoration:none}
 .group-title{font-family:var(--f-display);font-weight:510;font-size:15px;color:var(--glacier);letter-spacing:-.01em;margin:var(--s8) 0 var(--s2);padding-top:var(--s5);border-top:1px solid var(--line-2)}
 .group-title:first-child{margin-top:var(--s2);padding-top:0;border-top:none}
 .group-title + .section-title{margin-top:var(--s3)}
+.ins-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s5)}
+.ins-cell{min-width:0} .ins-cell .section-title{margin-top:var(--s5)}
+@media(max-width:860px){.ins-grid{grid-template-columns:1fr}}
 
 /* ---- 시장 컨텍스트 스트립 ---- */
 .market{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s3);margin-bottom:var(--s5)}
@@ -350,12 +353,14 @@ svg.uw{width:100%;height:46px;display:block}
 
 /* 모바일: 1차 내비를 엄지존 하단 고정 탭바로 (가로스크롤에 묻히는 문제 해소) */
 @media(max-width:560px){
-  .side{overflow:visible;padding:var(--s2) var(--s4)}
+  /* 단일 상단바(.topbar) + 단일 하단탭바(.nav) — 사이드바 상단 띠(브랜드·로그아웃) 제거 */
+  .side{overflow:visible;padding:0;border:none;min-height:0}
+  .side .brand,.side .foot{display:none}
   .nav{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line);
     justify-content:space-around;gap:0;padding:5px 0 calc(5px + env(safe-area-inset-bottom))}
   .nav a{flex:1;flex-direction:column;gap:3px;font-size:10px;padding:6px 4px;border-radius:0;text-align:center;justify-content:center}
   .nav a[aria-current="page"]{background:none;box-shadow:none;color:var(--frost)}
-  .nav .ic{width:auto;font-size:19px}
+  .nav .ic{width:auto} .nav .ic svg{width:22px;height:22px}
   .content{padding-bottom:78px} .cards,.market{grid-template-columns:1fr}
   .rsrow{grid-template-columns:96px 1fr 52px}
   .btn.sm,.chips .fchip{min-height:44px} .banner .bx{min-width:44px;min-height:44px}

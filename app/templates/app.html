@@ -728,11 +728,12 @@ function renderInsights(el){
     +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)
     +`<div class="group-title">행동 · 세분화</div><div class="section-title">심리 · 스트릭</div>`+behaviorPanel(ts)
     +`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음.</p>`)
-    +(stratTbl?`<div class="section-title">전략별 성과 (수익 큰 순)</div>`+stratTbl
-      :`<div class="section-title">전략별 성과</div><p class="empty-inline">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)
-    +(tagStatsTable(ts)?`<div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts):"")
-    +(groupTable(t=>t.emotion,"감정",false)?`<div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false):"")
-    +`<div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true);
+    +`<div class="ins-grid">`
+    +`<div class="ins-cell"><div class="section-title">전략별 성과</div>`+(stratTbl||`<p class="empty-inline">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)+`</div>`
+    +(tagStatsTable(ts)?`<div class="ins-cell"><div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts)+`</div>`:"")
+    +(groupTable(t=>t.emotion,"감정",false)?`<div class="ins-cell"><div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false)+`</div>`:"")
+    +`<div class="ins-cell"><div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true)+`</div>`
+    +`</div>`;
   bindEq();
 }
 const CONN_DEFS=[
