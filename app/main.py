@@ -180,15 +180,41 @@ def app_shell(request: Request):
 @app.get("/api/me")
 def api_me(request: Request):
     uid = _require(request)
+    s = db.get_user_settings(uid)
     return {"email": request.session.get("email", ""), "plan": db.get_user_plan(uid),
-            "billing_enabled": BILLING_ENABLED, "support_email": SUPPORT_EMAIL}
+            "billing_enabled": BILLING_ENABLED, "support_email": SUPPORT_EMAIL,
+            "account_equity": s["account_equity"], "be_pct": s["be_pct"]}
+
+
+@app.post("/api/settings")
+async def api_settings(request: Request):
+    uid = _require(request)
+    _csrf(request)
+    b = await request.json()
+
+    def _num(v):
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    eq = _num(b.get("account_equity"))
+    be = _num(b.get("be_pct"))
+    if eq is not None and eq <= 0:
+        eq = None
+    if be is not None and not (0 <= be <= 5):  # 본절 밴드 0~5% 합리적 범위
+        be = None
+    db.set_user_settings(uid, eq, be)
+    return {"ok": True}
 
 
 @app.get("/api/data")
 def api_data(request: Request):
     uid = _require(request)
-    summary, trades = engine.analyze_user(uid)
-    return JSONResponse({"summary": summary, "trades": [analytics.enrich(t) for t in trades]})
+    s = db.get_user_settings(uid)
+    be = (s["be_pct"] / 100.0) if s["be_pct"] is not None else analytics.BE_PCT  # 저장은 %, 계산은 분수
+    eq = s["account_equity"]
+    summary, trades = engine.analyze_user(uid, be)
+    return JSONResponse({"summary": summary, "trades": [analytics.enrich(t, eq, be) for t in trades]})
 
 
 @app.get("/api/market")

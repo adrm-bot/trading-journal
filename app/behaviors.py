@@ -13,15 +13,16 @@ def _pnl(r):
     return r.get("실현손익(USDT)") or 0.0
 
 
-def analyze(rows: list[dict]) -> dict:
+def analyze(rows: list[dict], be_pct=None) -> dict:
     rows = [r for r in rows if r]
     n = len(rows)
     res = {"n": n, "flags": []}
     if not n:
         return res
 
+    bp = be_pct if be_pct is not None else analytics.BE_PCT
     for r in rows:  # 단일 판정(승/패/본절) — analytics.outcome으로 통일
-        r["_oc"] = analytics.outcome(_pnl(r), r.get("entry"), r.get("qty"))
+        r["_oc"] = analytics.outcome(_pnl(r), r.get("entry"), r.get("qty"), bp)
     total = sum(_pnl(r) for r in rows)
     wins = sum(1 for r in rows if r["_oc"] == "win")
     losses = sum(1 for r in rows if r["_oc"] == "loss")

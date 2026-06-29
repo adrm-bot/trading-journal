@@ -494,11 +494,11 @@ def _parse(s):
         return None
 
 
-def analyze_user(uid):
+def analyze_user(uid, be_pct=None):
     trades = db.get_trades(uid)
     rows = [{"실현손익(USDT)": t["pnl"], "상태": t["status"], "심볼": t["symbol"],
              "방향": t["direction"], "청산시각": _parse(t["closed_at"]), "trade_id": t["trade_id"],
              "entry": t["entry"], "qty": t["qty"]} for t in trades]
-    summary = behaviors.analyze(rows)
+    summary = behaviors.analyze(rows, be_pct)
     summary = {k: (round(v, 2) if isinstance(v, float) else v) for k, v in summary.items()}
     return summary, trades

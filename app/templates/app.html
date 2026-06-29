@@ -245,7 +245,7 @@ function tradeCard(r){
       +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
       +((!t&&!r.plan&&!r.memo)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
-  const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>`:"";
+  const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}`:"";
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 — 채우기':'상세 보기·편집'}">
@@ -484,7 +484,10 @@ function perfMetrics(ts){
   const fees=ts.reduce((a,t)=>a+num(t.fees),0), funding=ts.reduce((a,t)=>a+num(t.funding),0);
   const wr=decided?wins.length/decided:0, payoff=avgLoss?Math.abs(avgWin/avgLoss):0;
   const kelly=payoff?(wr-(1-wr)/payoff):0;  // 최적 베팅비중(프랙셔널 켈리 권장)
-  return {n,sum,winRate:wr,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding,payoff,kelly};
+  const mar=mdd?Math.abs(sum/mdd):(sum>0?Infinity:0);  // 수익÷최대낙폭(계좌무관, 자산 약분)
+  const rps=ts.map(t=>t.risk_pct).filter(v=>v!=null);
+  const avgRiskPct=rps.length?rps.reduce((a,b)=>a+b,0)/rps.length:null, maxRiskPct=rps.length?Math.max(...rps):null;
+  return {n,sum,winRate:wr,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding,payoff,kelly,mar,avgRiskPct,maxRiskPct,riskN:rps.length};
 }
 function mcard(l,v,cls,sub){return `<div class="mcard"><div class="ml">${l}</div><div class="mval ${cls||''}">${v}</div>${sub?`<div class="msub">${sub}</div>`:''}</div>`;}
 function metricsRow(m){
@@ -494,6 +497,8 @@ function metricsRow(m){
     +mcard('손익비',m.avgLoss?(m.avgWin/Math.abs(m.avgLoss)).toFixed(2):'—','','평균이익 ÷ 평균손실')
     +mcard('Profit Factor',!isFinite(m.pf)?(m.n>=20?'∞':'—'):m.pf.toFixed(2),(isFinite(m.pf)&&m.pf>=1)?'pos':(isFinite(m.pf)?'neg':''),!isFinite(m.pf)?(m.n>=20?'손실 없음':'표본 부족(20건+)'):'총이익 ÷ 총손실')
     +mcard('최대 낙폭(MDD)',money(m.mdd),'neg','누적 고점 대비 (청산 기준)')
+    +mcard('MAR (수익÷MDD)',!isFinite(m.mar)?(m.n>=3?'∞':'—'):m.mar.toFixed(2),m.mar>=1?'pos':(m.mar>0?'':'neg'),'클수록 낙폭 대비 효율↑')
+    +(m.avgRiskPct!=null?mcard('평균 리스크/거래',m.avgRiskPct.toFixed(2)+'%',m.avgRiskPct>2?'neg':'',`최대 ${m.maxRiskPct.toFixed(2)}% · 계좌 대비`):'')
     +mcard('순손익',money(m.net),m.net>=0?'pos':'neg',m.funding?'펀딩 포함':'수수료 반영')
     +mcard('켈리 비중',(m.n>=20&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=20&&m.kelly>0)?'pos':'',m.n<20?'표본 부족(20건+ 필요)':(m.kelly>0?`½켈리만 권장 ${Math.round(m.kelly*50)}%`:'기댓값 0 이하 — 우위 없음'))
     +`</div>`;
@@ -759,6 +764,13 @@ function renderSettings(el){
         <button class="btn primary sm" type="submit" ${d.ack?'disabled':''}>${on?'키 교체':'연결'}</button>
       </form></div>`;
   }).join("")+`</div>
+    <div class="section-title">트레이딩 설정</div><div class="card">
+      <div class="row2">
+        <div class="field"><label for="setEquity">계좌 자산 (USDT)</label><input id="setEquity" type="number" step="any" inputmode="decimal" placeholder="예: 10000" value="${ME.account_equity??''}"></div>
+        <div class="field"><label for="setBe">본절 기준 (%)</label><input id="setBe" type="number" step="0.01" inputmode="decimal" placeholder="0.1" value="${ME.be_pct??''}"></div>
+      </div>
+      <p class="muted" style="font-size:var(--fs-xs);margin:0 0 12px;line-height:1.55">계좌 자산을 넣으면 거래별 리스크가 <b>계좌 %</b>로 표시되고 MAR 계산에 쓰입니다 · 본절 기준 = |손익|÷명목가가 이 %보다 작으면 무승부(기본 0.1% ≈ 왕복 수수료).</p>
+      <button class="btn primary sm" id="saveSettings">설정 저장</button></div>
     <div class="section-title">계정</div><div class="card"><div class="conn">
       <div><div class="nm" id="acctEmail"></div><div class="hint">키·시크릿은 암호화되어 저장됩니다 (평문 미저장).</div></div>
       <a class="btn sm" href="/logout">로그아웃</a></div>
@@ -790,6 +802,9 @@ function renderSettings(el){
   const up=$("#upgradeBtn");if(up)up.onclick=async()=>{
     try{await postJSON("/api/billing/checkout",{});}
     catch(e){toast(e&&e.message&&e.message.indexOf("http ")!==0?e.message:"결제는 준비 중입니다");}};
+  const ss=$("#saveSettings");if(ss)ss.onclick=async()=>{ss.disabled=true;
+    try{await postJSON("/api/settings",{account_equity:$("#setEquity").value,be_pct:$("#setBe").value});await loadAll();route();toast("설정 저장됨");}
+    catch(e){toast("저장하지 못했어요 — 잠시 후 다시 시도해 주세요");ss.disabled=false;}};
 }
 
 /* ---------- actions ---------- */
@@ -802,7 +817,8 @@ function renderFacts(r){
   let h=fact("진입가",fmtP(r.entry))+fact("청산가",fmtP(r.exit))+fact("수량",fmtP(r.qty))
     +fact("가격변동",mv)+fact("실현손익",`<span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>`)+fact("실현 R",rr)
     +fact("레버리지",r.leverage?r.leverage+'x':'—')+fact("보유시간",r.hold_min==null?'—':fmtHold(r.hold_min))
-    +fact("분할 체결",r.fill_count?r.fill_count+'회':'—');
+    +fact("분할 체결",r.fill_count?r.fill_count+'회':'—')
+    +(r.risk_usd?fact("리스크",`$${Math.round(r.risk_usd).toLocaleString()}${r.risk_pct!=null?` · ${r.risk_pct}%`:''}`):"");
   if(r.fees!=null)h+=fact("수수료",`-$${Number(r.fees).toLocaleString(undefined,{maximumFractionDigits:2})}`);
   if(r.funding)h+=fact("펀딩",`<span class="${r.funding>=0?'pos':'neg'}">${money(r.funding)}</span>`);
   $("#modalFacts").innerHTML=h;

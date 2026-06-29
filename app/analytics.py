@@ -36,12 +36,13 @@ def csv_cell(v):
     return v
 
 
-def enrich(t: dict) -> dict:
-    """거래에 가격변동%·R·계획 R:R·리스크·보유시간·규율 파생값 추가."""
+def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
+    """거래에 가격변동%·R·계획 R:R·리스크(·계좌%)·보유시간·규율 파생값 추가.
+    equity: 계좌 자산(USDT) — 주면 risk_pct(계좌 대비 리스크%) 계산. be_pct: 본절 밴드."""
     e, x, sl, d, qty = t.get("entry"), t.get("exit"), t.get("sl"), t.get("direction"), t.get("qty")
     tp, tp2 = t.get("tp"), t.get("tp2")
     short = d == "Short"
-    t["outcome"] = outcome(t.get("pnl"), e, qty)  # win/loss/be (본절 밴드)
+    t["outcome"] = outcome(t.get("pnl"), e, qty, be_pct)  # win/loss/be (본절 밴드)
     if e and x and e != 0:
         t["move_pct"] = round(((x - e) / e * 100) * (-1 if short else 1), 2)
     if e and x and sl and e != sl:
@@ -56,6 +57,8 @@ def enrich(t: dict) -> dict:
         t["rr2"] = round(abs(tp2 - e) / abs(e - sl), 2)
     if e and sl and qty:
         t["risk_usd"] = round(abs(e - sl) * qty, 2)  # 계획 리스크 = 진입~손절 거리 × 수량
+        if equity and equity > 0:
+            t["risk_pct"] = round(t["risk_usd"] / equity * 100, 2)  # 계좌 대비 리스크%
     oa, ca = t.get("opened_at"), t.get("closed_at")
     if oa and ca:
         try:

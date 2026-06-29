@@ -69,6 +69,20 @@ def test_enrich_sets_outcome():
     assert analytics.enrich({"entry": 100, "exit": 100.05, "qty": 30, "pnl": 1.5, "direction": "Long"})["outcome"] == "be"
 
 
+def test_enrich_risk_pct_with_equity():
+    t = analytics.enrich({"entry": 100, "exit": 98, "sl": 99, "qty": 100, "direction": "Long", "pnl": -200}, equity=10000)
+    assert t["risk_usd"] == 100.0   # |100-99|*100
+    assert t["risk_pct"] == 1.0     # 100/10000*100
+    t2 = analytics.enrich({"entry": 100, "exit": 98, "sl": 99, "qty": 100, "direction": "Long"})
+    assert "risk_pct" not in t2     # 자산 미설정 → 미계산
+
+
+def test_enrich_custom_be_pct():
+    # 명목가 10000, 손익 30 = 0.3%
+    assert analytics.enrich({"entry": 100, "exit": 100.3, "qty": 100, "pnl": 30, "direction": "Long"}, be_pct=0.005)["outcome"] == "be"   # <0.5%
+    assert analytics.enrich({"entry": 100, "exit": 100.3, "qty": 100, "pnl": 30, "direction": "Long"}, be_pct=0.001)["outcome"] == "win"  # >0.1%
+
+
 def test_csv_cell_defangs_formula_but_keeps_numbers():
     assert analytics.csv_cell("=SUM(A1)") == "'=SUM(A1)"
     assert analytics.csv_cell("+1+1") == "'+1+1"

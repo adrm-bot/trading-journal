@@ -28,7 +28,8 @@ def init():
         c.executescript("""
         CREATE TABLE IF NOT EXISTS users(
           id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, created INTEGER,
-          plan TEXT DEFAULT 'free', stripe_customer_id TEXT);
+          plan TEXT DEFAULT 'free', stripe_customer_id TEXT,
+          account_equity REAL, be_pct REAL);
         CREATE TABLE IF NOT EXISTS connections(
           user_id INTEGER, kind TEXT, data_enc TEXT, updated INTEGER,
           PRIMARY KEY(user_id, kind));
@@ -51,7 +52,8 @@ def init():
                 c.execute(f"ALTER TABLE trades ADD COLUMN {name} {typ}")
         # users 마이그레이션: 결제 스캐폴드 컬럼(멱등)
         ucols = {r[1] for r in c.execute("PRAGMA table_info(users)")}
-        for name, typ in (("plan", "TEXT DEFAULT 'free'"), ("stripe_customer_id", "TEXT")):
+        for name, typ in (("plan", "TEXT DEFAULT 'free'"), ("stripe_customer_id", "TEXT"),
+                          ("account_equity", "REAL"), ("be_pct", "REAL")):
             if name not in ucols:
                 c.execute(f"ALTER TABLE users ADD COLUMN {name} {typ}")
         # 백필: 기존 강제청산 행에 청산기준 부여(멱등)
@@ -74,6 +76,20 @@ def get_user_plan(uid):
     with conn() as c:
         r = c.execute("SELECT plan FROM users WHERE id=?", (uid,)).fetchone()
     return (r["plan"] if r and r["plan"] else "free")
+
+
+def get_user_settings(uid):
+    """트레이딩 설정 — 계좌 자산(USDT)·본절 밴드(%). 미설정이면 None/기본."""
+    with conn() as c:
+        r = c.execute("SELECT account_equity, be_pct FROM users WHERE id=?", (uid,)).fetchone()
+    eq = r["account_equity"] if r else None
+    be = r["be_pct"] if r and r["be_pct"] is not None else None
+    return {"account_equity": eq, "be_pct": be}
+
+
+def set_user_settings(uid, account_equity=None, be_pct=None):
+    with conn() as c:
+        c.execute("UPDATE users SET account_equity=?, be_pct=? WHERE id=?", (account_equity, be_pct, uid))
 
 
 def delete_user(uid):
