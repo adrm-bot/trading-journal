@@ -8,7 +8,6 @@
 import logging
 import os
 import secrets
-from datetime import datetime
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -26,7 +25,10 @@ load_dotenv(os.path.join(HERE, ".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
-from . import db, engine, crypto, market  # noqa: E402
+from . import db, engine, crypto, market, analytics  # noqa: E402
+
+EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io",
+              "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
 
 APP_ENV = os.getenv("APP_ENV", "development").lower()
 DEV_MODE = os.getenv("DEV_MODE", "false").lower() == "true"
@@ -86,7 +88,7 @@ def _require(request):
 def _csrf(request):
     # 상태변경 요청은 커스텀 헤더 요구 (단순 cross-site 폼 POST 차단; SameSite=lax 심층방어)
     if not request.headers.get("x-requested-with"):
-        raise HTTPException(403, "잘못된 요청")
+        raise HTTPException(403, "요청을 처리할 수 없어요 — 페이지를 새로고침한 뒤 다시 시도해 주세요")
 
 
 def _login(request, email, name):
@@ -98,44 +100,6 @@ def _login(request, email, name):
 
 def _redirect_uri(request):
     return os.getenv("OAUTH_REDIRECT_URI") or str(request.url_for("auth_callback"))
-
-
-def _enrich(t):
-    """거래에 가격변동%·R·계획RR·리스크·보유시간 파생값 추가."""
-    e, x, sl, d, qty = t.get("entry"), t.get("exit"), t.get("sl"), t.get("direction"), t.get("qty")
-    tp, tp2 = t.get("tp"), t.get("tp2")
-    short = d == "Short"
-    if e and x and e != 0:
-        t["move_pct"] = round(((x - e) / e * 100) * (-1 if short else 1), 2)
-    if e and x and sl and e != sl:
-        t["r"] = round((e - x) / (sl - e) if short else (x - e) / (e - sl), 2)
-    if e and sl and tp and e != sl:
-        t["rr"] = round(abs(tp - e) / abs(e - sl), 2)
-    if e and sl and tp2 and e != sl:
-        t["rr2"] = round(abs(tp2 - e) / abs(e - sl), 2)
-    if e and sl and qty:
-        t["risk_usd"] = round(abs(e - sl) * qty, 2)  # 계획 리스크 = 진입~손절 거리 × 수량
-    oa, ca = t.get("opened_at"), t.get("closed_at")
-    if oa and ca:
-        try:
-            t["hold_min"] = round((datetime.fromisoformat(ca) - datetime.fromisoformat(oa)).total_seconds() / 60)
-        except (TypeError, ValueError):
-            pass
-    # 규율: 계획(예상) SL/TP vs 실제 청산 대조 (계획값 입력 거래만)
-    r = t.get("r")
-    if e and x and sl and r is not None:
-        if r < 0:  # 손실: 계획 손절 너머로 청산했나(스탑 미준수)
-            violated = (x < sl) if not short else (x > sl)
-            t["stop_violated"] = bool(violated)
-            if violated and t.get("risk_usd"):
-                t["over_loss"] = round(abs(t.get("pnl") or 0) - t["risk_usd"], 2)  # 스탑 안 지켜 더 잃은 액수
-        elif r > 0 and tp:  # 이익: 계획 익절 못 미쳐 조기청산했나
-            early = (x < tp) if not short else (x > tp)
-            if early and qty:
-                t["money_left"] = round(abs(tp - x) * qty, 2)  # 테이블에 두고 온 이익
-    if t.get("rr"):
-        t["exit_eff"] = round(r / t["rr"], 2) if r is not None else None
-    return t
 
 
 # --- routes ---
@@ -212,7 +176,7 @@ def api_me(request: Request):
 def api_data(request: Request):
     uid = _require(request)
     summary, trades = engine.analyze_user(uid)
-    return JSONResponse({"summary": summary, "trades": [_enrich(t) for t in trades]})
+    return JSONResponse({"summary": summary, "trades": [analytics.enrich(t) for t in trades]})
 
 
 @app.get("/api/market")
@@ -228,7 +192,7 @@ def api_positions(request: Request):
         return {"positions": engine.fetch_open_positions(uid)}
     except Exception:  # noqa: BLE001
         logger.exception("positions 실패 uid=%s", uid)
-        return JSONResponse({"positions": [], "error": "보유 포지션 조회 실패"}, status_code=200)
+        return JSONResponse({"positions": [], "error": "보유 포지션을 불러오지 못했어요 — 거래소 연결 상태를 확인해 주세요"}, status_code=200)
 
 
 @app.post("/api/pull")
@@ -239,7 +203,7 @@ def api_pull(request: Request):
         results = engine.pull_user(uid)  # {exchange: {added, error}} — 거래소별 결과
     except Exception:  # noqa: BLE001
         logger.exception("pull 실패 uid=%s", uid)
-        return JSONResponse({"ok": False, "error": "거래 적재 실패 — 키/권한을 확인하세요"}, status_code=400)
+        return JSONResponse({"ok": False, "error": "거래를 불러오지 못했어요 — API 키와 read-only 권한을 확인해 주세요"}, status_code=400)
     total = sum(r["added"] for r in results.values())
     return {"ok": True, "fetched": total, "results": results}
 
@@ -288,7 +252,7 @@ async def api_save_connection(request: Request):
     if kind in ("bybit", "binance", "gate"):
         key, sec = (b.get("key") or "").strip(), (b.get("secret") or "").strip()
         if len(key) < 8 or len(sec) < 16:
-            raise HTTPException(400, "유효한 API 키/시크릿이 필요합니다 (read-only 권장)")
+            raise HTTPException(400, "API 키와 시크릿을 다시 확인해 주세요 — read-only 키를 권장합니다")
         # read-only 권한 강제 — 거래/출금 권한 있으면 저장 거부
         try:
             warn = engine.probe_readonly(kind, key, sec).get("warn")
@@ -296,25 +260,25 @@ async def api_save_connection(request: Request):
             raise HTTPException(400, str(e)) from None
         except Exception:  # noqa: BLE001
             logger.warning("키 프로빙 실패 kind=%s uid=%s", kind, uid)
-            raise HTTPException(400, f"{kind} 키 권한 확인 실패 — 잠시 후 다시 시도하세요") from None
+            raise HTTPException(400, f"{EXCH_NAMES.get(kind, kind)} 키 권한을 확인하지 못했어요 — 잠시 후 다시 시도해 주세요") from None
         data = {"key": key, "secret": sec}
     elif kind == "notion":
         tok = (b.get("token") or "").strip()
         if not tok:
-            raise HTTPException(400, "Notion 토큰 필요")
+            raise HTTPException(400, "Notion 토큰을 입력해 주세요")
         data = {"token": tok, "db_id": (b.get("extra") or "").strip()}
     elif kind == "telegram":
         tok = (b.get("token") or "").strip()
         if not tok:
-            raise HTTPException(400, "Telegram 봇 토큰 필요")
+            raise HTTPException(400, "Telegram 봇 토큰을 입력해 주세요")
         data = {"token": tok, "chat_id": (b.get("extra") or "").strip()}
     elif kind == "sheets":
         cr = (b.get("token") or "").strip()
         if not cr:
-            raise HTTPException(400, "서비스계정 JSON 필요")
+            raise HTTPException(400, "서비스계정 JSON을 입력해 주세요")
         data = {"creds": cr, "sheet_id": (b.get("extra") or "").strip()}
     else:
-        raise HTTPException(400, "unknown kind")
+        raise HTTPException(400, "지원하지 않는 연동입니다")
     db.set_connection(uid, kind, data)
     return {"ok": True, "warn": warn}
 

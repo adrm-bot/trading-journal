@@ -106,11 +106,16 @@ def get_trades(uid):
             "SELECT * FROM trades WHERE user_id=? ORDER BY closed_at DESC", (uid,))]
 
 
+# 일괄 기입에서 금지하는 필드: strategy를 한 번에 박으면 충동거래가 '계획 전략거래'로
+# 둔갑해 전략별 통계가 세탁됨(안티-조작 약속 위배). 전략은 거래별 개별 기입만 허용.
+_BULK_FORBIDDEN = {"status", "strategy", "setup", "sl", "tp", "tp2"}
+
+
 def bulk_fill_unplanned(uid, fields: dict) -> int:
-    """status='의도 미기입' 거래를 일괄 기입(과거 정리용). 빈 필드는 건너뜀, status→기록완료. 반환=건수."""
+    """status='의도 미기입' 거래를 일괄 기입(과거 정리용). 빈 필드·금지 필드는 건너뜀, status→기록완료. 반환=건수."""
     sets = {}
     for k, v in fields.items():
-        if k not in _INTENT or k == "status":
+        if k not in _INTENT or k in _BULK_FORBIDDEN:
             continue
         if v is None or (isinstance(v, str) and v.strip() == ""):
             continue
