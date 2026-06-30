@@ -310,7 +310,36 @@ function rsPanel(m){
 /* 자금 흐름(TOTAL2/3/OTHERS) + 섹터 강도 */
 function fmtBig(n){if(n==null)return"—";const t=n/1e12;if(Math.abs(t)>=1)return"$"+t.toFixed(2)+"T";return "$"+Math.round(n/1e9).toLocaleString()+"B";}
 function flowm(label,val,sub){return `<div class="flowm"><div class="mk">${label}</div><div class="mv">${val}</div><div class="ms">${sub}</div></div>`;}
-function secRows(arr){return arr.map(x=>`<div class="secrow"><span class="secn">${esc(x.name)}</span><span class="num ${x.chg24>=0?'pos':'neg'}">${(x.chg24>=0?'+':'')+x.chg24}%</span></div>`).join("");}
+/* 섹터명 한글화 — 주요 내러티브는 통용 한국어로, 미등록 니치 카테고리는 원문 유지(오역 방지).
+   부분일치(소문자), 위에서부터 첫 매치 적용 → 구체적인 규칙을 먼저 둔다. */
+const SECTOR_KO_RULES=[
+  ["smart contract platform","스마트컨트랙트 플랫폼"],
+  ["layer 0","레이어0"],["(l0)","레이어0"],["layer 1","레이어1"],["(l1)","레이어1"],["layer 2","레이어2"],["(l2)","레이어2"],["rollup","롤업"],["data availability","데이터 가용성(DA)"],
+  ["proof of work","작업증명(PoW)"],["proof of stake","지분증명(PoS)"],["bitcoin fork","비트코인 포크"],["masternodes","마스터노드"],
+  ["liquid staking","유동성 스테이킹"],["restaking","리스테이킹"],["staking","스테이킹"],
+  ["decentralized exchange","탈중앙 거래소(DEX)"],["(dex)","탈중앙 거래소(DEX)"],["automated market maker","자동마켓메이커(AMM)"],["(amm)","자동마켓메이커(AMM)"],
+  ["decentralized identifier","탈중앙 신원(DID)"],["decentralized finance","디파이(DeFi)"],["defai","디파이+AI(DeFAI)"],["defi","디파이(DeFi)"],
+  ["centralized exchange","거래소 토큰(CEX)"],["(cex)","거래소 토큰(CEX)"],["exchange-based","거래소 토큰"],
+  ["yield farming","이자농사"],["yield-bearing","이자수익 토큰"],["lending","대출(랜딩)"],["perpetuals","무기한 선물"],["derivatives","파생상품"],["options","옵션"],["prediction markets","예측시장"],
+  ["tokenized treasuries","토큰화 국채"],["tokenized commodities","토큰화 원자재"],["tokenized private credit","토큰화 사모대출"],
+  ["real world assets","실물자산(RWA)"],["rwa","실물자산(RWA)"],["tokenized","토큰화 자산"],
+  ["usd stablecoin","USD 스테이블코인"],["fiat-backed stablecoin","법정화폐 담보 스테이블코인"],
+  ["crypto-backed stablecoin","암호화폐 담보 스테이블코인"],["synthetic dollar","합성 달러"],["stablecoin","스테이블코인"],
+  ["ai agents","AI 에이전트"],["ai applications","AI 앱"],["ai framework","AI 프레임워크"],["artificial intelligence","AI"],["(ai)","AI"],
+  ["depin","DePIN(탈중앙 인프라)"],["zero knowledge","영지식(ZK)"],["(zk)","영지식(ZK)"],["chain abstraction","체인 추상화"],["cross-chain","크로스체인"],
+  ["gamblefi","갬블링(GambleFi)"],["gambling","갬블링(GambleFi)"],["gamefi","게임(GameFi)"],["gaming","게임(GameFi)"],["play to earn","P2E(플레이투언)"],["socialfi","소셜파이"],
+  ["dog-themed","도그 밈"],["frog-themed","개구리 밈"],["4chan-themed","밈(4chan)"],["elon musk","일론 머스크 테마"],["meme","밈코인"],
+  ["trump","트럼프 관련"],["made in usa","미국 프로젝트"],["made in china","중국 프로젝트"],
+  ["oracle","오라클"],["governance","거버넌스"],["infrastructure","인프라"],["launchpad","런치패드"],["wallets","지갑"],["neobank","네오뱅크"],["crypto card","암호화폐 카드"],["telegram","텔레그램 앱"],["mobile mining","모바일 채굴"],
+  ["privacy","프라이버시"],["quantum-resistant","양자내성"],["nft","NFT"],["metaverse","메타버스"],["analytics","애널리틱스"],["payment","결제"],["storage","스토리지"]];
+function secKo(name){
+  if(!name)return name;
+  const s=name.toLowerCase();
+  for(const [k,ko] of SECTOR_KO_RULES){if(s.includes(k))return ko;}
+  const e=name.match(/^(.+?)\s+Ecosystem$/i);if(e)return e[1]+" 생태계";  // 'X Ecosystem' → 'X 생태계'
+  return name;  // 미등록 니치는 원문
+}
+function secRows(arr){return arr.map(x=>`<div class="secrow"><span class="secn">${esc(secKo(x.name))}</span><span class="num ${x.chg24>=0?'pos':'neg'}">${(x.chg24>=0?'+':'')+x.chg24}%</span></div>`).join("");}
 function flowPanel(m){
   const d=m&&m.dom, s=m&&m.sectors;
   if(!d&&!(s&&s.top&&s.top.length))return "";
