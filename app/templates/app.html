@@ -476,6 +476,19 @@ function disciplineCard(ts){
   if(!c.length)return '';
   return `<div class="section-title">일일 규율 · 습관 비용</div><div class="mgrid">${c.join('')}</div>`;
 }
+/* 대시보드 컬럼 너비 드래그 조절 — 리사이저로 --meW 설정, localStorage 기억. 데스크탑(>1080)만 */
+function bindDashResizer(){
+  const dash3=$(".dash3"), rz=$(".dash-resizer"); if(!dash3||!rz)return;
+  try{const w=localStorage.getItem('dashMeW'); if(w)dash3.style.setProperty('--meW',w);}catch(e){}
+  const MIN=300, save=()=>{try{localStorage.setItem('dashMeW',dash3.style.getPropertyValue('--meW'));}catch(e){}};
+  const setX=x=>{const r=dash3.getBoundingClientRect();const v=Math.max(MIN,Math.min(r.width-12-MIN,x));dash3.style.setProperty('--meW',Math.round(v)+'px');};
+  rz.onmousedown=e=>{if(innerWidth<=1080)return;e.preventDefault();rz.classList.add('dragging');document.body.style.userSelect='none';
+    const mv=ev=>setX(ev.clientX-dash3.getBoundingClientRect().left);
+    const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);rz.classList.remove('dragging');document.body.style.userSelect='';save();};
+    document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);};
+  rz.onkeydown=e=>{if(innerWidth<=1080)return;const me=$(".dash-me");if(!me)return;const cur=me.getBoundingClientRect().width;
+    if(e.key==='ArrowLeft'){e.preventDefault();setX(cur-24);save();}else if(e.key==='ArrowRight'){e.preventDefault();setX(cur+24);save();}};
+}
 function renderDashboard(el){
   const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div>`;
   if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
@@ -484,9 +497,9 @@ function renderDashboard(el){
     +`<div id="posHost"></div>`
     +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
-  // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 매매일지답게 내 기록이 주연.
-  el.innerHTML=`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-mkt">${market}</div></div>`;
-  bindCards();ensureMarket();ensurePositions();
+  // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 가운데 리사이저로 폭 조절.
+  el.innerHTML=`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="컬럼 너비 조절 (드래그·좌우 화살표)" tabindex="0"></div><div class="dash-mkt">${market}</div></div>`;
+  bindCards();ensureMarket();ensurePositions();bindDashResizer();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}

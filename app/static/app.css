@@ -118,18 +118,21 @@ a{color:inherit;text-decoration:none}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}  /* minmax(0,1fr): 넓은 hero 숫자가 컬럼 폭을 밀어내지 않게 — 4칸 동일 폭. 기본 align-items:stretch로 동일 높이 */
 #view-dashboard .cards{margin-top:var(--s6)}  /* 스켈레톤 등 라벨 없는 경우의 섹션 여백 */
 #view-dashboard .section-title + .cards{margin-top:0}  /* '핵심 지표' 라벨이 앞서면 라벨 마진(24/0/12)이 간격 담당 — 이중 여백 방지 */
-/* 대시보드 2단: 좌 내 정보(주) · 우 시장맥락(보조) — 매매일지답게 내 기록이 주연 */
-.dash3{display:grid;grid-template-columns:minmax(0,1.12fr) minmax(0,1fr);gap:var(--s6);align-items:start}
+/* 대시보드 2단(드래그로 폭 조절): 좌 내 정보(주) · 우 시장(보조). 가운데 리사이저=구분선 */
+.dash3{display:grid;grid-template-columns:minmax(300px,var(--meW,1.1fr)) 12px minmax(300px,1fr);gap:0;align-items:start}
 .dash-me,.dash-mkt{min-width:0}
-.dash-me{display:flex;flex-direction:column}  /* 내 정보(주): KPI·포지션·인사이트·매매일지 */
+.dash-me{display:flex;flex-direction:column;padding-right:var(--s5)}  /* 내 정보(주) */
 .dash-me>.section-title:first-child{margin-top:0}
-.dash-mkt{border-left:1px solid var(--line);padding-left:var(--s6)}  /* 시장(보조) + 좌측 구분선 */
+.dash-mkt{padding-left:var(--s5)}  /* 시장(보조) */
+.dash-resizer{align-self:stretch;position:relative;cursor:col-resize;min-height:240px}  /* 드래그 구분선 */
+.dash-resizer::before{content:"";position:absolute;top:0;bottom:0;left:50%;transform:translateX(-50%);width:1px;background:var(--line);transition:width .12s,background .12s}
+.dash-resizer:hover::before,.dash-resizer.dragging::before{width:3px;background:var(--line-2)}
 @media(min-width:1081px){  /* 2단일 때만: 좌측 KPI 2×2, 좁아진 우측 시장 칩·TOTAL 2×2 */
   .dash-me .cards{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr}
   .dash-mkt .market{grid-template-columns:repeat(2,1fr)}
   .dash-mkt .flowrow{grid-template-columns:repeat(2,1fr)}
 }
-@media(max-width:1080px){.dash3{grid-template-columns:1fr}.dash-mkt{border-left:0;padding-left:0}}  /* 1단: 구분선 제거, 내 정보가 DOM상 먼저라 위쪽 */
+@media(max-width:1080px){.dash3{grid-template-columns:1fr}.dash-resizer{display:none}.dash-me{padding-right:0}.dash-mkt{padding-left:0}}  /* 1단: 리사이저 숨김, 내 정보가 DOM상 먼저라 위쪽 */
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}
 .stat .label{color:var(--muted);font-size:var(--fs-xs)}
 .stat .val{font-family:var(--f-display);font-size:22px;font-weight:510;margin-top:6px;color:var(--ice);letter-spacing:-.02em;white-space:nowrap}
