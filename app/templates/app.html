@@ -44,7 +44,7 @@
   <h3 id="modalTitle">거래 상세 · 사후 기록</h3><div class="meta" id="modalMeta"></div>
   <div class="facts" id="modalFacts"></div>
   <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
-  <div class="hh">한 줄만 적어도 기록됩니다 — 칩을 탭해서 빠르게 채워도 돼요.</div>
+  <div class="hh">한 줄만 적어도 됩니다. 아래 칩을 탭하면 더 빨라요.</div>
   <div class="field"><label>감정</label><div class="chips" id="c_emo"></div></div>
   <details class="more" id="moreFields"><summary>전략 · 근거 · 예상 손절/익절 · 메모 추가</summary>
     <div class="field"><label>진입전략 <span class="muted">· 하나 선택</span></label><div class="chips" id="c_strategy"></div></div>
@@ -188,7 +188,7 @@ function route(){
   if($("#pullBtn"))$("#pullBtn").onclick=pull; if($("#refreshBtn"))$("#refreshBtn").onclick=refresh;
 }
 async function refresh(){const v=curView(),host=$("#view-"+v);if(host)host.innerHTML=v==='journal'?skelRows(8):skelCards(4)+skelRows(6);
-  try{await loadAll();route();}catch(e){toast("불러오지 못했어요 — 잠시 후 다시 시도해 주세요");}}
+  try{await loadAll();route();}catch(e){toast("불러오지 못했습니다. 잠시 후 다시 시도해 주세요");}}
 
 /* ---------- views ---------- */
 function statCards(s){
@@ -216,8 +216,8 @@ function onboarding(){
     ?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 20h10"/><path d="M12 20V9"/><path d="M12 9C12 6 9.5 4 6 4c0 3.5 2.5 5 6 5z"/><path d="M12 11c0-2.6 2.2-4.5 5-4.5 0 2.8-2.2 4.5-5 4.5z"/></svg>'
     :'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M9 2v5M15 2v5"/><path d="M6 7h12v3a6 6 0 0 1-12 0z"/><path d="M12 16v6"/></svg>';
   return `<div class="empty"><div class="em" aria-hidden="true">${emIc}</div>
-    <h2>${hasExch?"아직 거래가 없어요":"거래소를 연결하면 시작돼요"}</h2>
-    <p>${hasExch?"최근 거래가 잡히면 여기 자동으로 들어옵니다. 지금 불러올까요?":"조회 전용(read-only) 키만 연결하면 청산된 거래가 자동으로 일지에 들어오고, 계획 미기입 거래는 따로 모아둡니다."}</p>
+    <h2>${hasExch?"아직 거래가 없습니다":"거래소를 연결하면 시작됩니다"}</h2>
+    <p>${hasExch?"새 거래가 청산되면 자동으로 기록됩니다. 지금 불러올까요?":"조회 전용(read-only) 키만 연결하면 청산된 거래가 자동으로 기록되고, 계획을 안 적은 거래는 따로 모아둡니다."}</p>
     ${hasExch?`<button class="btn primary" id="emptyPull">↻ 거래 불러오기</button>`:`<a class="btn primary" href="#settings">거래소 연결하기</a>`}</div>`;
 }
 function tradeRows(rows){
@@ -291,7 +291,7 @@ function tradeCard(r){
       +(mis?`<div class="jtags jmis">${mis}</div>`:"")
       +(r.review?`<div class="jreview"><span class="jrl">복기</span> ${esc(r.review)}</div>`:"")
       +chart
-      +((!t&&!gb&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
+      +((!t&&!gb&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획 · 근거 · 감정 채우기</div>`:"");}
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}`:"";
   const split=r.exit_count>1?` · <span class="muted" data-tip="${(r.legs_r&&r.legs_r.length)?'레그 R '+r.legs_r.map(x=>(x>=0?'+':'')+x).join(' · '):'분할 청산'}">분할 ${r.exit_count}회</span>`:"";
@@ -357,7 +357,7 @@ function marketStrip(m){
       ? `알트시즌 지수 ${v}/100 · 표본 ${as.n}개 알트의 90일 BTC 초과 비율(방향 참고) · 75+ 알트시즌 / 25- 비트시즌 · 그래프=알트 점유율(TOTAL2/TOTAL) 90일 실시계열`
       : `알트시즌 지수 ${v}/100 · 최근 90일 BTC를 이긴 알트 비율(표본 ${as.n}개, 방향 참고용) · 75+ 알트시즌 / 25- 비트시즌 · 현재값 스냅샷`;
     chips.push(mchip("알트시즌 지수",`<span class="${cls}">${v} · ${lbl}</span>`,sub,"",tip));}
-  if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없어요</div></div>`;
+  if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없습니다</div></div>`;
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
 /* 상대강도 — BTC vs 알트 (7일 상대수익률) */
@@ -491,7 +491,7 @@ async function ensurePositions(){
   if(OPENPOS!==null){h.outerHTML=posSection(OPENPOS);return;}
   if(POS_LOADING)return; POS_LOADING=true;
   try{const j=await(await api("/api/positions")).json();OPENPOS=j.positions||[];POS_ERR=j.error||null;}
-  catch(e){OPENPOS=[];POS_ERR="보유 포지션을 불러오지 못했어요";}
+  catch(e){OPENPOS=[];POS_ERR="보유 포지션을 불러오지 못했습니다";}
   POS_LOADING=false; const h2=$("#posHost"); if(h2)h2.outerHTML=posSection(OPENPOS);
 }
 
@@ -509,9 +509,9 @@ function disciplineCard(ts){
   const moneyLeft=ts.reduce((s,t)=>s+(t.money_left||0),0);
   const c=[];
   if(d){
-    c.push(mcard('R / 거래일',(d.avg>=0?'+':'')+d.avg.toFixed(2)+'R',d.avg>=0?'pos':'neg',`${d.days}거래일 평균`));
+    c.push(mcard('R / 거래일',(d.avg>=0?'+':'')+d.avg.toFixed(2)+'R',d.avg>=0?'pos':'neg',`${d.days}일 평균`));
     c.push(mcard('최악의 날',(d.worst>=0?'+':'')+d.worst.toFixed(2)+'R',d.worst<0?'neg':'','하루 최대 손실 R'));
-    c.push(mcard('일일 −2R 초과',d.over2+'일',d.over2>0?'neg':'','규율 무너진 날'));
+    c.push(mcard('일일 −2R 초과',d.over2+'일',d.over2>0?'neg':'','규율이 무너진 날'));
   }
   if(overLoss>0)c.push(mcard('스탑 미준수 손실','-'+k$(overLoss),'neg','손절 지켰다면 덜 잃음'));
   if(moneyLeft>0)c.push(mcard('두고 온 이익',k$(moneyLeft),'','조기청산 누적'));
@@ -537,7 +537,7 @@ function renderDashboard(el){
   const mine=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +disciplineCard(DATA.trades)
     +`<div id="posHost"></div>`
-    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음. 깔끔합니다.</p>`)
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
   // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 가운데 리사이저로 폭 조절.
   el.innerHTML=`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="컬럼 너비 조절 (드래그·좌우 화살표)" tabindex="0"></div><div class="dash-mkt">${market}</div></div>`;
@@ -587,7 +587,7 @@ function applyJournal(){
   if(JT.page>pages)JT.page=pages;
   const start=(JT.page-1)*JT.size;
   const pageRows=rows.slice(start,start+JT.size);
-  if(!k)$("#jt").innerHTML=`<div class="empty-sm muted">조건에 맞는 거래가 없어요 — 필터를 조정해 보세요.</div>`;
+  if(!k)$("#jt").innerHTML=`<div class="empty-sm muted">조건에 맞는 거래가 없습니다. 필터를 바꿔보세요.</div>`;
   else $("#jt").innerHTML=(JT.view==='table')?table(pageRows,{sortable:true}):journalCards(pageRows);
   $("#jSummary").innerHTML=`결과 <b>${k}</b>건 · 합산손익 <b class="${total>=0?'pos':'neg'}">${money(total)}</b> USDT`;
   renderPager(k,pages);
@@ -769,7 +769,7 @@ function equityPanel(ts){
   const closedN=ts.filter(t=>t.closed_at).length;
   const toggle=`<div class="eqhead"><span class="cgrp"><button class="btn sm eqbtn" data-eq="usdt" aria-pressed="${!isR}">USDT</button><button class="btn sm eqbtn" data-eq="r" aria-pressed="${isR}">R배수</button></span></div>`;
   const ord=[...ts].filter(t=>t.closed_at&&(!isR||t.r!=null)).sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
-  if(!ord.length)return `<div class="card chartc">${toggle}<p class="muted">${isR?'R 입력 거래가 없어요 — 손절가(SL)를 채우면 리스크 정규화 곡선이 그려집니다.':'표시할 거래가 아직 없어요.'}</p></div>`;
+  if(!ord.length)return `<div class="card chartc">${toggle}<p class="muted">${isR?'R이 입력된 거래가 없습니다. 손절가(SL)를 채우면 리스크 정규화 곡선이 그려집니다.':'표시할 거래가 아직 없습니다.'}</p></div>`;
   const tms=s=>{const d=new Date((s||'').replace(' ','T')+'Z');return isNaN(d)?0:d.getTime();};
   let cum=0; const pts=ord.map(t=>({x:tms(t.closed_at),y:(cum+=num(isR?t.r:t.pnl))}));
   const t0=pts[0].x, t1=pts[pts.length-1].x, tspan=(t1-t0)||1;
@@ -822,7 +822,7 @@ function drawdownPanel(ts){
     else{if(!cur)cur={peak:peak,startT:peakT,trough:p.y,troughT:p.x};else if(p.y<cur.trough){cur.trough=p.y;cur.troughT=p.x;}}
   });
   if(cur){cur.recovered=false;cur.recoverT=pts[pts.length-1].x;eps.push(cur);}
-  if(!eps.length)return `<div class="card"><p class="muted" style="margin:0">낙폭 없음 — 줄곧 고점 갱신 중. 👍</p></div>`;
+  if(!eps.length)return `<div class="card"><p class="muted" style="margin:0">낙폭 없음 · 줄곧 고점을 갱신하고 있습니다.</p></div>`;
   eps.forEach(e=>{e.depth=e.trough-e.peak;e.days=Math.max(0,Math.round((e.recoverT-e.startT)/86400000));});
   const sorted=[...eps].sort((a,b)=>a.depth-b.depth), ongoing=eps.find(e=>!e.recovered);
   const rows=sorted.slice(0,6).map(e=>`<div class="srow s2"><span class="snm">${e.recovered?'':'<span class="neg">● </span>'}<b class="neg">${money(e.depth)}</b> <span class="muted">· ${e.days}일</span></span><span class="muted num">${e.recovered?'회복':'진행 중'}</span></div>`).join('');
@@ -839,7 +839,7 @@ function feeCard(m){
 }
 function calCard(ts){
   const by={}; ts.forEach(t=>{const d=trDate(t);if(d)by[d]=(by[d]||0)+num(t.pnl);});
-  const days=Object.keys(by); if(!days.length)return `<p class="empty-inline">표시할 거래가 아직 없어요.</p>`;
+  const days=Object.keys(by); if(!days.length)return `<p class="empty-inline">표시할 거래가 아직 없습니다.</p>`;
   const s=new Date(days.reduce((a,b)=>a<b?a:b)+'T00:00:00Z'); s.setUTCDate(s.getUTCDate()-s.getUTCDay());
   const end=new Date(days.reduce((a,b)=>a>b?a:b)+'T00:00:00Z');
   const mx=Math.max(...Object.values(by).map(v=>Math.abs(v)),1); let cells='';
@@ -883,7 +883,7 @@ function exitHabits(ts){
   const closed=ts.filter(t=>t.exit_reason&&t.exit_reason!=='unknown');
   const overLoss=ts.reduce((s,t)=>s+((t.over_loss>0)?t.over_loss:0),0);
   const moneyLeft=ts.reduce((s,t)=>s+(t.money_left||0),0);
-  if(!closed.length&&!overLoss&&!moneyLeft)return `<p class="empty-inline">청산 방식 데이터가 아직 없어요 — Bybit는 자동으로 판별하고, 손절/익절가를 입력하면 규율 지표가 쌓입니다.</p>`;
+  if(!closed.length&&!overLoss&&!moneyLeft)return `<p class="empty-inline">청산 방식 데이터가 아직 없습니다. Bybit는 자동으로 판별하고, 손절·익절가를 입력하면 규율 지표가 쌓입니다.</p>`;
   const dist={};closed.forEach(t=>{const k=t.exit_reason;(dist[k]=dist[k]||{n:0,pnl:0});dist[k].n++;dist[k].pnl+=(t.pnl||0);});
   const LBL={sl_hit:ICONS.sl+" SL 적중",tp_hit:ICONS.tp+" TP 적중",trailing:ICONS.trail+" 트레일링 스탑",manual:ICONS.manual+" 수동 청산",liquidation:ICONS.liq+" 강제청산"};
   const rows=Object.entries(dist).sort((a,b)=>b[1].n-a[1].n).map(([k,v])=>
@@ -948,7 +948,7 @@ function trustBoard(ts){
   const bar=(l,v)=>`<div class="trow"><span class="tl">${l}</span><span class="tbar"><span class="tfill" style="width:${Math.round(v*100)}%"></span></span><span class="tv">${Math.round(v*100)}%</span></div>`;
   const trust=`<div class="card trustcard"><div class="tscore"><span class="tnum">${score}</span><span class="tlabel">데이터 신뢰도<br><span class="muted">통계가 얼마나 믿을 만한지</span></span></div>
     ${bar('계획 기입률',planned)}${bar('SL 유효율',slok)}${bar('청산방식 판별',exok)}${bar('표본 충분도',samp)}
-    <div class="ccap muted">미기입 채우기·예상 손절/익절가 입력·표본 누적 → 위 항목이 오를수록 모든 통계가 정확해집니다${n<30?` (현재 표본 ${n}/30)`:''}.</div></div>`;
+    <div class="ccap muted">미기입 채우기 · 손절·익절가 입력 · 표본 누적 → 위 항목이 오를수록 통계가 정확해집니다${n<30?` (현재 표본 ${n}/30)`:''}.</div></div>`;
   // ③ 생존편향: SL 기입 vs 미기입
   const has=t=>t.sl!=null&&t.sl!=='';
   const grp=arr=>{const w=arr.filter(t=>oc(t)==='win').length,l=arr.filter(t=>oc(t)==='loss').length,p=arr.reduce((s,t)=>s+num(t.pnl),0);
@@ -968,7 +968,7 @@ function renderInsights(el){
   const ddp=drawdownPanel(ts);
   const sgPanel=selfGradePanel(ts);
   const stratTbl=groupTable(t=>t.strategy,"전략",false,'strategy');
-  const caveat=m.n<20?`<p class="caveat">${ICONS.warn} 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
+  const caveat=m.n<20?`<p class="caveat">${ICONS.warn} 표본 ${m.n}건 · 통계는 참고용입니다. 보통 20~30건은 모여야 의미가 있습니다.</p>`:'';
   const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
     <dl><dt>실현 R (R배수)</dt><dd>청산 후 결과 손익을 <b>진입~손절 거리(1R)</b>로 나눈 값. +2R = 각오한 손실의 2배를 벌었다는 뜻. 사이즈가 달라도 거래 잘잘못을 같은 잣대로 비교.</dd>
     <dt>목표 R:R (계획)</dt><dd>진입 전 목표 손익비 = 목표이익 ÷ 각오한 손실(진입~손절). 실현 R은 끝난 결과, R:R은 들어가기 전 계획.</dd>
@@ -981,7 +981,7 @@ function renderInsights(el){
     <dt>상대강도</dt><dd>각 알트가 최근 7일 BTC보다 얼마나 더(또는 덜) 올랐는지. 위=강세(롱 후보), 아래=약세(숏 후보).</dd>
     <dt>청산 방식</dt><dd>포지션이 어떻게 닫혔나 — 손절(SL)·익절(TP)·트레일링·수동·강제청산. (Bybit 자동 판별)</dd>
     <dt>복수매매 / 틸트</dt><dd>복수매매 = 손실 직후 만회하려 급히 재진입. 틸트 = 감정에 휘둘려 무너지는 상태(연패·복수매매로 추정).</dd>
-    <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b> — 본절이 패배로 둔갑하지 않게.</dd></dl></details>`;
+    <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b>합니다. 본절이 패배로 둔갑하지 않도록.</dd></dl></details>`;
   el.innerHTML=
      `<div class="group-title">개요 · 정직성</div><div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +trustBoard(ts)
@@ -996,7 +996,7 @@ function renderInsights(el){
     +`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음.</p>`)
     +(sgPanel?`<div class="group-title">자기 채점 · 과정 평가 <span class="muted" style="font-weight:400;font-size:var(--fs-xs)">결과 아닌 과정</span></div>`+sgPanel:'')
     +`<div class="ins-grid">`
-    +`<div class="ins-cell"><div class="section-title">전략별 성과</div>`+(stratTbl||`<p class="empty-inline">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)+`</div>`
+    +`<div class="ins-cell"><div class="section-title">전략별 성과</div>`+(stratTbl||`<p class="empty-inline">거래에 진입전략을 입력하면 전략별 손익·승률이 집계됩니다.</p>`)+`</div>`
     +(tagStatsTable(ts)?`<div class="ins-cell"><div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts)+`</div>`:"")
     +(groupTable(t=>t.emotion,"감정",false,'emotion')?`<div class="ins-cell"><div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false,'emotion')+`</div>`:"")
     +(mistakeTally()?`<div class="ins-cell"><div class="section-title">반복 실수 (손실 큰 순)</div>`+mistakeTally()+`</div>`:"")
@@ -1032,7 +1032,7 @@ function renderSettings(el){
         <div class="field"><label for="setEquity">계좌 자산 (USDT)</label><input id="setEquity" type="number" step="any" inputmode="decimal" placeholder="예: 10000" value="${ME.account_equity??''}"></div>
         <div class="field"><label for="setBe">본절 기준 (%)</label><input id="setBe" type="number" step="0.01" inputmode="decimal" placeholder="0.1" value="${ME.be_pct??''}"></div>
       </div>
-      <p class="muted" style="font-size:var(--fs-xs);margin:0 0 12px;line-height:1.55">계좌 자산을 넣으면 거래별 리스크가 <b>계좌 %</b>로 표시되고 MAR 계산에 쓰입니다 · 본절 기준 = |손익|÷명목가가 이 %보다 작으면 무승부(기본 0.1% ≈ 왕복 수수료).</p>
+      <p class="muted" style="font-size:var(--fs-xs);margin:0 0 12px;line-height:1.55">계좌 자산을 입력하면 거래별 리스크가 <b>계좌 %</b>로 표시되고 MAR 계산에 쓰입니다. 본절 기준 = |손익|÷명목가가 이 %보다 작으면 무승부(기본 0.1% ≈ 왕복 수수료).</p>
       <button class="btn primary sm" id="saveSettings">설정 저장</button></div>
     <div class="section-title">계정</div><div class="card"><div class="conn">
       <div><div class="nm" id="acctEmail"></div><div class="hint">키·시크릿은 암호화되어 저장됩니다 (평문 미저장).</div></div>
@@ -1043,7 +1043,7 @@ function renderSettings(el){
       </div></div>
     <div class="section-title">플랜 · 문의</div><div class="card"><div class="conn">
       <div><div class="nm">현재 플랜 · ${ME.plan==='pro'?'Pro':'무료 (베타)'}</div>
-        <div class="hint">${ME.billing_enabled?'유료 플랜으로 더 많은 기능을 잠금 해제하세요.':'베타 기간 — 모든 기능을 무료로 쓸 수 있어요.'}</div></div>
+        <div class="hint">${ME.billing_enabled?'유료 플랜에서 더 많은 기능을 쓸 수 있습니다.':'베타 기간 · 모든 기능을 무료로 쓸 수 있습니다.'}</div></div>
       ${ME.support_email?`<a class="btn sm" href="mailto:${esc(ME.support_email)}">문의하기</a>`:`<button class="btn sm" disabled>문의 준비 중</button>`}</div>
       ${ME.billing_enabled?`<button class="btn primary sm" id="upgradeBtn" style="margin-top:12px">Pro로 업그레이드</button>`:`<button class="btn sm" disabled style="margin-top:12px">결제 준비 중</button>`}
     </div>`;
@@ -1055,11 +1055,11 @@ function renderSettings(el){
     btn.disabled=true;const orig=btn.textContent;btn.textContent="저장 중…";
     try{const res=await postJSON("/api/connections",body).then(r=>r.json());await loadAll();route();toast(res&&res.warn?res.warn:"연결 저장됨");
       if(wasNew&&EXCH.has(k)){location.hash="#dashboard";pull({silent:true,banner:"최근 90일치 거래를 불러오는 중…"});}}
-    catch(err){toast(err&&err.message&&err.message.indexOf("http ")!==0?err.message:"저장하지 못했어요 — 입력값을 확인해 주세요");btn.disabled=false;btn.textContent=orig;}});
+    catch(err){toast(err&&err.message&&err.message.indexOf("http ")!==0?err.message:"저장하지 못했습니다. 입력값을 확인해 주세요");btn.disabled=false;btn.textContent=orig;}});
   $$(".delBtn").forEach(b=>b.onclick=async()=>{
     b.disabled=true;
     try{await postJSON("/api/connections/delete",{kind:b.dataset.k});await loadAll();route();}
-    catch(err){toast("연결 해제에 실패했어요 — 잠시 후 다시 시도해 주세요");b.disabled=false;}});
+    catch(err){toast("연결을 해제하지 못했습니다. 잠시 후 다시 시도해 주세요");b.disabled=false;}});
   $$(".ackchk").forEach(c=>c.onchange=()=>{const b=c.closest("form").querySelector("button[type=submit]");if(b)b.disabled=!c.checked;});
   const da=$("#delAcctBtn");if(da)da.onclick=openDelAcct;
   const up=$("#upgradeBtn");if(up)up.onclick=async()=>{
@@ -1067,7 +1067,7 @@ function renderSettings(el){
     catch(e){toast(e&&e.message&&e.message.indexOf("http ")!==0?e.message:"결제는 준비 중입니다");}};
   const ss=$("#saveSettings");if(ss)ss.onclick=async()=>{ss.disabled=true;
     try{await postJSON("/api/settings",{account_equity:$("#setEquity").value,be_pct:$("#setBe").value});await loadAll();route();toast("설정 저장됨");}
-    catch(e){toast("저장하지 못했어요 — 잠시 후 다시 시도해 주세요");ss.disabled=false;}};
+    catch(e){toast("저장하지 못했습니다. 잠시 후 다시 시도해 주세요");ss.disabled=false;}};
 }
 
 /* ---------- actions ---------- */
@@ -1123,9 +1123,9 @@ async function saveIntent(){
     if(res.ok){await loadAll();route();
       const pend=DATA.trades.filter(t=>t.status==='의도 미기입');
       if(pend.length){openModal(pend[0].trade_id);toast(`저장됨 · 미기입 ${pend.length}건 남음 — 이어서 채우기`);}
-      else{closeModal();toast("기록 저장됨 · 모두 정리 완료");}
-    }else toast("저장하지 못했어요 — 거래를 찾지 못했어요");
-  }catch(err){toast("저장하지 못했어요 — 잠시 후 다시 시도해 주세요");}
+      else{closeModal();toast("저장 완료 · 미기입 거래 모두 정리됨");}
+    }else toast("저장하지 못했습니다. 해당 거래를 찾지 못했습니다");
+  }catch(err){toast("저장하지 못했습니다. 잠시 후 다시 시도해 주세요");}
   finally{SAVING=false;btn.disabled=false;}
 }
 function setBanner(html){const el=$("#pullbanner");if(el)el.innerHTML=html||'';}
@@ -1152,12 +1152,12 @@ async function pull(opt){opt=opt||{};
       const ok=Object.entries(rs).filter(([k,v])=>!v.error);
       const added=ok.reduce((s,[k,v])=>s+(v.added||0),0);
       const anyErr=Object.values(rs).some(v=>v.error);
-      if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건`:`최근 거래 없음 — 새 거래가 잡히면 자동 반영`);
+      if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건`:`최근 거래 없음 · 새 거래가 청산되면 자동 반영`);
       else if(!opt.silent) toast(ok.length?`불러옴: ${ok.map(([k,v])=>`${EXN(k)} +${v.added}`).join(' · ')}`:`연결된 거래소 없음`);
-    }else{errBanner(esc(res.error||"거래를 불러오지 못했어요"));}
+    }else{errBanner(esc(res.error||"거래를 불러오지 못했습니다"));}
   }catch(err){const m=err&&err.message;
     if(m&&m.indexOf("http ")!==0&&!opt.silent)toast(m);  /* 쿨다운(429) 등 명확한 메시지는 토스트로(자동 동기화는 조용히) */
-    else errBanner("거래를 불러오지 못했어요 — API 키와 연결을 확인해 주세요");}
+    else errBanner("거래를 불러오지 못했습니다. API 키와 연결을 확인해 주세요");}
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 불러오기";}}
 }
 
@@ -1175,7 +1175,7 @@ function autoSync(){
 function nudgeUnplanned(){
   if(sessionStorage.getItem('nudgeOff'))return;
   const n=(DATA.summary&&DATA.summary.unplanned)||0; if(n<1){setBanner('');return;}
-  setBanner(`<div class="banner warn">${ICONS.warn} 계획 미기입 <b>${n}건</b> — 사후 의도를 채우면 통계가 정확해집니다 <button class="btn sm" id="nudgeFill" style="margin-left:auto">지금 채우기</button><button class="bx" aria-label="닫기">×</button></div>`);
+  setBanner(`<div class="banner warn">${ICONS.warn} 계획 미기입 <b>${n}건</b> · 진입 이유를 채우면 통계가 더 정확해집니다<button class="btn sm" id="nudgeFill" style="margin-left:auto">지금 채우기</button><button class="bx" aria-label="닫기">×</button></div>`);
   const f=$("#nudgeFill");if(f)f.onclick=()=>{setBanner('');location.hash='#journal';route();applyView({status:'pending'});};
   const bx=$("#pullbanner .bx");if(bx)bx.onclick=()=>{sessionStorage.setItem('nudgeOff','1');setBanner('');};
 }
@@ -1185,8 +1185,8 @@ function openDelAcct(){$("#delConfirm").value="";$("#delAcctDo").disabled=true;$
 function closeDelAcct(){$("#delAcctBg").classList.remove("show");$("#shell").inert=false;}
 async function doDelAcct(){const btn=$("#delAcctDo");btn.disabled=true;
   try{const res=await(await postJSON("/api/account/delete",{})).json();
-    if(res.ok)location.href="/login";else{toast("삭제하지 못했어요 — 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
-  catch(e){toast("삭제하지 못했어요 — 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
+    if(res.ok)location.href="/login";else{toast("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
+  catch(e){toast("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
 
 /* ---------- 명령 팔레트 (⌘K / Ctrl+K) ---------- */
 let CMDK_ITEMS=[], CMDK_SEL=0;
@@ -1238,7 +1238,7 @@ $("#cmdkInput").onkeydown=e=>{
 async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
   try{const res=await(await postJSON("/api/intent/bulk",{plan:$("#b_plan").value,emotion:getChips("cb_emo")[0]||""})).json();
     closeBulk();await loadAll();route();toast(`${res.filled||0}건 정리 완료`);}
-  catch(e){toast("기록하지 못했어요 — 잠시 후 다시 시도해 주세요");}finally{btn.disabled=false;}}
+  catch(e){toast("기록하지 못했습니다. 잠시 후 다시 시도해 주세요");}finally{btn.disabled=false;}}
 
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;$("#closeBtn").onclick=closeModal;
 $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;$("#bulkClose").onclick=closeBulk;
