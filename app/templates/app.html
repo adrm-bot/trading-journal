@@ -449,10 +449,34 @@ async function ensurePositions(){
   POS_LOADING=false; const h2=$("#posHost"); if(h2)h2.outerHTML=posSection(OPENPOS);
 }
 
+/* 일일 R 집계 — 거래일별 ΣR(R 있는 거래만). 사용자 1순위 지표 R/일 */
+function dailyR(ts){
+  const by={}; ts.forEach(t=>{if(t.r==null)return;const d=trDate(t);if(!d)return;by[d]=(by[d]||0)+Number(t.r);});
+  const days=Object.keys(by); if(!days.length)return null;
+  const sums=days.map(d=>by[d]);
+  return {avg:sums.reduce((a,b)=>a+b,0)/days.length, worst:Math.min(...sums), over2:sums.filter(s=>s<=-2).length, days:days.length};
+}
+/* 일일 규율 + 습관 비용(반사실) — 대시보드 첫 화면에 들이대기 */
+function disciplineCard(ts){
+  const d=dailyR(ts), k$=v=>'$'+Math.round(v).toLocaleString();
+  const overLoss=ts.reduce((s,t)=>s+((t.over_loss>0)?t.over_loss:0),0);
+  const moneyLeft=ts.reduce((s,t)=>s+(t.money_left||0),0);
+  const c=[];
+  if(d){
+    c.push(mcard('R / 거래일',(d.avg>=0?'+':'')+d.avg.toFixed(2)+'R',d.avg>=0?'pos':'neg',`${d.days}거래일 평균`));
+    c.push(mcard('최악의 날',(d.worst>=0?'+':'')+d.worst.toFixed(2)+'R',d.worst<0?'neg':'','하루 최대 손실 R'));
+    c.push(mcard('일일 −2R 초과',d.over2+'일',d.over2>0?'neg':'','규율 무너진 날'));
+  }
+  if(overLoss>0)c.push(mcard('스탑 미준수 손실','-'+k$(overLoss),'neg','손절 지켰다면 덜 잃음'));
+  if(moneyLeft>0)c.push(mcard('두고 온 이익',k$(moneyLeft),'','조기청산 누적'));
+  if(!c.length)return '';
+  return `<div class="section-title">일일 규율 · 습관 비용</div><div class="mgrid">${c.join('')}</div>`;
+}
 function renderDashboard(el){
   const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div>`;
   if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
   const mine=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
+    +disciplineCard(DATA.trades)
     +`<div id="posHost"></div>`
     +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
