@@ -97,7 +97,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
-let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
+let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -495,6 +495,10 @@ function jtMatch(t){
   if(JT.status==='pending'&&t.status!=='의도 미기입')return false;
   if(JT.status==='done'&&t.status!=='기록완료')return false;
   if(JT.status==='reviewed'&&t.status!=='복기완료')return false;
+  if(JT.strategy!=='all'&&t.strategy!==JT.strategy)return false;
+  if(JT.emotion!=='all'&&t.emotion!==JT.emotion)return false;
+  if(JT.outcome!=='all'&&oc(t)!==JT.outcome)return false;
+  if(JT.mistake!=='all'&&!((t.mistake_tag||'').split(',').map(s=>s.trim()).includes(JT.mistake)))return false;
   if(JT.q){const hay=[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion,t.review,t.mistake_tag].join(' ').toLowerCase();if(!hay.includes(JT.q.toLowerCase()))return false;}
   return true;
 }
@@ -541,7 +545,7 @@ function viewsKey(){return 'mmj_views_'+((ME&&ME.email)||'');}
 function getViews(){try{const v=JSON.parse(localStorage.getItem(viewsKey()));if(Array.isArray(v))return v;}catch(e){}return [{name:'계획 미기입',jt:{status:'pending'}}];}
 function setViews(a){try{localStorage.setItem(viewsKey(),JSON.stringify(a));}catch(e){}}
 function viewsBar(){return `<div class="jviews"><span class="flbl">뷰</span>`+getViews().map(v=>`<button class="btn sm jview" data-v="${esc(v.name)}">${esc(v.name)}<span class="vx" data-del="${esc(v.name)}" role="button" aria-label="${esc(v.name)} 삭제">×</span></button>`).join('')+`<button class="btn sm" id="jSaveView">+ 현재 필터 저장</button></div>`;}
-function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
+function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
 function saveCurrentView(){const name=(prompt('이 필터를 저장할 이름은?','내 뷰')||'').trim();if(!name)return;
   const jt={from:JT.from,to:JT.to,q:JT.q,exchange:JT.exchange,dir:JT.dir,status:JT.status};
   setViews([...getViews().filter(v=>v.name!==name),{name,jt}]);renderJournal($("#view-journal"));toast('뷰 저장됨 · '+name);}
@@ -549,7 +553,7 @@ function delView(name){setViews(getViews().filter(v=>v.name!==name));renderJourn
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
   const exs=[...new Set(DATA.trades.map(t=>t.exchange).filter(Boolean))];
-  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all'].filter(Boolean).length;
+  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all',JT.strategy!=='all',JT.emotion!=='all',JT.outcome!=='all',JT.mistake!=='all'].filter(Boolean).length;
   el.innerHTML=`<div class="jbar top">
       <input type="search" id="jQ" value="${esc(JT.q)}" placeholder="심볼·전략·메모 검색" aria-label="검색">
       <span class="cgrp" id="jView" role="group" aria-label="보기 방식"><button class="btn sm vbtn" data-v="cards">일지</button><button class="btn sm vbtn" data-v="table">표</button></span>
@@ -567,6 +571,10 @@ function renderJournal(el){
       <div class="frow"><span class="flbl">거래소</span><span class="cgrp" id="jEx"></span></div>
       <div class="frow"><span class="flbl">방향</span><span class="cgrp" id="jDir"></span></div>
       <div class="frow"><span class="flbl">상태</span><span class="cgrp" id="jStat"></span></div>
+      <div class="frow"><span class="flbl">결과</span><span class="cgrp" id="jOut"></span></div>
+      <div class="frow"><span class="flbl">전략</span><span class="cgrp" id="jStrat"></span></div>
+      <div class="frow"><span class="flbl">감정</span><span class="cgrp" id="jEmo"></span></div>
+      <div class="frow" id="jMisRow" hidden><span class="flbl">실수</span><span class="cgrp" id="jMis"></span></div>
       <div class="frow"><span class="flbl">표시</span><select id="jSize" aria-label="페이지당 행수"><option value="25">25개</option><option value="50">50개</option><option value="100">100개</option></select><button class="btn sm" id="jReset">초기화</button></div>
     </div>
     <div id="jt"></div><div class="pager" id="jPager"></div>`;
@@ -574,12 +582,18 @@ function renderJournal(el){
   $("#jEx").innerHTML=chipGroup('exchange',[['all','전체'],...exs.map(e=>[e,e])]);
   $("#jDir").innerHTML=chipGroup('dir',[['all','전체'],['Long','롱'],['Short','숏']]);
   $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','계획 미기입 '+(DATA.summary.unplanned||0)],['done','기록완료'],['reviewed','복기완료']]);
+  const strats=[...new Set(DATA.trades.map(t=>t.strategy).filter(Boolean))], emos=[...new Set(DATA.trades.map(t=>t.emotion).filter(Boolean))];
+  $("#jOut").innerHTML=chipGroup('outcome',[['all','전체'],['win','승'],['loss','패'],['be','무']]);
+  $("#jStrat").innerHTML=chipGroup('strategy',[['all','전체'],...strats.map(s=>[s,s])]);
+  $("#jEmo").innerHTML=chipGroup('emotion',[['all','전체'],...emos.map(s=>[s,s])]);
+  const mis=[...new Set(DATA.trades.flatMap(t=>(t.mistake_tag||'').split(',').map(s=>s.trim()).filter(Boolean)))];
+  if(mis.length){$("#jMisRow").hidden=false;$("#jMis").innerHTML=chipGroup('mistake',[['all','전체'],...mis.map(s=>[s,s])]);}
   $("#jSize").value=String(JT.size);
   $("#jFrom").onchange=e=>{JT.from=e.target.value;JT.page=1;applyJournal();};
   $("#jTo").onchange=e=>{JT.to=e.target.value;JT.page=1;applyJournal();};
   $("#jQ").oninput=e=>{clearTimeout(jtDebounce);const v=e.target.value;jtDebounce=setTimeout(()=>{JT.q=v;JT.page=1;applyJournal();},180);};
   $("#jSize").onchange=e=>{JT.size=Number(e.target.value);JT.page=1;applyJournal();};
-  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
+  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
   $$(".jpreset").forEach(b=>b.onclick=()=>{const days=+b.dataset.d;JT.to=iso(new Date());JT.from=iso(new Date(Date.now()-days*86400000));JT.page=1;$("#jFrom").value=JT.from;$("#jTo").value=JT.to;applyJournal();});
   $$("#view-journal .fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
     $$(`#view-journal .fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");applyJournal();});
@@ -593,12 +607,20 @@ function renderJournal(el){
   if($("#jSaveView"))$("#jSaveView").onclick=saveCurrentView;
   applyJournal();
 }
-function groupTable(keyFn,head,asc){
+function groupTable(keyFn,head,asc,jf){
   const by={};DATA.trades.forEach(t=>{const k=keyFn(t);if(k==null)return;(by[k]=by[k]||{n:0,pnl:0,w:0,l:0});const o=oc(t);by[k].n++;by[k].pnl+=(t.pnl||0);if(o==='win')by[k].w++;else if(o==='loss')by[k].l++;});
   const ks=Object.entries(by).sort((a,b)=>asc?a[1].pnl-b[1].pnl:b[1].pnl-a[1].pnl);
   if(!ks.length)return"";
-  const rows=ks.map(([k,v])=>`<tr><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0}%</td></tr>`).join("");
+  const rows=ks.map(([k,v])=>`<tr${jf?` class="grow" data-jf="${jf}" data-jv="${esc(k)}" tabindex="0" role="button" aria-label="${esc(k)} 거래 보기"`:''}><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td><td class="num">${(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0}%</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>${head}</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+/* 반복 실수 집계(개별 태그 단위, 손실 큰 순) — 행 클릭 시 저널 드릴다운 */
+function mistakeTally(){
+  const by={};DATA.trades.forEach(t=>(t.mistake_tag||'').split(',').map(s=>s.trim()).filter(Boolean).forEach(m=>{(by[m]=by[m]||{n:0,pnl:0});by[m].n++;by[m].pnl+=(t.pnl||0);}));
+  const ks=Object.entries(by).sort((a,b)=>a[1].pnl-b[1].pnl);
+  if(!ks.length)return"";
+  const rows=ks.map(([k,v])=>`<tr class="grow" data-jf="mistake" data-jv="${esc(k)}" tabindex="0" role="button" aria-label="${esc(k)} 거래 보기"><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`).join("");
+  return `<div class="table-wrap"><table><thead><tr><th>실수 태그</th><th class="num">횟수</th><th class="num">실현손익</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /* ---------- 성과 분석 ---------- */
 function num(v){return Number(v)||0;}
@@ -852,7 +874,7 @@ function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
   const ddp=drawdownPanel(ts);
-  const stratTbl=groupTable(t=>t.strategy,"전략",false);
+  const stratTbl=groupTable(t=>t.strategy,"전략",false,'strategy');
   const caveat=m.n<20?`<p class="caveat">${ICONS.warn} 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
   const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
     <dl><dt>실현 R (R배수)</dt><dd>청산 후 결과 손익을 <b>진입~손절 거리(1R)</b>로 나눈 값. +2R = 각오한 손실의 2배를 벌었다는 뜻. 사이즈가 달라도 거래 잘잘못을 같은 잣대로 비교.</dd>
@@ -882,7 +904,8 @@ function renderInsights(el){
     +`<div class="ins-grid">`
     +`<div class="ins-cell"><div class="section-title">전략별 성과</div>`+(stratTbl||`<p class="empty-inline">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)+`</div>`
     +(tagStatsTable(ts)?`<div class="ins-cell"><div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts)+`</div>`:"")
-    +(groupTable(t=>t.emotion,"감정",false)?`<div class="ins-cell"><div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false)+`</div>`:"")
+    +(groupTable(t=>t.emotion,"감정",false,'emotion')?`<div class="ins-cell"><div class="section-title">감정별 성과</div>`+groupTable(t=>t.emotion,"감정",false,'emotion')+`</div>`:"")
+    +(mistakeTally()?`<div class="ins-cell"><div class="section-title">반복 실수 (손실 큰 순)</div>`+mistakeTally()+`</div>`:"")
     +`<div class="ins-cell"><div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true)+`</div>`
     +`</div>`;
   bindEq();
@@ -1155,5 +1178,9 @@ document.addEventListener("keydown",e=>{
   document.addEventListener('mouseout',e=>{if(e.target.closest&&e.target.closest('[data-tip]')){cur=null;tip.classList.remove('show');}});
 })();
 window.addEventListener("hashchange",route);
+/* 인사이트 그룹표 → 저널 드릴다운(전략·감정·실수 행 클릭) */
+function _drill(g){if(!g)return;location.hash='#journal';route();applyView({[g.dataset.jf]:g.dataset.jv});}
+document.addEventListener('click',e=>{const g=e.target.closest&&e.target.closest('.grow[data-jf]');if(g)_drill(g);});
+document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const g=e.target.closest&&e.target.closest('.grow[data-jf]');if(g){e.preventDefault();_drill(g);}});
 (async()=>{paintBootSkeleton();try{await loadAll();route();nudgeUnplanned();autoSync();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>

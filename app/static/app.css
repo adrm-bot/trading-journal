@@ -166,6 +166,7 @@ svg.rh{width:100%;height:170px;display:block}
 
 /* ---- table ---- */
 .table-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);overflow-x:auto;box-shadow:var(--inset)}
+tr.grow{cursor:pointer} tr.grow:hover{background:var(--card-2)} tr.grow td:first-child::after{content:" ↗";color:var(--dim);font-size:var(--fs-micro)}
 table{width:100%;border-collapse:collapse}
 th,td{padding:11px 14px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
 th{color:var(--fog);font-family:var(--f-mono);font-weight:500;font-size:var(--fs-cap);text-transform:uppercase;letter-spacing:.08em;background:var(--card-2)}
