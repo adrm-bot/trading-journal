@@ -317,7 +317,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 
 /* ---- 자금 흐름 · 섹터 ---- */
 .flowcard{padding:var(--s4) var(--s5)}
-.flowrow{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--s4);padding-bottom:var(--s3);margin-bottom:var(--s3);border-bottom:1px solid var(--line)}
+.flowrow{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s4);padding-bottom:var(--s3);margin-bottom:var(--s3);border-bottom:1px solid var(--line)}
 .flowm .mk{font-family:var(--f-mono);font-size:var(--fs-micro);letter-spacing:.08em;text-transform:uppercase;color:var(--fog)}
 .flowm .mv{font-family:var(--f-display);font-size:var(--fs-lg);font-weight:510;color:var(--ice);letter-spacing:-.01em;margin:2px 0;font-variant-numeric:tabular-nums}
 .flowm .ms{font-size:var(--fs-xs);color:var(--muted);font-family:var(--f-mono)}
@@ -325,7 +325,26 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .seclbl{font-family:var(--f-mono);font-size:var(--fs-micro);letter-spacing:.06em;text-transform:uppercase;color:var(--fog);margin:0 0 4px}
 .secrow{display:flex;justify-content:space-between;gap:var(--s3);padding:5px 0;font-size:var(--fs-sm);border-bottom:1px solid var(--line)}
 .secrow:last-child{border-bottom:none} .secn{color:var(--moonlight);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-@media(max-width:560px){.flowrow{grid-template-columns:1fr;gap:var(--s2)}.secwrap{grid-template-columns:1fr;gap:var(--s3)}}
+@media(max-width:560px){.flowrow{grid-template-columns:1fr 1fr;gap:var(--s3)}.secwrap{grid-template-columns:1fr;gap:var(--s3)}}
+.flowm .mvol{font-size:var(--fs-micro);color:var(--dim);font-family:var(--f-mono);margin-top:2px}
+.secrow[data-tip]{cursor:help}
+.secv{display:inline-flex;align-items:baseline;gap:8px;flex:0 0 auto}
+.svol{font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--dim)}
+.rstag.eth{background:var(--info-soft);color:var(--azure)}
+.rseth{margin-left:auto;font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--muted)}
+.rsrow.iseth .rssym{color:var(--glacier)}
+/* 도미넌스 칩 2행(BTC.D·USDT.D + 멀티TF 추정) */
+.mchip .mv.dom{font-size:var(--fs-sm);font-weight:400;display:flex;flex-direction:column;gap:3px;letter-spacing:0}
+.domr{display:flex;align-items:baseline;gap:7px}
+.domr .dl{font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--fog);min-width:40px}
+.domr .dv{font-weight:510;color:var(--ice);min-width:42px}
+.domr .tfrow{gap:7px}
+/* 공포·탐욕 흐름 스파크라인 */
+.spark{width:72px;height:16px;vertical-align:middle}
+.fngflow{display:inline-block} .fngd{color:var(--dim);font-size:var(--fs-micro);margin-left:6px}
+/* 알트시즌 게이지 */
+.asg{display:block;position:relative;height:6px;border-radius:3px;margin-top:7px;background:linear-gradient(90deg,rgba(var(--neg-rgb),.55),var(--card-2) 50%,rgba(var(--pos-rgb),.55))}
+.asgmark{position:absolute;top:-3px;width:3px;height:12px;border-radius:2px;background:var(--ice);transform:translateX(-50%)}
 
 /* ---- 성과 분석 (인사이트) ---- */
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3)}

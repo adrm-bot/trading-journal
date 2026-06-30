@@ -281,6 +281,17 @@ function tfRow(c){
   if(!c.tf){const t=TREND[c.trend]||["·","—","muted"];return `<span class="${t[2]}">${t[0]} ${t[1]}</span>`;}
   return `<span class="tfrow">`+TFL.map(([k,lab])=>{const t=TREND[(c.tf[k]||{}).trend]||["·","","muted"];
     return `<span class="tfb"><i>${lab}</i><b class="${t[2]}">${t[0]}</b></span>`;}).join("")+`</span>`;}
+/* 도미넌스용 멀티TF 화살표 — 추세 dict {1h,4h,1d} 직접 받음(가격기반 추정) */
+function tfArrows(o){
+  if(!o)return `<span class="muted">—</span>`;
+  return `<span class="tfrow">`+TFL.map(([k,lab])=>{const t=TREND[o[k]]||["·","","muted"];
+    return `<span class="tfb"><i>${lab}</i><b class="${t[2]}">${t[0]}</b></span>`;}).join("")+`</span>`;}
+/* 미니 스파크라인(SVG) — 최근값 추세선 */
+function spark(vals){
+  if(!vals||vals.length<2)return "";
+  const w=72,h=16,n=vals.length,mn=Math.min(...vals),mx=Math.max(...vals),rg=(mx-mn)||1;
+  const pts=vals.slice().reverse().map((v,i)=>`${(i/(n-1)*w).toFixed(1)},${(h-(v-mn)/rg*(h-2)-1).toFixed(1)}`).join(" ");
+  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>`;}
 function marketStrip(m){
   if(!m)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 불러오는 중…</div></div>`;
   const chips=[];
@@ -288,9 +299,18 @@ function marketStrip(m){
     const tfTxt=tf?TFL.map(([k,lab])=>`${lab} ${(TREND[(tf[k]||{}).trend]||["","미판정"])[1]}`).join(" · "):`일봉 ${trendBasis(m.btc)}`;
     const tip=`판단: EMA50/EMA200 정·역배열 · ${tfTxt} · 세 봉 같은 방향=추세 강함, 엇갈리면 전환·횡보 · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
     chips.push(mchip("비트코인 추세",tfRow(m.btc),`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`,"",tip));}
-  if(m.eth)chips.push(mchip("이더리움",usd(m.eth.price),`24h ${chgTxt(m.eth.chg24)} · 7d ${chgTxt(m.eth.chg7)}`,"",`판단: 일봉 ${trendBasis(m.eth)}${m.eth.ema50!=null?` · EMA50 ${usd(m.eth.ema50)} · EMA200 ${usd(m.eth.ema200)}`:''} · 24h ${m.eth.chg24}% · 7d ${m.eth.chg7}%`));
-  if(m.fng){const f=fngKo(m.fng.value);chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,"시장 심리 (alt.me)","","공포·탐욕 지수(alt.me) · 0-24 극단공포 / 25-44 공포 / 45-55 중립 / 56-75 탐욕 / 76-100 극단탐욕"));}
-  if(m.dom)chips.push(mchip("도미넌스",`BTC ${m.dom.btc}%`,`ETH ${m.dom.eth}% · 기타 ${m.dom.others}% · 시총 24h ${chgTxt(m.dom.mcap_chg)}`,"",`BTC ${m.dom.btc}% · ETH ${m.dom.eth}% · 기타(상위 제외) ${m.dom.others}% · 24h 전체시총 ${m.dom.mcap_chg}% · 도미넌스↑=BTC로, ↓=알트로 자금 (현재값 스냅샷 · 추세는 상대강도 패널 참고)`));
+  if(m.dom){const d=m.dom;
+    const main=`<div class="domr"><span class="dl">BTC.D</span><span class="dv">${d.btc}%</span>${tfArrows(d.btcd_tf)}</div>`
+      +`<div class="domr"><span class="dl">USDT.D</span><span class="dv">${d.usdt}%</span>${tfArrows(d.usdtd_tf)}</div>`;
+    const tip=`BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블) 비중·리스크오프 · ETH.D ${d.eth}% · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(무료 API에 도미넌스 시계열 없음 — BTC.D≈BTC/ETH 비율, USDT.D≈시장 역) · % 현재값은 스냅샷 정확`;
+    chips.push(mchip("도미넌스 · 추세",main,`ETH.D ${d.eth}% · 기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)}`,"dom",tip));}
+  if(m.fng){const f=fngKo(m.fng.value),h=m.fng.history||[];
+    const sub=h.length>=8?`<span class="fngflow ${f[1]}">${spark(h)}</span><span class="fngd">어제 ${h[1]} · 저번주 ${h[7]}</span>`:"시장 심리 (alt.me)";
+    const tip=`공포·탐욕 ${m.fng.value}/100${h.length>=8?` · 오늘 ${h[0]} · 어제 ${h[1]} · 그제 ${h[2]} · 저번주 ${h[7]}`:''} · 구간 0-24 극단공포/25-44 공포/45-55 중립/56-75 탐욕/76-100 극단탐욕 · 산정요소 변동성25%·모멘텀거래량25%·소셜15%·설문15%·도미넌스10%·트렌드10%(공개 가중치, 일별만)`;
+    chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,sub,"",tip));}
+  if(m.altseason){const as=m.altseason,v=as.value,lbl=v>=75?'알트시즌':v<=25?'비트시즌':'중립',cls=v>=75?'pos':v<=25?'neg':'muted';
+    const gauge=`<span class="asg"><span class="asgmark" style="left:${v}%"></span></span>`;
+    chips.push(mchip("알트시즌 지수",`<span class="${cls}">${v} · ${lbl}</span>`,gauge,"",`알트시즌 지수 ${v}/100 · 최근 90일 BTC를 이긴 알트 비율(표본 ${as.n}개, 방향 참고용) · 75+ 알트시즌 / 25- 비트시즌 · 시계열 그래프는 히스토리 없어 불가 → 현재값 스냅샷`));}
   if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없어요</div></div>`;
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
@@ -302,23 +322,29 @@ const RS_REGIME={
 };
 function rsPanel(m){
   const rs=m&&m.rs; if(!rs||!(rs.board||[]).length)return "";
-  const reg=RS_REGIME[rs.regime]||["—","",""];
+  const reg=RS_REGIME[rs.regime]||["—","",""], eth=m&&m.eth;
   const mx=Math.max(...rs.board.map(b=>Math.abs(b.vs_btc_7d)),1), last=rs.board.length-1;
   const rows=rs.board.map((b,i)=>{
     const strong=b.vs_btc_7d>=0, w=(Math.abs(b.vs_btc_7d)/mx*50).toFixed(1);
     const tag=i===0?'<span class="rstag long">강세·롱</span>':i===last?'<span class="rstag short">약세·숏</span>':'';
-    return `<div class="rsrow"><span class="rssym">${esc(b.sym)}${tag}</span>
+    const ethtag=b.sym==='ETH'?'<span class="rstag eth">대장</span>':'';
+    return `<div class="rsrow${b.sym==='ETH'?' iseth':''}"><span class="rssym">${esc(b.sym)}${ethtag}${tag}</span>
       <span class="rsbarwrap"><span class="rsbar ${strong?'pos':'neg'}" style="width:${w}%"></span></span>
       <span class="num ${strong?'pos':'neg'}">${(b.vs_btc_7d>=0?'+':'')+b.vs_btc_7d}%</span></div>`;
   }).join("");
+  const ethsnap=eth?`<span class="rseth">ETH ${usd(eth.price)} · 24h ${chgTxt(eth.chg24)} · 7d ${chgTxt(eth.chg7)}</span>`:'';
   return `<div class="section-title">상대강도 · BTC vs 알트 (7일)</div>
-    <div class="card rscard"><div class="rshead"><span class="rsbadge ${reg[2]}">${reg[0]}</span><span class="rshint">${reg[1]}</span></div>
+    <div class="card rscard"><div class="rshead"><span class="rsbadge ${reg[2]}">${reg[0]}</span><span class="rshint">${reg[1]}</span>${ethsnap}</div>
     <div class="rsbody">${rows}</div>
     <div class="ccap muted">BTC 대비 7일 상대수익률 · 위=강세(롱 후보) 아래=약세(숏 후보) · ${rs.outperform}/${rs.n} 알트가 BTC 우위</div></div>`;
 }
 /* 자금 흐름(TOTAL2/3/OTHERS) + 섹터 강도 */
-function fmtBig(n){if(n==null)return"—";const t=n/1e12;if(Math.abs(t)>=1)return"$"+t.toFixed(2)+"T";return "$"+Math.round(n/1e9).toLocaleString()+"B";}
-function flowm(label,val,sub){return `<div class="flowm"><div class="mk">${label}</div><div class="mv">${val}</div><div class="ms">${sub}</div></div>`;}
+function fmtBig(n){if(n==null)return"—";const a=Math.abs(n);
+  if(a>=1e12)return"$"+(n/1e12).toFixed(2)+"T";
+  if(a>=1e9)return"$"+(n/1e9).toFixed(a>=1e10?0:1)+"B";   // $82B / $1.8B
+  if(a>=1e6)return"$"+Math.round(n/1e6)+"M";               // $16M(소형 섹터 거래대금)
+  return"$"+Math.round(n).toLocaleString();}
+function flowm(label,val,sub,vol){return `<div class="flowm"><div class="mk">${label}</div><div class="mv">${val}</div><div class="ms">${sub}</div>${vol?`<div class="mvol">거래대금 ${vol}</div>`:""}</div>`;}
 /* 섹터명 한글화 — 주요 내러티브는 통용 한국어로, 미등록 니치 카테고리는 원문 유지(오역 방지).
    부분일치(소문자), 위에서부터 첫 매치 적용 → 구체적인 규칙을 먼저 둔다. */
 const SECTOR_KO_RULES=[
@@ -348,15 +374,21 @@ function secKo(name){
   const e=name.match(/^(.+?)\s+Ecosystem$/i);if(e)return e[1]+" 생태계";  // 'X Ecosystem' → 'X 생태계'
   return name;  // 미등록 니치는 원문
 }
-function secRows(arr){return arr.map(x=>`<div class="secrow"><span class="secn">${esc(secKo(x.name))}</span><span class="num ${x.chg24>=0?'pos':'neg'}">${(x.chg24>=0?'+':'')+x.chg24}%</span></div>`).join("");}
+function secCoins(arr){return (arr||[]).map(c=>{const t=c.replace(/\b\w/g,m=>m.toUpperCase());return t.length>20?t.slice(0,19)+"…":t;}).join(" · ");}
+function secRows(arr){return arr.map(x=>{
+  const coins=secCoins(x.coins), tip=coins?`구성 코인: ${coins}`:'';
+  return `<div class="secrow"${tip?` data-tip="${esc(tip)}"`:''}><span class="secn">${esc(secKo(x.name))}</span>`
+    +`<span class="secv">${x.vol!=null?`<span class="svol">${fmtBig(x.vol)}</span>`:''}<span class="num ${x.chg24>=0?'pos':'neg'}">${(x.chg24>=0?'+':'')+x.chg24}%</span></span></div>`;
+}).join("");}
 function flowPanel(m){
   const d=m&&m.dom, s=m&&m.sectors;
   if(!d&&!(s&&s.top&&s.top.length))return "";
   let html=`<div class="section-title">자금 흐름 · 섹터</div><div class="card flowcard">`;
-  if(d&&d.total2)html+=`<div class="flowrow">`
-    +flowm("TOTAL2",fmtBig(d.total2),"BTC 제외 시총")
-    +flowm("TOTAL3",fmtBig(d.total3),"BTC+ETH 제외")
-    +flowm("OTHERS",fmtBig(d.others_usd),`상위 제외 · ${d.others}%`)
+  if(d&&d.total)html+=`<div class="flowrow">`
+    +flowm("TOTAL",fmtBig(d.total),"전체 시총",d.total_vol?fmtBig(d.total_vol):null)
+    +flowm("TOTAL2",fmtBig(d.total2),"BTC 제외",null)
+    +flowm("TOTAL3",fmtBig(d.total3),"BTC+ETH 제외",null)
+    +flowm("OTHERS",fmtBig(d.others_usd),`상위 제외 · ${d.others}%`,null)
     +`</div>`;
   if(s&&s.top&&s.top.length)html+=`<div class="secwrap">`
     +`<div class="seccol"><div class="seclbl">강한 섹터 · 24h</div>${secRows(s.top)}</div>`
