@@ -366,6 +366,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 /* 알트시즌 게이지 */
 .asg{display:block;position:relative;height:6px;border-radius:3px;margin-top:7px;background:linear-gradient(90deg,rgba(var(--neg-rgb),.55),var(--card-2) 50%,rgba(var(--pos-rgb),.55))}
 .asgmark{position:absolute;top:-3px;width:3px;height:12px;border-radius:2px;background:var(--ice);transform:translateX(-50%)}
+.asflow{display:flex;align-items:center;gap:6px;margin-top:5px} .asflow i{color:var(--dim);font-size:var(--fs-micro);font-style:normal}
 
 /* ---- 성과 분석 (인사이트) ---- */
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:var(--s3)}

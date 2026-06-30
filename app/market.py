@@ -121,19 +121,30 @@ def _dom_proxy(ex):
 _TV_TF = {"1h": "1h", "4h": "4h", "1d": "1D"}
 
 
-def _dom_trends_real():
-    """TVRemix로 실제 도미넌스 시계열(CRYPTOCAP:BTC.D/USDT.D)의 EMA50/200 추세 — 프록시 아님.
-    키 없거나 한 TF라도 200봉 미만이면 None(호출부가 프록시로 폴백)."""
+def _tv_market():
+    """TVRemix 실데이터: 도미넌스(BTC.D/USDT.D) 멀티TF EMA50/200 추세 + 알트 점유율 90일 시계열.
+    추세=프록시 아닌 실제 CRYPTOCAP 시계열. altshare=TOTAL2/TOTAL(알트 시총 점유율) 최근 90일.
+    키 없거나 도미넌스 추세가 전부 실패하면 None(호출부가 가격기반 프록시로 폴백)."""
     if not tvremix.enabled():
         return None
     btcd, usdtd = {}, {}
+    ok = False
     for tf, iv in _TV_TF.items():
-        bd, _, _ = _trend(tvremix.closes("CRYPTOCAP:BTC.D", iv, 300))
-        ud, _, _ = _trend(tvremix.closes("CRYPTOCAP:USDT.D", iv, 300))
-        if bd is None and ud is None:
-            return None  # 사실상 실패 → 폴백
+        bd = _trend(tvremix.closes("CRYPTOCAP:BTC.D", iv, 300))[0]
+        ud = _trend(tvremix.closes("CRYPTOCAP:USDT.D", iv, 300))[0]
+        if bd is not None or ud is not None:
+            ok = True
         btcd[tf], usdtd[tf] = bd, ud
-    return btcd, usdtd
+    if not ok:
+        return None  # 사실상 실패 → 폴백
+    out = {"btcd_tf": btcd, "usdtd_tf": usdtd, "altshare": None}
+    t2 = tvremix.closes("CRYPTOCAP:TOTAL2", "1D", 120)  # 알트(BTC 제외) 시총
+    tt = tvremix.closes("CRYPTOCAP:TOTAL", "1D", 120)   # 전체 시총
+    n = min(len(t2), len(tt))
+    if n >= 30:  # 알트 점유율 = TOTAL2/TOTAL × 100, 최근 90일(newest-first: spark 규약)
+        share = [round(t2[-n + i] / tt[-n + i] * 100, 2) for i in range(n)]
+        out["altshare"] = share[-90:][::-1]
+    return out
 
 
 # 상대강도 비교군(메이저 알트). BTC 대비 7일 상대수익률로 강약 순위.
@@ -248,16 +259,17 @@ def get_context(force=False):
             data[key] = fn()
         except Exception:  # noqa: BLE001
             logger.warning("market %s 실패", key)
-    if data.get("dom"):  # 도미넌스 멀티TF 추세: TVRemix 실데이터 우선, 실패 시 가격기반 프록시
-        data["dom"]["btcd_tf"] = md.get("btcd_tf")
-        data["dom"]["usdtd_tf"] = md.get("usdtd_tf")
-        data["dom"]["trend_real"] = False
+    real = None
+    if tvremix.enabled():
         try:
-            real = _dom_trends_real()
-            if real:
-                data["dom"]["btcd_tf"], data["dom"]["usdtd_tf"] = real
-                data["dom"]["trend_real"] = True
+            real = _tv_market()
         except Exception:  # noqa: BLE001
-            logger.warning("market 도미넌스 실데이터 실패 → 프록시")
+            logger.warning("market TVRemix 실데이터 실패 → 프록시 폴백")
+    if data.get("dom"):  # 도미넌스 멀티TF 추세: TVRemix 실데이터 우선, 실패 시 가격기반 프록시
+        data["dom"]["btcd_tf"] = real["btcd_tf"] if real else md.get("btcd_tf")
+        data["dom"]["usdtd_tf"] = real["usdtd_tf"] if real else md.get("usdtd_tf")
+        data["dom"]["trend_real"] = bool(real)
+    if data.get("altseason") and real and real.get("altshare"):  # 알트 점유율 실시계열
+        data["altseason"]["spark"] = real["altshare"]
     _CACHE["data"], _CACHE["at"] = data, now
     return data

@@ -332,7 +332,12 @@ function marketStrip(m){
     chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,sub,"",tip));}
   if(m.altseason){const as=m.altseason,v=as.value,lbl=v>=75?'알트시즌':v<=25?'비트시즌':'중립',cls=v>=75?'pos':v<=25?'neg':'muted';
     const gauge=`<span class="asg"><span class="asgmark" style="left:${v}%"></span></span>`;
-    chips.push(mchip("알트시즌 지수",`<span class="${cls}">${v} · ${lbl}</span>`,gauge,"",`알트시즌 지수 ${v}/100 · 최근 90일 BTC를 이긴 알트 비율(표본 ${as.n}개, 방향 참고용) · 75+ 알트시즌 / 25- 비트시즌 · 시계열 그래프는 히스토리 없어 불가 → 현재값 스냅샷`));}
+    const hasSp=as.spark&&as.spark.length>=2;
+    const sub=hasSp?`${gauge}<span class="asflow ${cls}">${spark(as.spark)}<i>점유율 90일</i></span>`:gauge;
+    const tip=hasSp
+      ? `알트시즌 지수 ${v}/100 · 표본 ${as.n}개 알트의 90일 BTC 초과 비율(방향 참고) · 75+ 알트시즌 / 25- 비트시즌 · 그래프=알트 점유율(TOTAL2/TOTAL) 90일 실시계열`
+      : `알트시즌 지수 ${v}/100 · 최근 90일 BTC를 이긴 알트 비율(표본 ${as.n}개, 방향 참고용) · 75+ 알트시즌 / 25- 비트시즌 · 현재값 스냅샷`;
+    chips.push(mchip("알트시즌 지수",`<span class="${cls}">${v} · ${lbl}</span>`,sub,"",tip));}
   if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없어요</div></div>`;
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
