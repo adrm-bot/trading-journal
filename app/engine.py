@@ -180,7 +180,7 @@ def fetch_bybit(key, secret, lookback):
     try:
         rows = _bybit_closed_pnl(ex, lookback)
     except ccxt.BaseError:
-        raise RuntimeError("bybit 인증/조회 실패 — read-only 키·권한을 확인하세요") from None
+        raise RuntimeError("bybit 인증/조회 실패. read-only 키·권한을 확인하세요") from None
     exec_map = _bybit_executions(ex, lookback)  # 청산기준 보강(실패해도 graceful)
     return reconstruct_bybit(rows, exec_map)
 
@@ -350,7 +350,7 @@ def fetch_binance(key, secret, lookback):
             rows += reconstruct_walk("binance", sym, trades, fevents.get(sym))
         return rows
     except ccxt.BaseError:
-        raise RuntimeError("binance 인증/조회 실패 — USDⓈ-M read-only 키·권한·시간동기를 확인하세요") from None
+        raise RuntimeError("binance 인증/조회 실패. USDⓈ-M read-only 키·권한·시간동기를 확인하세요") from None
 
 
 # ---------- Gate.io: ccxt 통합 체결 → walk (로컬 키 없음, 방어적·라이브 검증 필요) ----------
@@ -382,7 +382,7 @@ def fetch_gate(key, secret, lookback):
             rows += reconstruct_walk("gate", sym.replace("/", "").split(":")[0], fills)
         return rows
     except ccxt.BaseError:
-        raise RuntimeError("gate 인증/조회 실패 — USDT 무기한 read-only 키·권한을 확인하세요") from None
+        raise RuntimeError("gate 인증/조회 실패. USDT 무기한 read-only 키·권한을 확인하세요") from None
 
 
 # ---------- 키 저장 전 read-only 권한 프로빙 (거래/출금 권한 있으면 거부) ----------
@@ -394,9 +394,9 @@ def _probe_bybit(key, secret):
     try:
         resp = ex.private_get_v5_user_query_api({})
     except ccxt.BaseError:
-        raise RuntimeError("bybit 키 검증 실패 — 키/시크릿/IP 화이트리스트를 확인하세요") from None
+        raise RuntimeError("bybit 키 검증 실패. 키·시크릿·IP 화이트리스트를 확인하세요") from None
     if str(resp.get("retCode")) != "0":
-        raise RuntimeError("bybit 키 검증 실패 — 권한 조회가 거부되었습니다") from None
+        raise RuntimeError("bybit 키 검증 실패. 권한 조회가 거부되었습니다") from None
     res = resp.get("result", {}) or {}
     perms = res.get("permissions", {}) or {}
     trade_groups = ["ContractTrade", "Spot", "Derivatives", "Options", "CopyTrading", "Exchange", "NFT"]
@@ -416,7 +416,7 @@ def _probe_binance(key, secret):
     try:
         r = ex.sapiGetAccountApiRestrictions()
     except ccxt.BaseError:
-        raise RuntimeError("binance 키 검증 실패 — USDⓈ-M(또는 동일 마스터) read-only 키·IP·시간동기를 확인하세요") from None
+        raise RuntimeError("binance 키 검증 실패. USDⓈ-M(또는 동일 마스터) read-only 키·IP·시간동기를 확인하세요") from None
 
     def _t(v):
         return v is True or str(v).lower() == "true"
@@ -434,8 +434,8 @@ def _probe_gate(key, secret):
     try:
         ex.fetch_balance({"type": "swap", "settle": "usdt"})
     except ccxt.BaseError:
-        raise RuntimeError("gate 키 검증 실패 — USDT 무기한 read-only 키·권한·IP를 확인하세요") from None
-    return {"ok": True, "warn": "Gate는 권한 자동검증이 제한적입니다 — 반드시 '읽기 전용' 키를 사용하세요."}
+        raise RuntimeError("gate 키 검증 실패. USDT 무기한 read-only 키·권한·IP를 확인하세요") from None
+    return {"ok": True, "warn": "Gate는 권한 자동검증이 제한적입니다. 반드시 '읽기 전용' 키를 사용하세요."}
 
 
 _PROBES = {"bybit": _probe_bybit, "binance": _probe_binance, "gate": _probe_gate}

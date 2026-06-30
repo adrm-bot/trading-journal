@@ -22,6 +22,6 @@
   {% if error %}<div class="err" role="alert">로그인하지 못했습니다. 다시 시도해 주세요.</div>{% endif %}
   {% if google %}<a class="lbtn g" href="/auth/google"><b aria-hidden="true">G</b>&nbsp;Google로 계속</a>{% endif %}
   {% if dev %}<a class="lbtn btn" href="/dev-login">개발 로그인 (dev)</a>{% endif %}
-  {% if not google and not dev %}<p style="color:var(--ember);font-size:12px">로그인 수단 미설정 — 환경변수 GOOGLE_CLIENT_ID 또는 DEV_MODE=true</p>{% endif %}
+  {% if not google and not dev %}<p style="color:var(--ember);font-size:12px">로그인 수단 미설정 · 환경변수 GOOGLE_CLIENT_ID 또는 DEV_MODE=true</p>{% endif %}
   <div class="foot">처음 로그인하면 일지가 자동으로 생성됩니다.</div>
 </div></div></body></html>

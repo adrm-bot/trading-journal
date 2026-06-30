@@ -79,7 +79,7 @@ if os.getenv("GOOGLE_CLIENT_ID") and os.getenv("GOOGLE_CLIENT_SECRET"):
     )
 
 if not DEV_MODE and oauth is None:
-    raise RuntimeError("로그인 수단 없음 — 프로덕션은 GOOGLE_CLIENT_ID/SECRET 필요")
+    raise RuntimeError("로그인 수단 없음. 프로덕션은 GOOGLE_CLIENT_ID/SECRET 필요")
 
 logger.info("부팅: env=%s dev_mode=%s google=%s", APP_ENV, DEV_MODE, oauth is not None)
 
@@ -99,7 +99,7 @@ def _require(request):
 def _csrf(request):
     # 상태변경 요청은 커스텀 헤더 요구 (단순 cross-site 폼 POST 차단; SameSite=lax 심층방어)
     if not request.headers.get("x-requested-with"):
-        raise HTTPException(403, "요청을 처리할 수 없어요 — 페이지를 새로고침한 뒤 다시 시도해 주세요")
+        raise HTTPException(403, "요청을 처리할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요")
 
 
 def _login(request, email, name):
@@ -230,7 +230,7 @@ def api_positions(request: Request):
         return {"positions": engine.fetch_open_positions(uid)}
     except Exception:  # noqa: BLE001
         logger.exception("positions 실패 uid=%s", uid)
-        return JSONResponse({"positions": [], "error": "보유 포지션을 불러오지 못했어요 — 거래소 연결 상태를 확인해 주세요"}, status_code=200)
+        return JSONResponse({"positions": [], "error": "보유 포지션을 불러오지 못했습니다. 거래소 연결 상태를 확인해 주세요"}, status_code=200)
 
 
 @app.post("/api/pull")
@@ -240,13 +240,13 @@ def api_pull(request: Request):
     now = time.time()
     wait = PULL_COOLDOWN - (now - _pull_at.get(uid, 0))
     if wait > 0:
-        raise HTTPException(429, f"너무 자주 불러왔어요 — {int(wait) + 1}초 뒤에 다시 시도해 주세요")
+        raise HTTPException(429, f"너무 자주 불러왔습니다. {int(wait) + 1}초 뒤에 다시 시도해 주세요")
     _pull_at[uid] = now
     try:
         results = engine.pull_user(uid)  # {exchange: {added, error}} — 거래소별 결과
     except Exception:  # noqa: BLE001
         logger.exception("pull 실패 uid=%s", uid)
-        return JSONResponse({"ok": False, "error": "거래를 불러오지 못했어요 — API 키와 read-only 권한을 확인해 주세요"}, status_code=400)
+        return JSONResponse({"ok": False, "error": "거래를 불러오지 못했습니다. API 키와 read-only 권한을 확인해 주세요"}, status_code=400)
     total = sum(r["added"] for r in results.values())
     return {"ok": True, "fetched": total, "results": results}
 
@@ -306,10 +306,10 @@ async def api_save_connection(request: Request):
     if kind in ("bybit", "binance", "gate"):
         key, sec = (b.get("key") or "").strip(), (b.get("secret") or "").strip()
         if len(key) < 8 or len(sec) < 16:
-            raise HTTPException(400, "API 키와 시크릿을 다시 확인해 주세요 — read-only 키를 권장합니다")
+            raise HTTPException(400, "API 키와 시크릿을 다시 확인해 주세요. read-only 키를 권장합니다")
         # Gate는 API로 키 권한을 조회할 수 없어 자동검증 불가 → 사용자 명시 확인 요구(정직성)
         if kind == "gate" and not b.get("ack_readonly"):
-            raise HTTPException(400, "Gate는 키 권한 자동 검증이 불가합니다 — '읽기 전용 키임을 확인' 체크 후 등록해 주세요")
+            raise HTTPException(400, "Gate는 키 권한 자동 검증이 불가합니다. '읽기 전용 키임을 확인' 체크 후 등록해 주세요")
         # read-only 권한 강제 — 거래/출금 권한 있으면 저장 거부 (Bybit/Binance는 실제 검증)
         try:
             warn = engine.probe_readonly(kind, key, sec).get("warn")
@@ -317,7 +317,7 @@ async def api_save_connection(request: Request):
             raise HTTPException(400, str(e)) from None
         except Exception:  # noqa: BLE001
             logger.warning("키 프로빙 실패 kind=%s uid=%s", kind, uid)
-            raise HTTPException(400, f"{EXCH_NAMES.get(kind, kind)} 키 권한을 확인하지 못했어요 — 잠시 후 다시 시도해 주세요") from None
+            raise HTTPException(400, f"{EXCH_NAMES.get(kind, kind)} 키 권한을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요") from None
         data = {"key": key, "secret": sec}
     elif kind == "notion":
         tok = (b.get("token") or "").strip()
@@ -376,7 +376,7 @@ async def api_billing_checkout(request: Request):
     _require(request)
     _csrf(request)
     if not BILLING_ENABLED:
-        raise HTTPException(503, "결제는 준비 중입니다 — 곧 제공됩니다")
+        raise HTTPException(503, "결제는 준비 중입니다. 곧 제공됩니다")
     # TODO(billing): stripe 지연 import + Checkout 세션 생성(STRIPE_SECRET_KEY·PRICE_ID 필요).
     raise HTTPException(503, "결제 설정이 완료되지 않았습니다")
 
