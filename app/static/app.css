@@ -197,6 +197,11 @@ td .num,td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .jlevels .lvtp{background:var(--pos-soft);color:var(--mint)}
 .jplan{margin-top:8px;font-size:var(--fs-sm);color:var(--text);line-height:1.5}
 .jmemo{margin-top:4px;font-size:var(--fs-sm);color:var(--muted)}
+.jmis{margin-top:6px}
+.rtag.mistake{background:var(--neg-soft);color:var(--ember);border-color:rgba(var(--neg-rgb),.4)}
+.jreview{margin-top:6px;font-size:var(--fs-sm);color:var(--moonlight);line-height:1.5;border-left:2px solid var(--warn);padding-left:9px}
+.jreview .jrl{font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
+.jchart{margin-top:6px;font-size:var(--fs-sm)} .jchart a{color:var(--azure);text-decoration:none} .jchart a:hover{text-decoration:underline}
 .jcard .jfill{margin-top:9px;color:var(--ember);box-shadow:inset 0 0 0 1px rgba(var(--neg-rgb),.45)}
 .vbtn[aria-pressed="true"]{box-shadow:inset 0 0 0 1px var(--frost);color:var(--glacier);background:var(--info-soft)}
 

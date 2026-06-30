@@ -58,6 +58,12 @@
     <div class="rr-line" id="rrLine"></div>
     <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
   </details>
+  <details class="more" id="reviewFields"><summary>복기 — 배운 것 · 실수 태그 · 차트</summary>
+    <div class="field"><label for="f_review">복기 — 이번에 배운 것 / 다음엔 어떻게</label><textarea id="f_review" placeholder="예: 4H 추세 거슬러 진입. 다음엔 정배열에서만, 손절 칼같이."></textarea></div>
+    <div class="field"><label>실수 태그 <span class="muted">· 여러 개 탭 · 반복 실수 추적</span></label><div class="chips" id="c_mistake"></div></div>
+    <div class="field"><label for="f_chart">차트 링크 <span class="muted">· TradingView 스냅샷 등 (선택)</span></label><input id="f_chart" type="url" placeholder="https://www.tradingview.com/x/…"></div>
+    <label class="ackrow" for="f_reviewed" style="cursor:pointer;margin-top:2px"><input type="checkbox" id="f_reviewed" style="width:auto;margin-top:3px"> 복기 완료로 표시</label>
+  </details>
   <div class="modal-actions"><button class="btn ghost" id="cancelBtn">취소</button><button class="btn primary" id="saveBtn">기록 저장</button></div>
 </div></div>
 
@@ -117,6 +123,7 @@ const ICONS={
 const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)","역추세(리버설)","레인지(박스)","스캘핑","뉴스·이벤트","기타"];
 const RATIONALES=["추세선","다이버전스","거래량 급증","캔들패턴","차트패턴","지지·저항","이평선(EMA존)","전고/전저","피보나치","오더블록·유동성","펀딩·롱숏비","상대강도(BTC대비)","뉴스·재료","직감·근거없음"];
 const EMOS=["차분","확신","조급(FOMO)","공포","탐욕","복수심","지루함","주저(망설임)"];
+const MISTAKES=["손절 미준수","추격매수","과대 레버리지","계획 무시","조급한 익절","복수매매","근거 없는 진입","분할 실패","과대 사이징"];
 function chipsInto(id,opts,multi){const el=$("#"+id);if(!el)return;el.dataset.multi=multi?"1":"0";
   el.innerHTML=opts.map(v=>`<button type="button" class="btn sm fchip" data-val="${esc(v)}" aria-pressed="false">${esc(v)}</button>`).join("");
   el.onclick=ev=>{const b=ev.target.closest(".fchip");if(!b)return;
@@ -254,16 +261,21 @@ function tradeCard(r){
   let body;
   if(pending){body=`<span class="btn sm jfill">${ICONS.pencil} 왜 들어갔는지 채우기</span>`;}
   else{const t=tagChips(r);
+    const mis=(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean).map(m=>`<span class="rtag mistake">${esc(m)}</span>`).join("");
+    const cu=(r.chart_url||"").trim(), chart=/^https?:\/\//i.test(cu)?`<div class="jchart"><a href="${esc(cu)}" target="_blank" rel="noopener noreferrer">차트 보기 ↗</a></div>`:"";
     body=(t?`<div class="jtags">${t}</div>`:"")
       +(r.plan?`<div class="jplan">${esc(r.plan)}</div>`:"")
       +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
-      +((!t&&!r.plan&&!r.memo)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
+      +(mis?`<div class="jtags jmis">${mis}</div>`:"")
+      +(r.review?`<div class="jreview"><span class="jrl">복기</span> ${esc(r.review)}</div>`:"")
+      +chart
+      +((!t&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}`:"";
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 — 채우기':'상세 보기·편집'}">
-    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}</div>
+    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
     <div class="jmeta">${meta}</div>${stats}${planLevels(r)}${body}</div>`;
 }
@@ -457,8 +469,9 @@ function jtMatch(t){
   if(JT.exchange!=='all'&&t.exchange!==JT.exchange)return false;
   if(JT.dir!=='all'&&t.direction!==JT.dir)return false;
   if(JT.status==='pending'&&t.status!=='의도 미기입')return false;
-  if(JT.status==='done'&&t.status==='의도 미기입')return false;
-  if(JT.q){const hay=[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion].join(' ').toLowerCase();if(!hay.includes(JT.q.toLowerCase()))return false;}
+  if(JT.status==='done'&&t.status!=='기록완료')return false;
+  if(JT.status==='reviewed'&&t.status!=='복기완료')return false;
+  if(JT.q){const hay=[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion,t.review,t.mistake_tag].join(' ').toLowerCase();if(!hay.includes(JT.q.toLowerCase()))return false;}
   return true;
 }
 function jtCmp(a,b){
@@ -536,7 +549,7 @@ function renderJournal(el){
   $("#jFilterT").onclick=()=>{const f=$("#jFilters"),open=f.hidden;f.hidden=!open;$("#jFilterT").setAttribute("aria-expanded",String(open));};
   $("#jEx").innerHTML=chipGroup('exchange',[['all','전체'],...exs.map(e=>[e,e])]);
   $("#jDir").innerHTML=chipGroup('dir',[['all','전체'],['Long','롱'],['Short','숏']]);
-  $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','계획 미기입 '+(DATA.summary.unplanned||0)],['done','기록완료']]);
+  $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','계획 미기입 '+(DATA.summary.unplanned||0)],['done','기록완료'],['reviewed','복기완료']]);
   $("#jSize").value=String(JT.size);
   $("#jFrom").onchange=e=>{JT.from=e.target.value;JT.page=1;applyJournal();};
   $("#jTo").onchange=e=>{JT.to=e.target.value;JT.page=1;applyJournal();};
@@ -948,16 +961,20 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   $("#modalMeta").textContent=`${EXN(r.exchange)} · ${r.symbol} ${r.direction?dirKo(r.direction):''} · ${(toKST(r.closed_at)||{}).str||''} KST${liq}`;
   renderFacts(r);
   $("#f_plan").value=r.plan||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_tp3").value=r.tp3??"";$("#f_memo").value=r.memo||"";
+  $("#f_review").value=r.review||"";$("#f_chart").value=r.chart_url||"";$("#f_reviewed").checked=(r.status==='복기완료');
   setChips("c_strategy",r.strategy?[r.strategy]:[]);setChips("c_emo",r.emotion?[r.emotion]:[]);
+  setChips("c_mistake",(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean));
   const _etc=setChips("c_setup",(r.setup||"").split(",").map(s=>s.trim()).filter(Boolean));$("#f_setup_etc").value=_etc.join(", ");
   updateRR();
   const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo);
+  const rev=$("#reviewFields"); if(rev)rev.open=!!(r.review||r.mistake_tag||r.chart_url||r.status==='복기완료');
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
   const _setup=getChips("c_setup");const _e=$("#f_setup_etc").value.trim();if(_e)_setup.push(_e);
-  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,tp3:$("#f_tp3").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value};
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,tp3:$("#f_tp3").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value,
+    review:$("#f_review").value,mistake_tag:getChips("c_mistake").join(","),chart_url:$("#f_chart").value,reviewed:$("#f_reviewed").checked};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){await loadAll();route();
@@ -1082,7 +1099,7 @@ async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
 
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;$("#closeBtn").onclick=closeModal;
 $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;$("#bulkClose").onclick=closeBulk;
-chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);
+chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);chipsInto("c_mistake",MISTAKES,true);
 chipsInto("cb_emo",EMOS,false);
 $("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};

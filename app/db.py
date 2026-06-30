@@ -11,7 +11,8 @@ DB_PATH = os.getenv("APP_DB_PATH", os.path.join(os.path.dirname(__file__), "data
 TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "opened_at", "closed_at", "fees", "funding", "leverage", "fill_count",
               "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo"]
-_INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "tp3", "emotion", "memo", "status"}
+_INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "tp3", "emotion", "memo",
+           "review", "mistake_tag", "chart_url", "status"}  # review=복기(교훈), mistake_tag=실수태그, chart_url=차트링크
 
 
 def conn():
@@ -40,11 +41,13 @@ def init():
           fill_count INTEGER, liquidated INTEGER DEFAULT 0, exit_reason TEXT,
           status TEXT DEFAULT '의도 미기입',
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL, emotion TEXT, memo TEXT,
+          review TEXT, mistake_tag TEXT, chart_url TEXT,
           PRIMARY KEY(user_id, trade_id));
         """)
         # 마이그레이션: 기존 DB에 누락 컬럼 추가 (idempotent)
         cols = {r[1] for r in c.execute("PRAGMA table_info(trades)")}
         for name, typ in (("tp", "REAL"), ("strategy", "TEXT"), ("tp2", "REAL"), ("tp3", "REAL"),
+                          ("review", "TEXT"), ("mistake_tag", "TEXT"), ("chart_url", "TEXT"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
                           ("leverage", "REAL"), ("fill_count", "INTEGER"), ("liquidated", "INTEGER"),
                           ("exit_reason", "TEXT")):
@@ -144,7 +147,7 @@ def get_trades(uid):
 
 # 일괄 기입에서 금지하는 필드: strategy를 한 번에 박으면 충동거래가 '계획 전략거래'로
 # 둔갑해 전략별 통계가 세탁됨(안티-조작 약속 위배). 전략은 거래별 개별 기입만 허용.
-_BULK_FORBIDDEN = {"status", "strategy", "setup", "sl", "tp", "tp2", "tp3"}
+_BULK_FORBIDDEN = {"status", "strategy", "setup", "sl", "tp", "tp2", "tp3", "mistake_tag", "review"}
 
 
 def bulk_fill_unplanned(uid, fields: dict) -> int:
