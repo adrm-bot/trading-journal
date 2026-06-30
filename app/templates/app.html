@@ -268,16 +268,7 @@ function tradeCard(r){
     <div class="jmeta">${meta}</div>${stats}${planLevels(r)}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
-/* 우측 레일용 컴팩트 최근거래 — 클릭 시 상세 모달(.jcard와 동일) */
-function railTrades(ts){
-  if(!ts.length)return `<p class="empty-inline">최근 거래 없음</p>`;
-  return `<div class="raillist">`+ts.map(t=>{
-    const p=Number(t.pnl), cls=(t.outcome==='win'||p>0)?'pos':(t.outcome==='loss'||p<0)?'neg':'muted';
-    return `<div class="railrow" data-id="${esc(t.trade_id||'')}" tabindex="0" role="button">
-      <span class="rl"><b>${esc(t.symbol||'')}</b><em>${esc(t.direction||'')}</em><span class="rd">${esc(trDate(t))}</span></span>
-      <span class="rp ${cls}">${money(t.pnl)}</span></div>`;}).join("")+`</div>`;
-}
-function bindCards(){$$(".jcard,.railrow").forEach(c=>{c.onclick=()=>openModal(c.dataset.id);
+function bindCards(){$$(".jcard").forEach(c=>{c.onclick=()=>openModal(c.dataset.id);
   c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openModal(c.dataset.id);}};});}
 
 /* ---------- 시장 컨텍스트 스트립 ---------- */
@@ -315,8 +306,8 @@ function marketStrip(m){
   if(m.dom){const d=m.dom;
     const main=`<div class="domr"><span class="dl">BTC.D</span><span class="dv">${d.btc}%</span>${tfArrows(d.btcd_tf)}</div>`
       +`<div class="domr"><span class="dl">USDT.D</span><span class="dv">${d.usdt}%</span>${tfArrows(d.usdtd_tf)}</div>`;
-    const tip=`BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블) 비중·리스크오프 · ETH.D ${d.eth}% · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(무료 API에 도미넌스 시계열 없음 — BTC.D≈BTC/ETH 비율, USDT.D≈시장 역) · % 현재값은 스냅샷 정확`;
-    chips.push(mchip("도미넌스 · 추세",main,`ETH.D ${d.eth}% · 기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)}`,"dom",tip));}
+    const tip=`BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블) 비중·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(무료 API에 도미넌스 시계열 없음 — BTC.D≈BTC/ETH 비율, USDT.D≈시장 역) · % 현재값은 스냅샷 정확`;
+    chips.push(mchip("도미넌스 · 추세",main,`기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)}`,"dom",tip));}
   if(m.fng){const f=fngKo(m.fng.value),h=m.fng.history||[];
     const sub=h.length>=8?`<span class="fngflow ${f[1]}">${spark(h)}</span><span class="fngd">어제 ${h[1]} · 저번주 ${h[7]}</span>`:"시장 심리 (alt.me)";
     const tip=`공포·탐욕 ${m.fng.value}/100${h.length>=8?` · 오늘 ${h[0]} · 어제 ${h[1]} · 그제 ${h[2]} · 저번주 ${h[7]}`:''} · 구간 0-24 극단공포/25-44 공포/45-55 중립/56-75 탐욕/76-100 극단탐욕 · 산정요소 변동성25%·모멘텀거래량25%·소셜15%·설문15%·도미넌스10%·트렌드10%(공개 가중치, 일별만)`;
@@ -451,9 +442,9 @@ function renderDashboard(el){
   if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
   const rail=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +`<div id="posHost"></div>`
-    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
-    +`<div class="section-title">최근 일지</div>`+railTrades(DATA.trades.slice(0,6));
-  el.innerHTML=`<div class="dash3"><div class="dash-main">${market}</div><div class="dash-rail">${rail}</div></div>`;
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`);
+  el.innerHTML=`<div class="dash3"><div class="dash-main">${market}</div><div class="dash-rail">${rail}</div></div>`
+    +`<div class="section-title">최근 일지</div><div class="dash-journal">`+journalCards(DATA.trades.slice(0,8))+`</div>`;
   bindCards();ensureMarket();ensurePositions();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}

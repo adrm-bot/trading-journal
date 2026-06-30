@@ -124,15 +124,8 @@ a{color:inherit;text-decoration:none}
 .dash-rail .stat .msub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}  /* 날짜범위 줄바꿈 방지 */
 .dash-rail .market{margin-bottom:0}
 @media(max-width:1080px){.dash3{grid-template-columns:1fr}}
-.raillist{display:flex;flex-direction:column}
-.railrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
-.railrow:last-child{border-bottom:0}
-.railrow:hover{background:var(--card)}
-.railrow .rl{min-width:0;font-size:var(--fs-sm);color:var(--moonlight)}
-.railrow .rl b{font-weight:510}
-.railrow .rl em{font-style:normal;color:var(--muted);font-size:var(--fs-xs);margin-left:5px}
-.railrow .rd{display:block;font-size:var(--fs-micro);color:var(--dim);font-family:var(--f-mono);margin-top:1px}
-.railrow .rp{font-family:var(--f-mono);font-weight:510;white-space:nowrap}
+.dash-journal .jfeed{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3)}  /* 하단 전체폭 일지: 2단으로 더 많이·정보 풍부하게 */
+@media(max-width:860px){.dash-journal .jfeed{grid-template-columns:1fr}}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}
 .stat .label{color:var(--muted);font-size:var(--fs-xs)}
 .stat .val{font-family:var(--f-display);font-size:22px;font-weight:510;margin-top:6px;color:var(--ice);letter-spacing:-.02em;white-space:nowrap}
