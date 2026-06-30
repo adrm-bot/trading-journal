@@ -93,7 +93,7 @@ a{color:inherit;text-decoration:none}
 .tb-eyebrow{margin-bottom:6px;color:var(--muted)}
 .topbar h1{margin:0;font-family:var(--f-display);font-size:28px;font-weight:600;color:var(--glacier);letter-spacing:-.022em;line-height:1.05}
 .topbar .desc{color:var(--muted);font-size:var(--fs-sm);margin-top:5px}
-.content{padding:var(--s8);max-width:1120px;width:100%}
+.content{padding:var(--s8);max-width:1340px;width:100%}  /* 3단 대시보드용 확대(우측 빈 공간 활용) */
 
 /* ---- buttons (sharp 2px) ---- */
 .btn{font:inherit;font-weight:500;cursor:pointer;border:1px solid var(--line-2);box-shadow:none;background:transparent;color:var(--moonlight);
@@ -113,6 +113,26 @@ a{color:inherit;text-decoration:none}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}  /* minmax(0,1fr): 넓은 hero 숫자가 컬럼 폭을 밀어내지 않게 — 4칸 동일 폭. 기본 align-items:stretch로 동일 높이 */
 #view-dashboard .cards{margin-top:var(--s6)}  /* 스켈레톤 등 라벨 없는 경우의 섹션 여백 */
 #view-dashboard .section-title + .cards{margin-top:0}  /* '핵심 지표' 라벨이 앞서면 라벨 마진(24/0/12)이 간격 담당 — 이중 여백 방지 */
+/* 3단 대시보드: 좌 내비(.shell) · 중앙 시장맥락 · 우 내 트레이딩(매매일지) */
+.dash3{display:grid;grid-template-columns:minmax(0,1fr) 336px;gap:var(--s6);align-items:start}
+.dash-main,.dash-rail{min-width:0}
+.dash-rail{display:flex;flex-direction:column}
+.dash-rail>.section-title:first-child{margin-top:0}
+.dash-rail .cards{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr}  /* 좁은 레일에서 KPI 2×2(균등 폭·높이) */
+.dash-rail .stat .val{font-size:var(--fs-md)}  /* 좁은 칸에 맞춰 축소 */
+.dash-rail .card{padding:var(--s3) var(--s4)}
+.dash-rail .stat .msub{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}  /* 날짜범위 줄바꿈 방지 */
+.dash-rail .market{margin-bottom:0}
+@media(max-width:1080px){.dash3{grid-template-columns:1fr}}
+.raillist{display:flex;flex-direction:column}
+.railrow{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);cursor:pointer}
+.railrow:last-child{border-bottom:0}
+.railrow:hover{background:var(--card)}
+.railrow .rl{min-width:0;font-size:var(--fs-sm);color:var(--moonlight)}
+.railrow .rl b{font-weight:510}
+.railrow .rl em{font-style:normal;color:var(--muted);font-size:var(--fs-xs);margin-left:5px}
+.railrow .rd{display:block;font-size:var(--fs-micro);color:var(--dim);font-family:var(--f-mono);margin-top:1px}
+.railrow .rp{font-family:var(--f-mono);font-weight:510;white-space:nowrap}
 .card{background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);padding:var(--s4) var(--s5);box-shadow:var(--inset)}
 .stat .label{color:var(--muted);font-size:var(--fs-xs)}
 .stat .val{font-family:var(--f-display);font-size:22px;font-weight:510;margin-top:6px;color:var(--ice);letter-spacing:-.02em;white-space:nowrap}

@@ -255,7 +255,16 @@ function tradeCard(r){
     <div class="jmeta">${meta}</div>${stats}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
-function bindCards(){$$(".jcard").forEach(c=>{c.onclick=()=>openModal(c.dataset.id);
+/* 우측 레일용 컴팩트 최근거래 — 클릭 시 상세 모달(.jcard와 동일) */
+function railTrades(ts){
+  if(!ts.length)return `<p class="empty-inline">최근 거래 없음</p>`;
+  return `<div class="raillist">`+ts.map(t=>{
+    const p=Number(t.pnl), cls=(t.outcome==='win'||p>0)?'pos':(t.outcome==='loss'||p<0)?'neg':'muted';
+    return `<div class="railrow" data-id="${esc(t.trade_id||'')}" tabindex="0" role="button">
+      <span class="rl"><b>${esc(t.symbol||'')}</b><em>${esc(t.direction||'')}</em><span class="rd">${esc(trDate(t))}</span></span>
+      <span class="rp ${cls}">${money(t.pnl)}</span></div>`;}).join("")+`</div>`;
+}
+function bindCards(){$$(".jcard,.railrow").forEach(c=>{c.onclick=()=>openModal(c.dataset.id);
   c.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openModal(c.dataset.id);}};});}
 
 /* ---------- 시장 컨텍스트 스트립 ---------- */
@@ -393,10 +402,13 @@ async function ensurePositions(){
 }
 
 function renderDashboard(el){
-  const head=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="posHost"></div>`;
-  if(!DATA.trades.length){el.innerHTML=head+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
-  el.innerHTML=head+`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)+`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
-    +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,5));
+  const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div>`;
+  if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
+  const rail=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
+    +`<div id="posHost"></div>`
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
+    +`<div class="section-title">최근 일지</div>`+railTrades(DATA.trades.slice(0,6));
+  el.innerHTML=`<div class="dash3"><div class="dash-main">${market}</div><div class="dash-rail">${rail}</div></div>`;
   bindCards();ensureMarket();ensurePositions();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
