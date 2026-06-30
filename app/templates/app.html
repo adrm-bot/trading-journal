@@ -43,7 +43,7 @@
   <button type="button" class="mclose" id="closeBtn" aria-label="닫기">×</button>
   <h3 id="modalTitle">거래 상세 · 사후 기록</h3><div class="meta" id="modalMeta"></div>
   <div class="facts" id="modalFacts"></div>
-  <div class="field"><label for="f_plan">계획/의도 — 왜 들어갔나</label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
+  <div class="field"><label for="f_plan">계획·의도 <span class="muted">· 왜 들어갔나</span></label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
   <div class="hh">한 줄만 적어도 됩니다. 아래 칩을 탭하면 더 빨라요.</div>
   <div class="field"><label>감정</label><div class="chips" id="c_emo"></div></div>
   <details class="more" id="moreFields"><summary>전략 · 근거 · 예상 손절/익절 · 메모 추가</summary>
@@ -61,16 +61,16 @@
     <div class="rr-line" id="rrLine"></div>
     <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
   </details>
-  <details class="more" id="reviewFields"><summary>복기 · 자기 채점 — 등급 · 배운 것 · 실수 · 차트</summary>
+  <details class="more" id="reviewFields"><summary>복기 · 자기 채점 <span class="muted" style="font-weight:400">(등급 · 배운 것 · 실수 · 차트)</span></summary>
     <div class="gradebox">
-      <div class="hh" style="margin:0 0 8px">결과가 아니라 <b>과정</b>을 채점합니다 — 이긴 거래도 실행이 나쁠 수 있고, 진 거래도 잘 친 것일 수 있어요.</div>
+      <div class="hh" style="margin:0 0 8px">결과가 아니라 <b>과정</b>을 채점합니다. 이긴 거래도 실행이 나쁠 수 있고, 진 거래도 잘 친 것일 수 있습니다.</div>
       <div class="row2">
         <div class="field"><label>셋업 등급 <span class="muted">· 셋업의 질</span></label><div class="chips grades" id="c_setupg"></div></div>
         <div class="field"><label>실행 등급 <span class="muted">· 계획대로 쳤나</span></label><div class="chips grades" id="c_execg"></div></div>
       </div>
       <div class="field"><label>확신도 <span class="muted">· 진입 시 1(반신반의) ~ 5(강한 확신)</span></label><div class="chips grades" id="c_conv"></div></div>
     </div>
-    <div class="field"><label for="f_review">복기 — 이번에 배운 것 / 다음엔 어떻게</label><textarea id="f_review" placeholder="예: 4H 추세 거슬러 진입. 다음엔 정배열에서만, 손절 칼같이."></textarea></div>
+    <div class="field"><label for="f_review">복기 <span class="muted">· 배운 것 / 다음엔 어떻게</span></label><textarea id="f_review" placeholder="예: 4H 추세 거슬러 진입. 다음엔 정배열에서만, 손절 칼같이."></textarea></div>
     <div class="field"><label>실수 태그 <span class="muted">· 여러 개 탭 · 반복 실수 추적</span></label><div class="chips" id="c_mistake"></div></div>
     <div class="field"><label for="f_chart">차트 링크 <span class="muted">· TradingView 스냅샷 등 (선택)</span></label><input id="f_chart" type="url" placeholder="https://www.tradingview.com/x/…"></div>
     <label class="ackrow" for="f_reviewed" style="cursor:pointer;margin-top:2px"><input type="checkbox" id="f_reviewed" style="width:auto;margin-top:3px"> 복기 완료로 표시</label>
@@ -81,9 +81,9 @@
 <div class="modal-bg" id="bulkBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="bulkTitle">
   <button type="button" class="mclose" id="bulkClose" aria-label="닫기">×</button>
   <h3 id="bulkTitle">계획 미기입 거래 한 번에 정리</h3><div class="meta" id="bulkMeta"></div>
-  <div class="field"><label for="b_plan">메모 — 전체에 동일 적용</label><textarea id="b_plan">사후 일괄 정리 — 당시 계획 미기록</textarea></div>
+  <div class="field"><label for="b_plan">메모 <span class="muted">· 전체에 동일 적용</span></label><textarea id="b_plan">사후 일괄 정리 · 당시 계획 미기록</textarea></div>
   <div class="field"><label>감정 <span class="muted">· 선택</span></label><div class="chips" id="cb_emo"></div></div>
-  <p class="muted" style="font-size:12px;margin:2px 0 0">과거의 계획 미기입 거래를 한 번에 '기록완료'로 바꿉니다. 정직한 통계를 위해 <b>전략·근거는 일괄로 넣지 않습니다</b> — 거래별로 하나씩 기입하세요.</p>
+  <p class="muted" style="font-size:12px;margin:2px 0 0">과거의 계획 미기입 거래를 한 번에 '기록완료'로 바꿉니다. 정직한 통계를 위해 <b>전략·근거는 일괄로 넣지 않습니다</b>. 거래별로 하나씩 입력하세요.</p>
   <div class="modal-actions"><button class="btn ghost" id="bulkCancel">취소</button><button class="btn primary" id="bulkSave">전부 기록 완료로</button></div>
 </div></div>
 
@@ -129,6 +129,14 @@ const ICONS={
   good:_sv+'<path d="M20 6 9 17l-5-5"/></svg>',
   info:_sv+'<circle cx="12" cy="12" r="9"/><path d="M12 11v5M12 8h.01"/></svg>',
   pencil:_sv+'<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>',
+  // 섹션 그룹 헤더용(인사이트 위계 시각화) + 롱/숏 방향
+  ov:_sv+'<path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',                         // 개요·성과
+  shield:_sv+'<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',   // 자본·리스크
+  check:_sv+'<circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',   // 실행·규율
+  compass:_sv+'<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg>', // 행동·심리
+  award:_sv+'<circle cx="12" cy="8" r="5"/><path d="M9 12.5 7 22l5-3 5 3-2-9.5"/></svg>', // 자기 채점
+  upR:_sv+'<path d="M7 17 17 7"/><path d="M8 7h9v9"/></svg>',                     // 롱
+  downR:_sv+'<path d="M7 7 17 17"/><path d="M17 8v9H8"/></svg>',                  // 숏
 };
 /* 의도 입력 칩(탭 선택형) taxonomy */
 const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)","역추세(리버설)","레인지(박스)","스캘핑","뉴스·이벤트","기타"];
@@ -269,8 +277,8 @@ function planLevels(r){
 /* 자기채점 배지 — 셋업·실행 등급은 질에 따라 색(A 좋음 ~ F 나쁨), 확신도는 중립 */
 function gq(g){return g==='A'?'g-a':g==='B'?'g-b':g==='F'?'g-f':(g==='C'||g==='D')?'g-c':'';}
 function gradeBadges(r){const b=[];
-  if(r.setup_grade)b.push(`<span class="gb ${gq(r.setup_grade)}" data-tip="셋업 등급 — 셋업 자체의 질(결과 무관)">셋업 ${esc(r.setup_grade)}</span>`);
-  if(r.exec_grade)b.push(`<span class="gb ${gq(r.exec_grade)}" data-tip="실행 등급 — 계획대로 쳤나(손익 무관)">실행 ${esc(r.exec_grade)}</span>`);
+  if(r.setup_grade)b.push(`<span class="gb ${gq(r.setup_grade)}" data-tip="셋업 등급 · 셋업 자체의 질(결과 무관)">셋업 ${esc(r.setup_grade)}</span>`);
+  if(r.exec_grade)b.push(`<span class="gb ${gq(r.exec_grade)}" data-tip="실행 등급 · 계획대로 쳤나(손익 무관)">실행 ${esc(r.exec_grade)}</span>`);
   if(r.conviction!=null&&r.conviction!=='')b.push(`<span class="gb g-conv" data-tip="진입 확신도 1~5">확신 ${esc(String(r.conviction))}/5</span>`);
   return b.length?`<div class="jgrades">${b.join("")}</div>`:"";}
 function tradeCard(r){
@@ -297,7 +305,7 @@ function tradeCard(r){
   const split=r.exit_count>1?` · <span class="muted" data-tip="${(r.legs_r&&r.legs_r.length)?'레그 R '+r.legs_r.map(x=>(x>=0?'+':'')+x).join(' · '):'분할 청산'}">분할 ${r.exit_count}회</span>`:"";
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}${split}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
-  return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 — 채우기':'상세 보기·편집'}">
+  return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
     <div class="jmeta">${meta}</div>${stats}${planLevels(r)}${body}</div>`;
@@ -312,7 +320,7 @@ function chgTxt(v){return v==null?"":`<span class="${v>=0?'pos':'neg'}">${(v>=0?
 function usd(n){return n==null?"—":"$"+Number(n).toLocaleString(undefined,{maximumFractionDigits:n<10?4:0});}
 function fngKo(v){if(v==null)return["—","muted"];if(v<25)return["극단적 공포","neg"];if(v<45)return["공포","neg"];if(v<=55)return["중립","muted"];if(v<=75)return["탐욕","pos"];return["극단적 탐욕","pos"];}
 function mchip(label,main,sub,cls,tip){return `<div class="mchip"${tip?` data-tip="${esc(tip)}"`:''}><div class="mk">${label}</div><div class="mv ${cls||''}">${main}</div>${sub?`<div class="ms">${sub}</div>`:""}</div>`;}
-const trendBasis=c=>(c&&c.trend)?({up:"EMA50>EMA200 정배열(상승)",down:"EMA50<EMA200 역배열(하락)",side:"EMA 혼조(횡보)"}[c.trend]):"일봉 200일 미만 — 미판정";
+const trendBasis=c=>(c&&c.trend)?({up:"EMA50>EMA200 정배열(상승)",down:"EMA50<EMA200 역배열(하락)",side:"EMA 혼조(횡보)"}[c.trend]):"일봉 200일 미만 · 미판정";
 const TFL=[["1h","1H"],["4h","4H"],["1d","1D"]];
 /* 멀티 타임프레임 추세: 1H·4H·1D 각각 EMA50/200 화살표 한 줄. tf 없으면 단일 추세로 폴백 */
 function tfRow(c){
@@ -343,7 +351,7 @@ function marketStrip(m){
       +`<div class="domr"><span class="dl">USDT.D</span><span class="dv">${d.usdt}%</span>${tfArrows(d.usdtd_tf)}</div>`;
     const tip=d.trend_real
       ? `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세 = 실제 도미넌스 시계열(CRYPTOCAP) EMA50/200 · % 현재값 스냅샷`
-      : `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(도미넌스 시계열 미가용 — BTC.D≈BTC/ETH, USDT.D≈시장 역) · % 현재값 스냅샷`;
+      : `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(도미넌스 시계열 미가용: BTC.D≈BTC/ETH, USDT.D≈시장 역) · % 현재값 스냅샷`;
     chips.push(mchip("도미넌스 · 추세",main,`기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)}`,"dom",tip));}
   if(m.fng){const f=fngKo(m.fng.value),h=m.fng.history||[];
     const sub=h.length>=8?`<span class="fngflow ${f[1]}">${spark(h)}</span><span class="fngd">어제 ${h[1]} · 저번주 ${h[7]}</span>`:"시장 심리 (alt.me)";
@@ -392,8 +400,8 @@ function rsPanel(m){
         <span class="rsend">ALT</span>
       </div>
       <div class="rsact">
-        <div class="rsa long"><span class="rsa-k">롱 후보</span><span class="rsa-v">${longSym}</span><span class="rsa-d">${longVal}</span></div>
-        <div class="rsa short"><span class="rsa-k">숏 후보</span><span class="rsa-v">${shortSym}</span><span class="rsa-d">${shortVal}</span></div>
+        <div class="rsa long"><span class="rsa-k">${ICONS.upR} 롱 후보</span><span class="rsa-v">${longSym}</span><span class="rsa-d">${longVal}</span></div>
+        <div class="rsa short"><span class="rsa-k">${ICONS.downR} 숏 후보</span><span class="rsa-v">${shortSym}</span><span class="rsa-d">${shortVal}</span></div>
       </div>
       ${ethsnap?`<div class="rsethline">${ethsnap}</div>`:''}
       <details class="rsmore"><summary>알트 ${rs.n}개 상세 · 7일 상대수익률</summary><div class="rsbody">${rows}</div></details>
@@ -483,7 +491,7 @@ function posSection(list){
     return `<tr><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td>
       <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td></tr>`;
   }).join("");
-  return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 — 청산되면 일지에 기록됩니다)</span></div>
+  return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
     <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 async function ensurePositions(){
@@ -760,7 +768,7 @@ function metricsRow(m){
     +mcard('MAR (수익÷MDD)',!isFinite(m.mar)?(m.n>=3?'∞':'—'):m.mar.toFixed(2),m.mar>=1?'pos':(m.mar>0?'':'neg'),'클수록 낙폭 대비 효율↑')
     +(m.avgRiskPct!=null?mcard('평균 리스크/거래',m.avgRiskPct.toFixed(2)+'%',m.avgRiskPct>2?'neg':'',`최대 ${m.maxRiskPct.toFixed(2)}% · 계좌 대비`):'')
     +mcard('순손익',money(m.net),m.net>=0?'pos':'neg',m.funding?'펀딩 포함':'수수료 반영')
-    +mcard('켈리 비중',(m.n>=20&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=20&&m.kelly>0)?'pos':'',m.n<20?'표본 부족(20건+ 필요)':(m.kelly>0?`½켈리만 권장 ${Math.round(m.kelly*50)}%`:'기댓값 0 이하 — 우위 없음'))
+    +mcard('켈리 비중',(m.n>=20&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=20&&m.kelly>0)?'pos':'',m.n<20?'표본 부족(20건+ 필요)':(m.kelly>0?`½켈리만 권장 ${Math.round(m.kelly*50)}%`:'기댓값 0 이하 · 우위 없음'))
     +`</div>`;
 }
 let EQ_MODE='usdt';  // 자산곡선 모드: 'usdt' | 'r'(리스크 정규화)
@@ -866,7 +874,7 @@ function sessionCard(ts){
 }
 function rHist(ts){
   const rs=ts.map(t=>t.r).filter(r=>r!=null);
-  if(rs.length<3)return `<p class="empty-inline">R 입력 거래가 적습니다 — 손절가(SL)를 채우면 R 분포가 그려집니다.</p>`;
+  if(rs.length<3)return `<p class="empty-inline">R 입력 거래가 적습니다. 손절가(SL)를 채우면 R 분포가 그려집니다.</p>`;
   const B=[["≤-2",-1e9,-2],["-2~-1",-2,-1],["-1~0",-1,0],["0~1",0,1],["1~2",1,2],["2~3",2,3],[">3",3,1e9]];
   const cnt=B.map(([l,lo,hi])=>rs.filter(r=>r>lo&&r<=hi).length);
   const mx=Math.max(...cnt,1), W=600,H=170,pad=26,bw=(W-2*pad)/B.length;
@@ -938,7 +946,7 @@ function trustBoard(ts){
   if(revN>0)cf.push(mcard(`복수매매 의심 ${revN}건`,money(revPnl),revPnl<0?'neg':'','손실 직후 30분내 재진입 손익'));
   if(moneyLeft>0)cf.push(mcard('두고 온 이익',k$(moneyLeft),'','계획 익절 전 조기청산 누적'));
   const cfBlock=cf.length?`<div class="mgrid">${cf.join('')}</div>`
-    :`<p class="muted">아직 교정 신호 없음 — 예상 손절/익절가를 채우면 '습관의 가격표'가 쌓입니다.</p>`;
+    :`<p class="muted">아직 교정 신호 없음. 예상 손절·익절가를 채우면 '습관의 가격표'가 쌓입니다.</p>`;
   // ② 데이터 신뢰도 점수
   const planned=(n-ts.filter(t=>t.status==='의도 미기입').length)/n;
   const slok=ts.filter(t=>t.r!=null).length/n;
@@ -957,7 +965,7 @@ function trustBoard(ts){
   const sb=`<div class="table-wrap"><table><thead><tr><th>그룹</th><th class="num">건수</th><th class="num">승률</th><th class="num">평균손익</th></tr></thead><tbody>
     <tr><td>SL 기입</td><td class="num">${a.n}</td><td class="num">${a.wr}%</td><td class="num ${a.avg>=0?'pos':'neg'}">${money(a.avg)}</td></tr>
     <tr><td>SL 미기입</td><td class="num">${b.n}</td><td class="num">${b.wr}%</td><td class="num ${b.avg>=0?'pos':'neg'}">${money(b.avg)}</td></tr>
-    </tbody></table></div><div class="ccap muted">두 군의 승률이 크게 다르면 — 이긴 거래에 SL을 더 자주 채워 평균R이 과대평가됐을 수 있음(선택편향).</div>`;
+    </tbody></table></div><div class="ccap muted">두 군의 승률이 크게 다르면, 이긴 거래에 SL을 더 자주 채워 평균R이 과대평가됐을 수 있습니다(선택편향).</div>`;
   return `<div class="section-title">내 습관의 가격표 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 반사실(실제 데이터)</span></div>${cfBlock}
     <div class="section-title">데이터 신뢰도</div>${trust}
     <div class="section-title">생존편향 점검 · SL 기입 vs 미기입</div>${sb}`;
@@ -979,22 +987,22 @@ function renderInsights(el){
     <dt>켈리 비중</dt><dd>수학적 최적 베팅 비중. 과대평가되기 쉬워 <b>절반(½켈리)만</b> 쓰길 권장. 표본 20건+부터만 표시.</dd>
     <dt>펀딩(비)</dt><dd>무기한 선물 보유 중 롱·숏이 주기적으로 주고받는 수수료. 순손익에 ± 반영.</dd>
     <dt>상대강도</dt><dd>각 알트가 최근 7일 BTC보다 얼마나 더(또는 덜) 올랐는지. 위=강세(롱 후보), 아래=약세(숏 후보).</dd>
-    <dt>청산 방식</dt><dd>포지션이 어떻게 닫혔나 — 손절(SL)·익절(TP)·트레일링·수동·강제청산. (Bybit 자동 판별)</dd>
+    <dt>청산 방식</dt><dd>포지션이 어떻게 닫혔나: 손절(SL)·익절(TP)·트레일링·수동·강제청산. (Bybit 자동 판별)</dd>
     <dt>복수매매 / 틸트</dt><dd>복수매매 = 손실 직후 만회하려 급히 재진입. 틸트 = 감정에 휘둘려 무너지는 상태(연패·복수매매로 추정).</dd>
     <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b>합니다. 본절이 패배로 둔갑하지 않도록.</dd></dl></details>`;
   el.innerHTML=
-     `<div class="group-title">개요 · 정직성</div><div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
+     `<div class="group-title"><span class="gti">${ICONS.ov}</span>개요 · 정직성</div><div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
     +trustBoard(ts)
-    +`<div class="group-title">자본 · 리스크</div><div class="section-title">자산 곡선 · 낙폭</div><div id="eqHost">`+equityPanel(ts)+`</div>`
+    +`<div class="group-title"><span class="gti">${ICONS.shield}</span>자본 · 리스크</div><div class="section-title">자산 곡선 · 낙폭</div><div id="eqHost">`+equityPanel(ts)+`</div>`
     +(ddp?`<div class="section-title">낙폭 이력 · 회복</div>`+ddp:'')
     +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
-    +`<div class="group-title">실행 · 비용</div><div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)
+    +`<div class="group-title"><span class="gti">${ICONS.check}</span>실행 · 비용</div><div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
     +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
     +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)
-    +`<div class="group-title">행동 · 세분화</div><div class="section-title">심리 · 스트릭</div>`+behaviorPanel(ts)
+    +`<div class="group-title"><span class="gti">${ICONS.compass}</span>행동 · 세분화</div><div class="section-title">심리 · 스트릭</div>`+behaviorPanel(ts)
     +`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음.</p>`)
-    +(sgPanel?`<div class="group-title">자기 채점 · 과정 평가 <span class="muted" style="font-weight:400;font-size:var(--fs-xs)">결과 아닌 과정</span></div>`+sgPanel:'')
+    +(sgPanel?`<div class="group-title"><span class="gti">${ICONS.award}</span>자기 채점 · 과정 평가 <span class="muted" style="font-weight:400;font-size:var(--fs-xs)">결과 아닌 과정</span></div>`+sgPanel:'')
     +`<div class="ins-grid">`
     +`<div class="ins-cell"><div class="section-title">전략별 성과</div>`+(stratTbl||`<p class="empty-inline">거래에 진입전략을 입력하면 전략별 손익·승률이 집계됩니다.</p>`)+`</div>`
     +(tagStatsTable(ts)?`<div class="ins-cell"><div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts)+`</div>`:"")
@@ -1007,7 +1015,7 @@ function renderInsights(el){
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"binance",nm:"Binance",hint:"USDⓈ-M 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
-  {k:"gate",nm:"Gate.io",hint:"USDT 무기한 선물 read-only 키",read:1,ack:"이 키는 '읽기 전용'입니다 — Gate는 권한 자동 검증이 불가해 직접 확인합니다",fields:[["key","API Key","text"],["secret","API Secret","password"]]},
+  {k:"gate",nm:"Gate.io",hint:"USDT 무기한 선물 read-only 키",read:1,ack:"이 키는 '읽기 전용'입니다. Gate는 권한 자동 검증이 안 돼 직접 확인합니다",fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"notion",nm:"Notion",hint:"일지를 Notion으로 내보내기",soon:1,fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
   {k:"telegram",nm:"Telegram",hint:"행동 요약 알림 받기",soon:1,fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
   {k:"sheets",nm:"Google Sheets",hint:"일지를 Google Sheets로 내보내기",soon:1,fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},
@@ -1122,7 +1130,7 @@ async function saveIntent(){
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){await loadAll();route();
       const pend=DATA.trades.filter(t=>t.status==='의도 미기입');
-      if(pend.length){openModal(pend[0].trade_id);toast(`저장됨 · 미기입 ${pend.length}건 남음 — 이어서 채우기`);}
+      if(pend.length){openModal(pend[0].trade_id);toast(`저장됨 · 미기입 ${pend.length}건 남음 · 이어서 채우기`);}
       else{closeModal();toast("저장 완료 · 미기입 거래 모두 정리됨");}
     }else toast("저장하지 못했습니다. 해당 거래를 찾지 못했습니다");
   }catch(err){toast("저장하지 못했습니다. 잠시 후 다시 시도해 주세요");}
