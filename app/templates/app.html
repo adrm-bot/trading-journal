@@ -322,7 +322,9 @@ function marketStrip(m){
   if(m.dom){const d=m.dom;
     const main=`<div class="domr"><span class="dl">BTC.D</span><span class="dv">${d.btc}%</span>${tfArrows(d.btcd_tf)}</div>`
       +`<div class="domr"><span class="dl">USDT.D</span><span class="dv">${d.usdt}%</span>${tfArrows(d.usdtd_tf)}</div>`;
-    const tip=`BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블) 비중·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(무료 API에 도미넌스 시계열 없음 — BTC.D≈BTC/ETH 비율, USDT.D≈시장 역) · % 현재값은 스냅샷 정확`;
+    const tip=d.trend_real
+      ? `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세 = 실제 도미넌스 시계열(CRYPTOCAP) EMA50/200 · % 현재값 스냅샷`
+      : `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(도미넌스 시계열 미가용 — BTC.D≈BTC/ETH, USDT.D≈시장 역) · % 현재값 스냅샷`;
     chips.push(mchip("도미넌스 · 추세",main,`기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)}`,"dom",tip));}
   if(m.fng){const f=fngKo(m.fng.value),h=m.fng.history||[];
     const sub=h.length>=8?`<span class="fngflow ${f[1]}">${spark(h)}</span><span class="fngd">어제 ${h[1]} · 저번주 ${h[7]}</span>`:"시장 심리 (alt.me)";

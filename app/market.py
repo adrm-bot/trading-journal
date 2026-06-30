@@ -10,6 +10,8 @@ import urllib.request
 
 import ccxt
 
+from . import tvremix
+
 logger = logging.getLogger("app.market")
 
 _CACHE = {"at": 0.0, "data": None}
@@ -112,6 +114,25 @@ def _dom_proxy(ex):
             usdtd[tf] = _invert(_trend(mkt)[0]) if mkt else None
         except Exception:  # noqa: BLE001
             btcd[tf], usdtd[tf] = None, None
+    return btcd, usdtd
+
+
+# TVRemix 인터벌 매핑(우리 1d → TradingView 1D)
+_TV_TF = {"1h": "1h", "4h": "4h", "1d": "1D"}
+
+
+def _dom_trends_real():
+    """TVRemix로 실제 도미넌스 시계열(CRYPTOCAP:BTC.D/USDT.D)의 EMA50/200 추세 — 프록시 아님.
+    키 없거나 한 TF라도 200봉 미만이면 None(호출부가 프록시로 폴백)."""
+    if not tvremix.enabled():
+        return None
+    btcd, usdtd = {}, {}
+    for tf, iv in _TV_TF.items():
+        bd, _, _ = _trend(tvremix.closes("CRYPTOCAP:BTC.D", iv, 300))
+        ud, _, _ = _trend(tvremix.closes("CRYPTOCAP:USDT.D", iv, 300))
+        if bd is None and ud is None:
+            return None  # 사실상 실패 → 폴백
+        btcd[tf], usdtd[tf] = bd, ud
     return btcd, usdtd
 
 
@@ -227,8 +248,16 @@ def get_context(force=False):
             data[key] = fn()
         except Exception:  # noqa: BLE001
             logger.warning("market %s 실패", key)
-    if data.get("dom"):  # 도미넌스 칩에 멀티TF 프록시 추세 주입(가격기반 추정)
+    if data.get("dom"):  # 도미넌스 멀티TF 추세: TVRemix 실데이터 우선, 실패 시 가격기반 프록시
         data["dom"]["btcd_tf"] = md.get("btcd_tf")
         data["dom"]["usdtd_tf"] = md.get("usdtd_tf")
+        data["dom"]["trend_real"] = False
+        try:
+            real = _dom_trends_real()
+            if real:
+                data["dom"]["btcd_tf"], data["dom"]["usdtd_tf"] = real
+                data["dom"]["trend_real"] = True
+        except Exception:  # noqa: BLE001
+            logger.warning("market 도미넌스 실데이터 실패 → 프록시")
     _CACHE["data"], _CACHE["at"] = data, now
     return data
