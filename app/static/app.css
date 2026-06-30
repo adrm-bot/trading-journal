@@ -17,7 +17,7 @@
   /* text */
   --heading:var(--snow); --ice:var(--snow); --glacier:var(--snow);
   --text:var(--mist); --moonlight:var(--mist); --pebble:var(--fog);
-  --muted:var(--fog); --dim:#7e848e; --frost:var(--indigo);  /* --dim 상향(#62→#7e): 회색 마이크로카피 WCAG AA(≥4.5:1) 충족 */
+  --muted:var(--fog); --dim:#7e848e; --frost:#7e8af0;  /* 인디고 텍스트 톤: --indigo(#5e6ad2)는 다크 위 ~3.8:1로 AA 미달 → 텍스트용은 한 단계 밝게(≥4.5:1). 보더/필/세만틱 bg는 --indigo 유지 */
 
   /* semantic — P&L green/red are functional; lime reserved for the single primary CTA */
   --pos:#3fb950; --pos-rgb:63,185,80; --pos-soft:rgba(var(--pos-rgb),.13);
@@ -27,7 +27,7 @@
   --accent:var(--acid-lime); --accent-soft:rgba(228,242,34,.12);
   --focus:#8b95ff;  /* 다크 표면 위 가시성 높은 포커스 링(인디고 라이트) */
   /* legacy aliases → Linear */
-  --iris:var(--acid-lime); --iris-hi:#eef85a; --ember:var(--crimson); --azure:var(--indigo); --mint:#3fb950;
+  --iris:var(--acid-lime); --iris-hi:#eef85a; --ember:var(--crimson); --azure:#7e8af0; --mint:#3fb950;
 
   /* elevation — inset border + drop shadow, never fills */
   --glow:0 0 0 1px rgba(94,106,210,.45);
@@ -441,7 +441,7 @@ svg.uw{width:100%;height:46px;display:block}
 .cal{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,13px);gap:3px;overflow-x:auto;padding-bottom:4px}
 .cal-cell{width:13px;height:13px;border-radius:2px}
 .hours{display:grid;grid-template-columns:repeat(12,1fr);gap:3px;margin-bottom:var(--s4)}
-.hcell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:3px;font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--moonlight)}
+.hcell{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:3px;font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--moonlight);text-shadow:0 1px 2px rgba(0,0,0,.55)}
 .sess{display:flex;flex-direction:column;gap:1px}
 .srow{display:grid;grid-template-columns:1fr auto auto;gap:var(--s4);padding:7px 0;border-bottom:1px solid var(--line);font-size:var(--fs-sm);align-items:center}
 .srow.s2{grid-template-columns:1fr auto}
