@@ -73,10 +73,20 @@ a{color:inherit;text-decoration:none}
 /* ---- app shell ---- */
 .shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
 .side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:var(--s4);overflow:hidden;transition:padding .15s ease}
-@media(min-width:861px){.shell.nav-off{grid-template-columns:0 1fr}.shell.nav-off .side{padding-left:0;padding-right:0;border-right:0}}  /* 사이드바 토글(데스크탑 한정) — 완전 접힘 */
-.navtoggle{flex:0 0 auto;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-btn);color:var(--moonlight);cursor:pointer;transition:.12s}
-.navtoggle:hover{background:var(--card);color:var(--glacier)} .navtoggle svg{width:18px;height:18px}
-.tb-left{display:flex;align-items:center;gap:var(--s4);min-width:0}
+.side-top{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:var(--s5)}
+.side-top .brand{padding:0;min-width:0}
+.navtoggle{flex:0 0 auto;width:32px;height:32px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-btn);color:var(--moonlight);cursor:pointer;transition:.12s}
+.navtoggle:hover{background:var(--card);color:var(--glacier)} .navtoggle svg{width:17px;height:17px}
+/* 아이콘 레일(접힘, 데스크탑 >860): 사라지지 않고 아이콘만 남는 56px 띠 */
+@media(min-width:861px){
+  .shell.nav-off{grid-template-columns:56px 1fr}
+  .shell.nav-off .side{padding:var(--s4) 8px}
+  .shell.nav-off .brand{display:none}
+  .shell.nav-off .side-top{justify-content:center;margin-bottom:var(--s4)}
+  .shell.nav-off .nav a{justify-content:center;padding:9px 0;gap:0}
+  .shell.nav-off .nav .lbl{display:none}
+  .shell.nav-off .foot{display:none}
+}
 @media(max-width:860px){.navtoggle{display:none}}
 .brand{font-family:var(--f-display);font-weight:510;font-size:17px;color:var(--glacier);letter-spacing:0;padding:var(--s2) var(--s3) var(--s6);display:flex;align-items:center;gap:8px}
 .brand-ic{width:20px;height:20px;flex:0 0 auto}

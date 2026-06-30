@@ -9,21 +9,21 @@
 <a class="sr-only" href="#main">본문 바로가기</a>
 <div class="shell" id="shell">
   <aside class="side">
-    <div class="brand"><svg class="brand-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 3v18"/></svg>매매일지</div>
+    <div class="side-top">
+      <div class="brand"><svg class="brand-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 3v18"/></svg><span class="brand-lbl">매매일지</span></div>
+      <button class="navtoggle" id="navToggle" aria-label="메뉴 접기·펼치기" aria-pressed="false" data-tip="메뉴 접기·펼치기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+    </div>
     <nav class="nav" aria-label="주 메뉴">
-      <a href="#dashboard" data-view="dashboard"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M7 20v-6M12 20v-11M17 20v-9"/></svg></span>대시보드</a>
-      <a href="#journal" data-view="journal"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span>거래</a>
-      <a href="#insights" data-view="insights"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5 7 4-14 2.5 7h6"/></svg></span>인사이트</a>
-      <a href="#settings" data-view="settings"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="8" cy="18" r="2.2"/></svg></span>설정</a>
+      <a href="#dashboard" data-view="dashboard"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M7 20v-6M12 20v-11M17 20v-9"/></svg></span><span class="lbl">대시보드</span></a>
+      <a href="#journal" data-view="journal"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span><span class="lbl">거래</span></a>
+      <a href="#insights" data-view="insights"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5 7 4-14 2.5 7h6"/></svg></span><span class="lbl">인사이트</span></a>
+      <a href="#settings" data-view="settings"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="8" cy="18" r="2.2"/></svg></span><span class="lbl">설정</span></a>
     </nav>
     <div class="foot"><div class="email" id="email">—</div><a href="/logout">로그아웃</a></div>
   </aside>
   <main class="main" id="main">
     <div class="topbar">
-      <div class="tb-left">
-        <button class="navtoggle" id="navToggle" aria-label="메뉴 접기·펼치기" aria-pressed="false" data-tip="메뉴 접기·펼치기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
-        <div><div class="eyebrow tb-eyebrow" id="eyebrow">OVERVIEW</div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
-      </div>
+      <div><div class="eyebrow tb-eyebrow" id="eyebrow">OVERVIEW</div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
       <div class="tbar-right">
         <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-3.8-3.8"/></svg>검색 <span class="kbd">⌘K</span></button>
         <div id="actions"></div>
