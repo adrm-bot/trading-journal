@@ -287,6 +287,7 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .empty-sm{padding:var(--s8);text-align:center;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--inset)}
 .banner{display:flex;align-items:center;gap:8px;padding:9px var(--s5);font-size:var(--fs-sm);border-bottom:1px solid var(--line)}
 .banner.err{background:var(--neg-soft);color:var(--ember);border-bottom-color:rgba(var(--neg-rgb),.3)}
+.banner.warn{background:var(--warn-soft);color:var(--amber);border-bottom-color:rgba(210,153,34,.3)}
 .banner b{font-weight:510}
 .banner .bx{margin-left:auto;background:none;border:none;color:inherit;font-size:var(--fs-lg);cursor:pointer;line-height:1;padding:0 4px}
 .badge.liq{background:var(--neg-soft);color:var(--ember);font-size:var(--fs-micro);padding:1px 6px}

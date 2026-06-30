@@ -960,7 +960,11 @@ async function saveIntent(){
   const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,tp3:$("#f_tp3").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
-    if(res.ok){closeModal();await loadAll();route();toast("기록 저장됨");}else toast("저장하지 못했어요 — 거래를 찾지 못했어요");
+    if(res.ok){await loadAll();route();
+      const pend=DATA.trades.filter(t=>t.status==='의도 미기입');
+      if(pend.length){openModal(pend[0].trade_id);toast(`저장됨 · 미기입 ${pend.length}건 남음 — 이어서 채우기`);}
+      else{closeModal();toast("기록 저장됨 · 모두 정리 완료");}
+    }else toast("저장하지 못했어요 — 거래를 찾지 못했어요");
   }catch(err){toast("저장하지 못했어요 — 잠시 후 다시 시도해 주세요");}
   finally{SAVING=false;btn.disabled=false;}
 }
@@ -973,7 +977,7 @@ function errBanner(innerHTML){  /* 영구 에러 배너 + 다시 시도(toast는
 }
 function setPullBanner(results){
   const errs=Object.entries(results||{}).filter(([k,v])=>v&&v.error);
-  if(!errs.length){setBanner('');return;}
+  if(!errs.length){nudgeUnplanned();return;}  /* 에러 없으면 미기입 nudge로 대체(있을 때만) */
   errBanner(errs.map(([k,v])=>`<b>${esc(EXN(k))}</b> ${esc(v.error)}`).join(' · '));
 }
 async function pull(opt){opt=opt||{};
@@ -992,11 +996,29 @@ async function pull(opt){opt=opt||{};
       else if(!opt.silent) toast(ok.length?`불러옴: ${ok.map(([k,v])=>`${EXN(k)} +${v.added}`).join(' · ')}`:`연결된 거래소 없음`);
     }else{errBanner(esc(res.error||"거래를 불러오지 못했어요"));}
   }catch(err){const m=err&&err.message;
-    if(m&&m.indexOf("http ")!==0)toast(m);  /* 쿨다운(429) 등 명확한 메시지는 토스트로 */
+    if(m&&m.indexOf("http ")!==0&&!opt.silent)toast(m);  /* 쿨다운(429) 등 명확한 메시지는 토스트로(자동 동기화는 조용히) */
     else errBanner("거래를 불러오지 못했어요 — API 키와 연결을 확인해 주세요");}
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 불러오기";}}
 }
 
+/* 폐루프: 앱 진입 시 stale면 자동 동기화 — 거래소 연결돼 있고 마지막 자동풀이 6h+ 지났으면 조용히 1회 */
+function autoSync(){
+  try{
+    if(!(CONN&&CONN.some(k=>EXCH.has(k))))return;
+    const last=+(localStorage.getItem('lastAutoPull')||0);
+    if(Date.now()-last<6*3600*1000)return;
+    localStorage.setItem('lastAutoPull',String(Date.now()));
+    pull({silent:true});
+  }catch(e){}
+}
+/* 폐루프: 미기입 거래가 있으면 상단 nudge 배너로 '지금 채우기' 유도(세션당 1회 디스미스 가능) */
+function nudgeUnplanned(){
+  if(sessionStorage.getItem('nudgeOff'))return;
+  const n=(DATA.summary&&DATA.summary.unplanned)||0; if(n<1){setBanner('');return;}
+  setBanner(`<div class="banner warn">${ICONS.warn} 계획 미기입 <b>${n}건</b> — 사후 의도를 채우면 통계가 정확해집니다 <button class="btn sm" id="nudgeFill" style="margin-left:auto">지금 채우기</button><button class="bx" aria-label="닫기">×</button></div>`);
+  const f=$("#nudgeFill");if(f)f.onclick=()=>{setBanner('');location.hash='#journal';route();applyView({status:'pending'});};
+  const bx=$("#pullbanner .bx");if(bx)bx.onclick=()=>{sessionStorage.setItem('nudgeOff','1');setBanner('');};
+}
 function openBulk(){setChips("cb_emo",[]);$("#bulkMeta").textContent=`계획 미기입 ${DATA.summary.unplanned||0}건에 적용`;$("#shell").inert=true;$("#bulkBg").classList.add("show");$("#b_plan").focus();}
 function closeBulk(){$("#bulkBg").classList.remove("show");$("#shell").inert=false;}
 function openDelAcct(){$("#delConfirm").value="";$("#delAcctDo").disabled=true;$("#shell").inert=true;$("#delAcctBg").classList.add("show");$("#delConfirm").focus();}
@@ -1092,5 +1114,5 @@ document.addEventListener("keydown",e=>{
   document.addEventListener('mouseout',e=>{if(e.target.closest&&e.target.closest('[data-tip]')){cur=null;tip.classList.remove('show');}});
 })();
 window.addEventListener("hashchange",route);
-(async()=>{paintBootSkeleton();try{await loadAll();route();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
+(async()=>{paintBootSkeleton();try{await loadAll();route();nudgeUnplanned();autoSync();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>
