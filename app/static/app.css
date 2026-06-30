@@ -72,7 +72,12 @@ a{color:inherit;text-decoration:none}
 
 /* ---- app shell ---- */
 .shell{display:grid;grid-template-columns:230px 1fr;min-height:100vh}
-.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:var(--s4)}
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:var(--s4);overflow:hidden;transition:padding .15s ease}
+@media(min-width:861px){.shell.nav-off{grid-template-columns:0 1fr}.shell.nav-off .side{padding-left:0;padding-right:0;border-right:0}}  /* 사이드바 토글(데스크탑 한정) — 완전 접힘 */
+.navtoggle{flex:0 0 auto;width:34px;height:34px;display:inline-flex;align-items:center;justify-content:center;background:transparent;border:1px solid var(--line-2);border-radius:var(--r-btn);color:var(--moonlight);cursor:pointer;transition:.12s}
+.navtoggle:hover{background:var(--card);color:var(--glacier)} .navtoggle svg{width:18px;height:18px}
+.tb-left{display:flex;align-items:center;gap:var(--s4);min-width:0}
+@media(max-width:860px){.navtoggle{display:none}}
 .brand{font-family:var(--f-display);font-weight:510;font-size:17px;color:var(--glacier);letter-spacing:0;padding:var(--s2) var(--s3) var(--s6);display:flex;align-items:center;gap:8px}
 .brand-ic{width:20px;height:20px;flex:0 0 auto}
 .btn-ic{width:14px;height:14px;flex:0 0 auto}

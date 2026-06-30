@@ -20,7 +20,10 @@
   </aside>
   <main class="main" id="main">
     <div class="topbar">
-      <div><div class="eyebrow tb-eyebrow" id="eyebrow">OVERVIEW</div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
+      <div class="tb-left">
+        <button class="navtoggle" id="navToggle" aria-label="메뉴 접기·펼치기" aria-pressed="false" data-tip="메뉴 접기·펼치기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+        <div><div class="eyebrow tb-eyebrow" id="eyebrow">OVERVIEW</div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
+      </div>
       <div class="tbar-right">
         <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-3.8-3.8"/></svg>검색 <span class="kbd">⌘K</span></button>
         <div id="actions"></div>
@@ -1183,5 +1186,10 @@ window.addEventListener("hashchange",route);
 function _drill(g){if(!g)return;location.hash='#journal';route();applyView({[g.dataset.jf]:g.dataset.jv});}
 document.addEventListener('click',e=>{const g=e.target.closest&&e.target.closest('.grow[data-jf]');if(g)_drill(g);});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const g=e.target.closest&&e.target.closest('.grow[data-jf]');if(g){e.preventDefault();_drill(g);}});
+(function(){const sh=$("#shell"),b=$("#navToggle");if(!sh||!b)return;  /* 사이드바 토글(데스크탑) — 상태 기억 */
+  const set=off=>{sh.classList.toggle('nav-off',off);b.setAttribute('aria-pressed',String(off));try{localStorage.setItem('navOff',off?'1':'');}catch(e){}};
+  b.onclick=()=>set(!sh.classList.contains('nav-off'));
+  try{if(localStorage.getItem('navOff'))set(true);}catch(e){}
+})();
 (async()=>{paintBootSkeleton();try{await loadAll();route();nudgeUnplanned();autoSync();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>
