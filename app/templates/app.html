@@ -47,10 +47,13 @@
     <div class="field"><label>진입전략 <span class="muted">· 하나 선택</span></label><div class="chips" id="c_strategy"></div></div>
     <div class="field"><label>진입근거 <span class="muted">· 여러 개 탭</span></label><div class="chips" id="c_setup"></div>
       <input id="f_setup_etc" placeholder="기타 근거 직접 입력 (선택)" style="margin-top:6px"></div>
-    <div class="row3">
+    <div class="row2">
       <div class="field"><label for="f_sl">예상 손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
       <div class="field"><label for="f_tp">예상 익절가1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
+    </div>
+    <div class="row2">
       <div class="field"><label for="f_tp2">예상 익절가2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
+      <div class="field"><label for="f_tp3">예상 익절가3 (TP3)</label><input id="f_tp3" type="number" step="any" placeholder="0.104"></div>
     </div>
     <div class="rr-line" id="rrLine"></div>
     <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
@@ -233,6 +236,16 @@ function tagChips(r){
   if(r.emotion)out.push(`<span class="rtag emo">${esc(r.emotion)}</span>`);
   return out.join("");
 }
+/* 계획 레벨 — 카드에 SL·TP1·TP2·TP3 바로 표시(있는 것만) */
+function planLevels(r){
+  const has=v=>v!=null&&v!=='';
+  const lv=[];
+  if(has(r.sl))lv.push(`<span class="lv lvsl">SL ${fmtP(r.sl)}</span>`);
+  if(has(r.tp))lv.push(`<span class="lv lvtp">TP1 ${fmtP(r.tp)}</span>`);
+  if(has(r.tp2))lv.push(`<span class="lv lvtp">TP2 ${fmtP(r.tp2)}</span>`);
+  if(has(r.tp3))lv.push(`<span class="lv lvtp">TP3 ${fmtP(r.tp3)}</span>`);
+  return lv.length?`<div class="jlevels">${lv.join("")}</div>`:"";
+}
 function tradeCard(r){
   const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${dirKo(r.direction)}</span>`:"";
   const xr=exitBadge(r)?" "+exitBadge(r):"";
@@ -252,7 +265,7 @@ function tradeCard(r){
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 — 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
-    <div class="jmeta">${meta}</div>${stats}${body}</div>`;
+    <div class="jmeta">${meta}</div>${stats}${planLevels(r)}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
 /* 우측 레일용 컴팩트 최근거래 — 클릭 시 상세 모달(.jcard와 동일) */
@@ -929,29 +942,30 @@ function renderFacts(r){
 }
 function updateRR(){
   if(!EDIT)return; const e=EDIT.entry,x=EDIT.exit,d=EDIT.direction,qty=EDIT.qty;
-  const sl=parseFloat($("#f_sl").value), tp=parseFloat($("#f_tp").value), tp2=parseFloat($("#f_tp2").value);
+  const sl=parseFloat($("#f_sl").value), tp=parseFloat($("#f_tp").value), tp2=parseFloat($("#f_tp2").value), tp3=parseFloat($("#f_tp3").value);
   const p=[];
   if(e&&x&&!isNaN(sl)&&e!==sl){const r=d==='Short'?(e-x)/(sl-e):(x-e)/(e-sl);p.push(`실현 <b class="${r>=0?'pos':'neg'}">${(r>=0?'+':'')+r.toFixed(2)}R</b>`);}
   if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl)p.push(`TP1 R:R <b>1:${(Math.abs(tp-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp2)&&e!==sl)p.push(`TP2 R:R <b>1:${(Math.abs(tp2-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
+  if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
 }
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
   const liq=r.liquidated?' · 강제청산':'';
   $("#modalMeta").textContent=`${EXN(r.exchange)} · ${r.symbol} ${r.direction?dirKo(r.direction):''} · ${(toKST(r.closed_at)||{}).str||''} KST${liq}`;
   renderFacts(r);
-  $("#f_plan").value=r.plan||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_memo").value=r.memo||"";
+  $("#f_plan").value=r.plan||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_tp3").value=r.tp3??"";$("#f_memo").value=r.memo||"";
   setChips("c_strategy",r.strategy?[r.strategy]:[]);setChips("c_emo",r.emotion?[r.emotion]:[]);
   const _etc=setChips("c_setup",(r.setup||"").split(",").map(s=>s.trim()).filter(Boolean));$("#f_setup_etc").value=_etc.join(", ");
   updateRR();
-  const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.memo);
+  const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo);
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
   const _setup=getChips("c_setup");const _e=$("#f_setup_etc").value.trim();if(_e)_setup.push(_e);
-  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value};
+  const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,tp3:$("#f_tp3").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){closeModal();await loadAll();route();toast("기록 저장됨");}else toast("저장하지 못했어요 — 거래를 찾지 못했어요");
@@ -1056,7 +1070,7 @@ $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;$("#closeBtn
 $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;$("#bulkClose").onclick=closeBulk;
 chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);
 chipsInto("cb_emo",EMOS,false);
-$("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;
+$("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
 $("#delAcctClose").onclick=closeDelAcct;$("#delAcctCancel").onclick=closeDelAcct;$("#delAcctDo").onclick=doDelAcct;

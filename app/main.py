@@ -261,11 +261,11 @@ async def api_intent(request: Request):
             return float(v) if v not in (None, "") else None
         except (TypeError, ValueError):
             return None
-    sl, tp, tp2 = _num(b.get("sl")), _num(b.get("tp")), _num(b.get("tp2"))
-    has_content = (sl is not None or tp is not None or tp2 is not None
+    sl, tp, tp2, tp3 = _num(b.get("sl")), _num(b.get("tp")), _num(b.get("tp2")), _num(b.get("tp3"))
+    has_content = (sl is not None or tp is not None or tp2 is not None or tp3 is not None
                    or any((b.get(k) or "").strip() for k in ("plan", "setup", "strategy", "memo", "emotion")))
     fields = {"plan": b.get("plan"), "setup": b.get("setup"), "strategy": b.get("strategy"),
-              "sl": sl, "tp": tp, "tp2": tp2, "emotion": b.get("emotion"), "memo": b.get("memo"),
+              "sl": sl, "tp": tp, "tp2": tp2, "tp3": tp3, "emotion": b.get("emotion"), "memo": b.get("memo"),
               "status": "기록완료" if has_content else "의도 미기입"}
     ok = db.update_intent(uid, b.get("trade_id"), fields)
     return JSONResponse({"ok": ok}, status_code=200 if ok else 404)
@@ -340,7 +340,7 @@ async def api_del_connection(request: Request):
 # 데이터 권리(PIPA/GDPR): 내보내기 + 계정·데이터 완전 삭제
 _EXPORT_COLS = ["closed_at", "opened_at", "exchange", "symbol", "direction", "entry", "exit", "qty",
                 "pnl", "r", "rr", "risk_usd", "leverage", "fees", "funding", "hold_min", "status",
-                "strategy", "setup", "sl", "tp", "tp2", "emotion", "plan", "memo", "exit_reason", "liquidated"]
+                "strategy", "setup", "sl", "tp", "tp2", "tp3", "emotion", "plan", "memo", "exit_reason", "liquidated"]
 
 
 @app.get("/api/export")
