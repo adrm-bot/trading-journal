@@ -10,7 +10,8 @@ DB_PATH = os.getenv("APP_DB_PATH", os.path.join(os.path.dirname(__file__), "data
 
 TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "opened_at", "closed_at", "fees", "funding", "leverage", "fill_count",
-              "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo"]
+              "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo",
+              "exit_count", "exit_legs", "mae_price", "mfe_price"]  # 분할청산 레그 + 최대 역행/순행(D)
 _INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "tp3", "emotion", "memo",
            "review", "mistake_tag", "chart_url", "status"}  # review=복기(교훈), mistake_tag=실수태그, chart_url=차트링크
 
@@ -42,12 +43,15 @@ def init():
           status TEXT DEFAULT '의도 미기입',
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL, emotion TEXT, memo TEXT,
           review TEXT, mistake_tag TEXT, chart_url TEXT,
+          exit_count INTEGER, exit_legs TEXT, mae_price REAL, mfe_price REAL,
           PRIMARY KEY(user_id, trade_id));
         """)
         # 마이그레이션: 기존 DB에 누락 컬럼 추가 (idempotent)
         cols = {r[1] for r in c.execute("PRAGMA table_info(trades)")}
         for name, typ in (("tp", "REAL"), ("strategy", "TEXT"), ("tp2", "REAL"), ("tp3", "REAL"),
                           ("review", "TEXT"), ("mistake_tag", "TEXT"), ("chart_url", "TEXT"),
+                          ("exit_count", "INTEGER"), ("exit_legs", "TEXT"),
+                          ("mae_price", "REAL"), ("mfe_price", "REAL"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
                           ("leverage", "REAL"), ("fill_count", "INTEGER"), ("liquidated", "INTEGER"),
                           ("exit_reason", "TEXT")):

@@ -9,6 +9,20 @@ def test_long_winner_correct_sl():
     assert "sl_invalid" not in t
 
 
+def test_partial_exit_legs_r():
+    # 롱 진입100·SL90(1R=10) · 분할청산 120(+2R)·140(+4R)
+    t = analytics.enrich({"entry": 100, "exit": 130, "sl": 90, "qty": 2, "direction": "Long",
+                          "exit_legs": "[[120,1],[140,1]]"})
+    assert t["legs_r"] == [2.0, 4.0]
+
+
+def test_partial_exit_legs_r_short():
+    # 숏 진입200·SL210(1R=10) · 분할청산 180(+2R)·160(+4R)
+    t = analytics.enrich({"entry": 200, "exit": 170, "sl": 210, "qty": 2, "direction": "Short",
+                          "exit_legs": "[[180,1],[160,1]]"})
+    assert t["legs_r"] == [2.0, 4.0]
+
+
 def test_long_winner_wrongside_sl_no_negative_r():
     # 롱인데 SL을 진입가 위(110)에 오기입 — 수익 거래가 음수 R로 둔갑하면 안 됨
     t = analytics.enrich({"entry": 100, "exit": 120, "sl": 110, "qty": 1, "direction": "Long"})

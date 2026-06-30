@@ -45,6 +45,9 @@ def test_scale_out_vwap_exit():
     assert out[0]["qty"] == 2.0
     assert out[0]["pnl"] == 60.0
     assert out[0]["fill_count"] == 3
+    assert out[0]["exit_count"] == 2  # 분할청산 2레그
+    import json as _json
+    assert _json.loads(out[0]["exit_legs"]) == [[120.0, 1.0], [140.0, 1.0]]
 
 
 def test_flip_long_to_short():

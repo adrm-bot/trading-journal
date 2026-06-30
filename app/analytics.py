@@ -6,6 +6,7 @@
 - over_loss(스탑 미준수 초과손실)는 '손절 너머로 더 간 거리 × 수량'(가격 기준, 수수료 불포함)으로
   risk_usd와 동일한 기준에서 계산. (실현손익은 수수료·펀딩 포함이라 risk와 섞으면 구조적으로 과대.)
 """
+import json
 import os
 from datetime import datetime
 
@@ -81,4 +82,12 @@ def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
                 t["money_left"] = round(abs(tp - x) * qty, 2)  # 테이블에 두고 온 이익
     if t.get("rr"):
         t["exit_eff"] = round(r / t["rr"], 2) if r is not None else None
+    # 분할청산 레그별 R(가격 기준) — SL 유효 + 레그 보존(워크 재구성)된 거래만. 분할익절 충실도 가시화.
+    if e and sl and e != sl and t.get("exit_legs"):
+        try:
+            legs = json.loads(t["exit_legs"]) if isinstance(t["exit_legs"], str) else t["exit_legs"]
+            rd = abs(e - sl)
+            t["legs_r"] = [round(((p - e) / rd) * (-1 if short else 1), 2) for p, q in legs if p]
+        except (ValueError, TypeError):
+            pass
     return t

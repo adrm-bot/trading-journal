@@ -7,6 +7,7 @@
 - Binance: closed-pnl 등가가 없어 userTrades(체결, 강제청산 포함)를 부호 walk로 재구성, 실현손익은 거래소 보고값 합산.
 - 거래소 예외는 키가 섞일 수 있어 `raise ... from None`으로 원문 체인을 끊는다.
 """
+import json
 import logging
 import os
 import time
@@ -36,7 +37,8 @@ def _ts_str(ms):
 
 def _position_row(exchange, trade_id, symbol, direction, entry, exit_, qty, pnl,
                   opened_ms, closed_ms, fees=0.0, funding=0.0, leverage=0.0,
-                  fill_count=0, liquidated=False, exit_reason="unknown"):
+                  fill_count=0, liquidated=False, exit_reason="unknown",
+                  exit_count=0, exit_legs=None):
     return {
         "trade_id": trade_id, "exchange": exchange, "symbol": symbol, "direction": direction,
         "entry": entry, "exit": exit_, "qty": qty, "pnl": pnl,
@@ -44,6 +46,7 @@ def _position_row(exchange, trade_id, symbol, direction, entry, exit_, qty, pnl,
         "fees": round(fees, 6), "funding": round(funding, 6),
         "leverage": leverage or None, "fill_count": fill_count or None,
         "liquidated": 1 if liquidated else 0, "exit_reason": exit_reason, "status": "의도 미기입",
+        "exit_count": exit_count or None, "exit_legs": exit_legs,  # 분할청산 레그(JSON)
     }
 
 
@@ -242,7 +245,8 @@ def _binance_user_trades(ex, symbol, lookback):
 
 def _new_bpos(direction, ts, anchor):
     return {"dir": direction, "en": 0.0, "eq": 0.0, "xn": 0.0, "xq": 0.0,
-            "fee": 0.0, "rp": 0.0, "n": 0, "o": ts, "c": ts, "anchor": anchor, "liq": False}
+            "fee": 0.0, "rp": 0.0, "n": 0, "o": ts, "c": ts, "anchor": anchor, "liq": False,
+            "legs": []}  # 청산 레그(가격, 수량) — 분할청산 충실도/레그 R용
 
 
 def reconstruct_walk(exchange, symbol, trades, funding_events=None):
@@ -278,6 +282,7 @@ def reconstruct_walk(exchange, symbol, trades, funding_events=None):
                 close_q = min(q, abs(net))
                 frac = close_q / q if q else 1.0
                 pos["xn"] += price * close_q; pos["xq"] += close_q
+                pos["legs"].append((round(price, 10), round(close_q, 10)))  # 청산 레그 보존
                 pos["fee"] += fee * frac; pos["rp"] += realized
                 net += (-close_q if net > 0 else close_q)  # net을 0쪽으로
                 leftover = q - close_q
@@ -308,9 +313,11 @@ def _finalize_pos(exchange, symbol, pos, closing_id):
     # 실현손익: 거래소 보고 합(rp) 우선, 없으면 vwap 계산으로 폴백(Gate 등 fill에 pnl 미포함 대비)
     pnl = pos["rp"] if abs(pos["rp"]) > 1e-9 else dsign * (exit_ - entry) * xq - pos["fee"]
     tid = f"{exchange}:pos:{symbol}:{closing_id}"
+    legs = pos.get("legs") or []
     return _position_row(exchange, tid, symbol, pos["dir"], round(entry, 10), round(exit_, 10),
                          round(eq, 10), round(pnl, 8), pos["o"], pos["c"],
-                         fees=pos["fee"], fill_count=pos["n"], liquidated=pos["liq"])
+                         fees=pos["fee"], fill_count=pos["n"], liquidated=pos["liq"],
+                         exit_count=len(legs), exit_legs=(json.dumps(legs) if len(legs) > 1 else None))
 
 
 def fetch_binance(key, secret, lookback):

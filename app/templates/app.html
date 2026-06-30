@@ -272,7 +272,8 @@ function tradeCard(r){
       +((!t&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}`:"";
-  const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}</div>`;
+  const split=r.exit_count>1?` · <span class="muted" data-tip="${(r.legs_r&&r.legs_r.length)?'레그 R '+r.legs_r.map(x=>(x>=0?'+':'')+x).join(' · '):'분할 청산'}">분할 ${r.exit_count}회</span>`:"";
+  const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}${split}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 — 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
