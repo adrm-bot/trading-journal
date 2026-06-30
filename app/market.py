@@ -57,10 +57,12 @@ def _coin(ex, symbol, mtf=False):
     last = closes[-1]
     chg24 = (last / closes[-2] - 1) * 100 if len(closes) >= 2 else None
     chg7 = (last / closes[-8] - 1) * 100 if len(closes) >= 8 else None
+    chg90 = (last / closes[-91] - 1) * 100 if len(closes) >= 91 else None  # 알트시즌(90일) 비교용
     trend, e50, e200 = _trend(closes)  # 일봉 EMA50/EMA200(골든/데드 크로스) = 주추세
     out = {"price": round(last, 2), "trend": trend,
            "chg24": round(chg24, 2) if chg24 is not None else None,
            "chg7": round(chg7, 2) if chg7 is not None else None,
+           "chg90": round(chg90, 2) if chg90 is not None else None,
            "ema50": round(e50, 2) if e50 is not None else None,
            "ema200": round(e200, 2) if e200 is not None else None}
     if mtf:  # 1h·4h·1d 각각 EMA50/200 추세 (1d는 이미 받은 캔들 재사용)
@@ -77,6 +79,40 @@ def _coin(ex, symbol, mtf=False):
                 tf[t] = {"trend": None, "ema50": None, "ema200": None}
         out["tf"] = tf
     return out
+
+
+def _ratio_trend(a, b):
+    """두 종가 시리즈 비율(a/b)의 EMA50/200 추세 — 도미넌스 방향 가격기반 프록시."""
+    n = min(len(a), len(b))
+    if n < 200:
+        return None
+    ratio = [a[-n + i] / b[-n + i] for i in range(n)]
+    return _trend(ratio)[0]
+
+
+def _invert(t):
+    return {"up": "down", "down": "up", "side": "side"}.get(t)
+
+
+def _closes(ex, symbol, tf):
+    return [c[4] for c in ex.fetch_ohlcv(symbol, tf, limit=300) if c and c[4]]
+
+
+def _dom_proxy(ex):
+    """BTC.D·USDT.D의 1H·4H·1D 추세 = 가격기반 추정(무료 API에 도미넌스 시계열 없음).
+    BTC.D ≈ BTC/ETH 비율 추세(BTC가 알트 대장 대비 점유율↑/↓),
+    USDT.D ≈ 시장(BTC+ETH 지수) 추세의 역(시장↓ = 현금/스테이블 점유율↑ = 리스크오프)."""
+    btcd, usdtd = {}, {}
+    for tf in _TFS:
+        try:
+            bc, ec = _closes(ex, "BTC/USDT", tf), _closes(ex, "ETH/USDT", tf)
+            btcd[tf] = _ratio_trend(bc, ec)
+            n = min(len(bc), len(ec))
+            mkt = [bc[-n + i] / bc[-n] + ec[-n + i] / ec[-n] for i in range(n)] if n >= 200 else []
+            usdtd[tf] = _invert(_trend(mkt)[0]) if mkt else None
+        except Exception:  # noqa: BLE001
+            btcd[tf], usdtd[tf] = None, None
+    return btcd, usdtd
 
 
 # 상대강도 비교군(메이저 알트). BTC 대비 7일 상대수익률로 강약 순위.
@@ -99,8 +135,19 @@ def _regime(board, btc):
             "btc_chg7": btc.get("chg7"), "btc_trend": btc.get("trend")}
 
 
+def _altseason(board, btc):
+    """알트시즌 지수(0-100) = 최근 90일 BTC 수익률을 초과한 알트 비율.
+    표준 Altcoin Season Index(보통 top50) 축약판 — 표본 N=알트수라 방향 참고용."""
+    bc90 = btc.get("chg90")
+    pts = [b for b in board if b.get("chg90") is not None]
+    if bc90 is None or not pts:
+        return None
+    op = sum(1 for b in pts if b["chg90"] > bc90)
+    return {"value": round(op / len(pts) * 100), "n": len(pts)}
+
+
 def _market_data():
-    """리전 차단 회피: Bybit→Binance. BTC·ETH 시세 + 알트 상대강도 보드/레짐."""
+    """리전 차단 회피: Bybit→Binance. BTC·ETH 시세 + 알트 상대강도 보드/레짐 + 도미넌스 프록시 추세."""
     for name in ("bybit", "binance"):
         try:
             ex = getattr(ccxt, name)({"enableRateLimit": True})
@@ -114,29 +161,39 @@ def _market_data():
                     eth = c
                 if c and c.get("chg7") is not None and btc.get("chg7") is not None:
                     board.append({"sym": sym, "chg24": c.get("chg24"), "chg7": c.get("chg7"),
+                                  "chg90": c.get("chg90"),
                                   "vs_btc_7d": round(c["chg7"] - btc["chg7"], 2)})
             board.sort(key=lambda b: b["vs_btc_7d"], reverse=True)
-            return {"btc": btc, "eth": eth, "rs": _regime(board, btc), "src": name}
+            btcd_tf, usdtd_tf = _dom_proxy(ex)
+            return {"btc": btc, "eth": eth, "rs": _regime(board, btc), "src": name,
+                    "btcd_tf": btcd_tf, "usdtd_tf": usdtd_tf, "altseason": _altseason(board, btc)}
         except Exception:  # noqa: BLE001
             logger.warning("market 시세 %s 실패", name)
-    return {"btc": None, "eth": None, "rs": None, "src": None}
+    return {"btc": None, "eth": None, "rs": None, "src": None,
+            "btcd_tf": None, "usdtd_tf": None, "altseason": None}
 
 
 def _fng():
-    d = _get_json("https://api.alternative.me/fng/?limit=1")["data"][0]
-    return {"value": int(d["value"]), "label": d.get("value_classification", "")}
+    d = _get_json("https://api.alternative.me/fng/?limit=8")["data"]  # 일별 8일(오늘~7일전)
+    cur = d[0]
+    return {"value": int(cur["value"]), "label": cur.get("value_classification", ""),
+            "history": [int(x["value"]) for x in d]}  # [오늘, 어제, 그제, … 7일전]
 
 
 def _dominance():
     g = _get_json("https://api.coingecko.com/api/v3/global")["data"]
     mcp = g.get("market_cap_percentage", {}) or {}
     total = (g.get("total_market_cap", {}) or {}).get("usd") or 0
+    total_vol = (g.get("total_volume", {}) or {}).get("usd") or 0
     btc_d = mcp.get("btc", 0) or 0
     eth_d = mcp.get("eth", 0) or 0
+    usdt_d = mcp.get("usdt", 0) or 0
+    usdc_d = mcp.get("usdc", 0) or 0
     others_d = max(0.0, 100 - sum(v for v in mcp.values() if isinstance(v, (int, float))))
     return {"btc": round(btc_d, 1), "eth": round(eth_d, 1), "others": round(others_d, 1),
+            "usdt": round(usdt_d, 2), "usdc": round(usdc_d, 2),          # 스테이블 도미넌스
             "mcap_chg": round(g.get("market_cap_change_percentage_24h_usd") or 0, 2),
-            "total": total,
+            "total": total, "total_vol": total_vol,                      # TOTAL 시총·24h 거래대금(정확)
             "total2": total * (1 - btc_d / 100),               # BTC 제외 시총
             "total3": total * (1 - (btc_d + eth_d) / 100),       # BTC+ETH 제외 시총
             "others_usd": total * others_d / 100}                # 상위 제외(알트 잔여)
@@ -150,7 +207,10 @@ def _sectors():
     rows.sort(key=lambda c: c["market_cap_change_24h"], reverse=True)
 
     def _row(c):
-        return {"name": c.get("name") or "?", "chg24": round(c["market_cap_change_24h"], 2)}
+        ids = c.get("top_3_coins_id") or []  # 섹터 대표 코인(구성 심볼 '대략')
+        coins = [str(x).replace("-", " ") for x in ids if x][:3]
+        return {"name": c.get("name") or "?", "chg24": round(c["market_cap_change_24h"], 2),
+                "vol": c.get("volume_24h"), "coins": coins}  # vol=24h 거래대금(실측)
     return {"top": [_row(c) for c in rows[:5]], "bottom": [_row(c) for c in rows[-3:]]}
 
 
@@ -160,11 +220,15 @@ def get_context(force=False):
         return _CACHE["data"]
     md = _market_data()
     data = {"btc": md["btc"], "eth": md["eth"], "rs": md["rs"], "src": md["src"],
+            "altseason": md.get("altseason"),
             "fng": None, "dom": None, "sectors": None, "ts": int(now)}
     for key, fn in (("fng", _fng), ("dom", _dominance), ("sectors", _sectors)):
         try:
             data[key] = fn()
         except Exception:  # noqa: BLE001
             logger.warning("market %s 실패", key)
+    if data.get("dom"):  # 도미넌스 칩에 멀티TF 프록시 추세 주입(가격기반 추정)
+        data["dom"]["btcd_tf"] = md.get("btcd_tf")
+        data["dom"]["usdtd_tf"] = md.get("usdtd_tf")
     _CACHE["data"], _CACHE["at"] = data, now
     return data
