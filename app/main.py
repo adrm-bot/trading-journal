@@ -262,7 +262,13 @@ async def api_intent(request: Request):
         except (TypeError, ValueError):
             return None
     sl, tp, tp2, tp3 = _num(b.get("sl")), _num(b.get("tp")), _num(b.get("tp2")), _num(b.get("tp3"))
+    # 자기채점: 셋업 A/B/C · 실행 A~F · 확신 1~5 (허용값 밖이면 None — 오염 방지)
+    setup_grade = b.get("setup_grade") if b.get("setup_grade") in ("A", "B", "C") else None
+    exec_grade = b.get("exec_grade") if b.get("exec_grade") in ("A", "B", "C", "D", "F") else None
+    conviction = _num(b.get("conviction"))
+    conviction = int(conviction) if conviction is not None and 1 <= conviction <= 5 else None
     has_content = (sl is not None or tp is not None or tp2 is not None or tp3 is not None
+                   or setup_grade is not None or exec_grade is not None or conviction is not None
                    or any((b.get(k) or "").strip() for k in
                           ("plan", "setup", "strategy", "memo", "emotion", "review", "mistake_tag", "chart_url")))
     reviewed = bool(b.get("reviewed")) and has_content  # 복기완료는 내용이 있어야
@@ -270,6 +276,7 @@ async def api_intent(request: Request):
     fields = {"plan": b.get("plan"), "setup": b.get("setup"), "strategy": b.get("strategy"),
               "sl": sl, "tp": tp, "tp2": tp2, "tp3": tp3, "emotion": b.get("emotion"), "memo": b.get("memo"),
               "review": b.get("review"), "mistake_tag": b.get("mistake_tag"), "chart_url": b.get("chart_url"),
+              "setup_grade": setup_grade, "exec_grade": exec_grade, "conviction": conviction,
               "status": status}
     ok = db.update_intent(uid, b.get("trade_id"), fields)
     return JSONResponse({"ok": ok}, status_code=200 if ok else 404)
@@ -345,6 +352,7 @@ async def api_del_connection(request: Request):
 _EXPORT_COLS = ["closed_at", "opened_at", "exchange", "symbol", "direction", "entry", "exit", "qty",
                 "pnl", "r", "rr", "risk_usd", "leverage", "fees", "funding", "hold_min", "status",
                 "strategy", "setup", "sl", "tp", "tp2", "tp3", "emotion", "plan", "memo",
+                "setup_grade", "exec_grade", "conviction",
                 "review", "mistake_tag", "chart_url", "exit_reason", "liquidated"]
 
 

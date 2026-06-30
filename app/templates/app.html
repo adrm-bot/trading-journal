@@ -61,7 +61,15 @@
     <div class="rr-line" id="rrLine"></div>
     <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
   </details>
-  <details class="more" id="reviewFields"><summary>복기 — 배운 것 · 실수 태그 · 차트</summary>
+  <details class="more" id="reviewFields"><summary>복기 · 자기 채점 — 등급 · 배운 것 · 실수 · 차트</summary>
+    <div class="gradebox">
+      <div class="hh" style="margin:0 0 8px">결과가 아니라 <b>과정</b>을 채점합니다 — 이긴 거래도 실행이 나쁠 수 있고, 진 거래도 잘 친 것일 수 있어요.</div>
+      <div class="row2">
+        <div class="field"><label>셋업 등급 <span class="muted">· 셋업의 질</span></label><div class="chips grades" id="c_setupg"></div></div>
+        <div class="field"><label>실행 등급 <span class="muted">· 계획대로 쳤나</span></label><div class="chips grades" id="c_execg"></div></div>
+      </div>
+      <div class="field"><label>확신도 <span class="muted">· 진입 시 1(반신반의) ~ 5(강한 확신)</span></label><div class="chips grades" id="c_conv"></div></div>
+    </div>
     <div class="field"><label for="f_review">복기 — 이번에 배운 것 / 다음엔 어떻게</label><textarea id="f_review" placeholder="예: 4H 추세 거슬러 진입. 다음엔 정배열에서만, 손절 칼같이."></textarea></div>
     <div class="field"><label>실수 태그 <span class="muted">· 여러 개 탭 · 반복 실수 추적</span></label><div class="chips" id="c_mistake"></div></div>
     <div class="field"><label for="f_chart">차트 링크 <span class="muted">· TradingView 스냅샷 등 (선택)</span></label><input id="f_chart" type="url" placeholder="https://www.tradingview.com/x/…"></div>
@@ -127,6 +135,8 @@ const STRATS=["추세추종","눌림목(되돌림)","돌파(브레이크아웃)"
 const RATIONALES=["추세선","다이버전스","거래량 급증","캔들패턴","차트패턴","지지·저항","이평선(EMA존)","전고/전저","피보나치","오더블록·유동성","펀딩·롱숏비","상대강도(BTC대비)","뉴스·재료","직감·근거없음"];
 const EMOS=["차분","확신","조급(FOMO)","공포","탐욕","복수심","지루함","주저(망설임)"];
 const MISTAKES=["손절 미준수","추격매수","과대 레버리지","계획 무시","조급한 익절","복수매매","근거 없는 진입","분할 실패","과대 사이징"];
+/* 자기 채점(과정 평가, 결과 무관) — 셋업 A/B/C · 실행 A~F · 확신 1~5 */
+const SETUP_GRADES=["A","B","C"], EXEC_GRADES=["A","B","C","D","F"], CONV=["1","2","3","4","5"];
 function chipsInto(id,opts,multi){const el=$("#"+id);if(!el)return;el.dataset.multi=multi?"1":"0";
   el.innerHTML=opts.map(v=>`<button type="button" class="btn sm fchip" data-val="${esc(v)}" aria-pressed="false">${esc(v)}</button>`).join("");
   el.onclick=ev=>{const b=ev.target.closest(".fchip");if(!b)return;
@@ -256,6 +266,13 @@ function planLevels(r){
   if(has(r.tp3))lv.push(`<span class="lv lvtp">TP3 ${fmtP(r.tp3)}</span>`);
   return lv.length?`<div class="jlevels">${lv.join("")}</div>`:"";
 }
+/* 자기채점 배지 — 셋업·실행 등급은 질에 따라 색(A 좋음 ~ F 나쁨), 확신도는 중립 */
+function gq(g){return g==='A'?'g-a':g==='B'?'g-b':g==='F'?'g-f':(g==='C'||g==='D')?'g-c':'';}
+function gradeBadges(r){const b=[];
+  if(r.setup_grade)b.push(`<span class="gb ${gq(r.setup_grade)}" data-tip="셋업 등급 — 셋업 자체의 질(결과 무관)">셋업 ${esc(r.setup_grade)}</span>`);
+  if(r.exec_grade)b.push(`<span class="gb ${gq(r.exec_grade)}" data-tip="실행 등급 — 계획대로 쳤나(손익 무관)">실행 ${esc(r.exec_grade)}</span>`);
+  if(r.conviction!=null&&r.conviction!=='')b.push(`<span class="gb g-conv" data-tip="진입 확신도 1~5">확신 ${esc(String(r.conviction))}/5</span>`);
+  return b.length?`<div class="jgrades">${b.join("")}</div>`:"";}
 function tradeCard(r){
   const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${dirKo(r.direction)}</span>`:"";
   const xr=exitBadge(r)?" "+exitBadge(r):"";
@@ -266,13 +283,15 @@ function tradeCard(r){
   else{const t=tagChips(r);
     const mis=(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean).map(m=>`<span class="rtag mistake">${esc(m)}</span>`).join("");
     const cu=(r.chart_url||"").trim(), chart=/^https?:\/\//i.test(cu)?`<div class="jchart"><a href="${esc(cu)}" target="_blank" rel="noopener noreferrer">차트 보기 ↗</a></div>`:"";
+    const gb=gradeBadges(r);
     body=(t?`<div class="jtags">${t}</div>`:"")
+      +gb
       +(r.plan?`<div class="jplan">${esc(r.plan)}</div>`:"")
       +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
       +(mis?`<div class="jtags jmis">${mis}</div>`:"")
       +(r.review?`<div class="jreview"><span class="jrl">복기</span> ${esc(r.review)}</div>`:"")
       +chart
-      +((!t&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
+      +((!t&&!gb&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획·근거·감정 채우기</div>`:"");}
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}`:"";
   const split=r.exit_count>1?` · <span class="muted" data-tip="${(r.legs_r&&r.legs_r.length)?'레그 R '+r.legs_r.map(x=>(x>=0?'+':'')+x).join(' · '):'분할 청산'}">분할 ${r.exit_count}회</span>`:"";
@@ -646,6 +665,39 @@ function mistakeTally(){
   const rows=ks.map(([k,v])=>`<tr class="grow" data-jf="mistake" data-jv="${esc(k)}" tabindex="0" role="button" aria-label="${esc(k)} 거래 보기"><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>실수 태그</th><th class="num">횟수</th><th class="num">실현손익</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
+/* 자기채점 집계 — 등급/확신도별 거래수·평균R·승률·손익(고정 순서, 손익순 아님) */
+function gradeStats(field,order,head){
+  const by={};DATA.trades.forEach(t=>{let k=t[field];if(k==null||k==='')return;k=String(k);
+    (by[k]=by[k]||{n:0,pnl:0,w:0,l:0,rs:[]});const o=oc(t);by[k].n++;by[k].pnl+=(t.pnl||0);
+    if(o==='win')by[k].w++;else if(o==='loss')by[k].l++;if(t.r!=null)by[k].rs.push(t.r);});
+  const ks=order.filter(k=>by[k]);if(!ks.length)return"";
+  const rows=ks.map(k=>{const v=by[k],ar=v.rs.length?v.rs.reduce((a,b)=>a+b,0)/v.rs.length:null,
+    wr=(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0;
+    return `<tr><td><b>${esc(k)}</b></td><td class="num">${v.n}</td><td class="num ${ar==null?'':(ar>=0?'pos':'neg')}">${ar==null?'—':(ar>=0?'+':'')+ar.toFixed(2)+'R'}</td><td class="num">${wr}%</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`;}).join("");
+  return `<div class="table-wrap"><table><thead><tr><th>${head}</th><th class="num">거래수</th><th class="num">평균R</th><th class="num">승률</th><th class="num">실현손익</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+/* 규율 준수율(파생) — 기록된 거래 중 손절 준수 & 실수태그 없음 비율 */
+function adherenceStat(){
+  const rec=DATA.trades.filter(t=>t.status&&t.status!=='의도 미기입');
+  if(!rec.length)return null;
+  const ok=rec.filter(t=>!t.stop_violated&&!((t.mistake_tag||'').trim())).length;
+  return {pct:Math.round(ok/rec.length*100),ok,n:rec.length};
+}
+function selfGradePanel(ts){
+  const sg=gradeStats('setup_grade',['A','B','C'],'셋업 등급'),
+        eg=gradeStats('exec_grade',['A','B','C','D','F'],'실행 등급'),
+        cv=gradeStats('conviction',['1','2','3','4','5'],'확신도'),
+        ad=adherenceStat();
+  if(!sg&&!eg&&!cv)return"";  // 채점 0건이면 패널 자체를 숨김(준수율만으론 안 띄움)
+  let html="";
+  if(ad)html+=`<div class="adcard"><span class="adv ${ad.pct>=80?'pos':ad.pct>=60?'muted':'neg'}">${ad.pct}%</span><span class="adl">규율 준수율<span class="muted"> · ${ad.n}건 중 ${ad.ok}건 · 손절 준수 & 실수태그 없음</span></span></div>`;
+  html+=`<div class="ins-grid">`
+    +(sg?`<div class="ins-cell"><div class="section-title">셋업 등급별 성과</div>${sg}</div>`:"")
+    +(eg?`<div class="ins-cell"><div class="section-title">실행 등급별 성과</div>${eg}</div>`:"")
+    +(cv?`<div class="ins-cell"><div class="section-title">확신도 → 평균R (캘리브레이션)</div>${cv}<p class="ccap muted">확신이 높을수록 평균R이 높으면 자기 확신이 잘 보정된 것 · 역전되면 과신 신호.</p></div>`:"")
+    +`</div>`;
+  return html;
+}
 /* ---------- 성과 분석 ---------- */
 function num(v){return Number(v)||0;}
 /* 서버는 UTC로 저장 → 화면·집계는 전부 KST(UTC+9)로 변환(한국 트레이더의 '하루'·세션 정합) */
@@ -898,6 +950,7 @@ function renderInsights(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();return;}
   const ts=DATA.trades, m=perfMetrics(ts);
   const ddp=drawdownPanel(ts);
+  const sgPanel=selfGradePanel(ts);
   const stratTbl=groupTable(t=>t.strategy,"전략",false,'strategy');
   const caveat=m.n<20?`<p class="caveat">${ICONS.warn} 표본 ${m.n}건 — 통계는 참고용입니다. 보통 20~30건 이상부터 의미가 생깁니다.</p>`:'';
   const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
@@ -925,6 +978,7 @@ function renderInsights(el){
     +`<div class="section-title">세션·시간대별 손익</div>`+sessionCard(ts)
     +`<div class="group-title">행동 · 세분화</div><div class="section-title">심리 · 스트릭</div>`+behaviorPanel(ts)
     +`<div class="section-title">행동 패턴</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음.</p>`)
+    +(sgPanel?`<div class="group-title">자기 채점 · 과정 평가 <span class="muted" style="font-weight:400;font-size:var(--fs-xs)">결과 아닌 과정</span></div>`+sgPanel:'')
     +`<div class="ins-grid">`
     +`<div class="ins-cell"><div class="section-title">전략별 성과</div>`+(stratTbl||`<p class="empty-inline">거래에 진입전략을 기입하면 전략별 손익·승률이 여기 모입니다.</p>`)+`</div>`
     +(tagStatsTable(ts)?`<div class="ins-cell"><div class="section-title">진입근거 태그별 성과</div>`+tagStatsTable(ts)+`</div>`:"")
@@ -1034,18 +1088,20 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   $("#f_plan").value=r.plan||"";$("#f_sl").value=r.sl??"";$("#f_tp").value=r.tp??"";$("#f_tp2").value=r.tp2??"";$("#f_tp3").value=r.tp3??"";$("#f_memo").value=r.memo||"";
   $("#f_review").value=r.review||"";$("#f_chart").value=r.chart_url||"";$("#f_reviewed").checked=(r.status==='복기완료');
   setChips("c_strategy",r.strategy?[r.strategy]:[]);setChips("c_emo",r.emotion?[r.emotion]:[]);
+  setChips("c_setupg",r.setup_grade?[r.setup_grade]:[]);setChips("c_execg",r.exec_grade?[r.exec_grade]:[]);setChips("c_conv",r.conviction!=null?[String(r.conviction)]:[]);
   setChips("c_mistake",(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean));
   const _etc=setChips("c_setup",(r.setup||"").split(",").map(s=>s.trim()).filter(Boolean));$("#f_setup_etc").value=_etc.join(", ");
   updateRR();
   const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo);
-  const rev=$("#reviewFields"); if(rev)rev.open=!!(r.review||r.mistake_tag||r.chart_url||r.status==='복기완료');
+  const rev=$("#reviewFields"); if(rev)rev.open=!!(r.review||r.mistake_tag||r.chart_url||r.setup_grade||r.exec_grade||r.conviction!=null||r.status==='복기완료');
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
   if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
   const _setup=getChips("c_setup");const _e=$("#f_setup_etc").value.trim();if(_e)_setup.push(_e);
   const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,tp3:$("#f_tp3").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value,
-    review:$("#f_review").value,mistake_tag:getChips("c_mistake").join(","),chart_url:$("#f_chart").value,reviewed:$("#f_reviewed").checked};
+    review:$("#f_review").value,mistake_tag:getChips("c_mistake").join(","),chart_url:$("#f_chart").value,
+    setup_grade:getChips("c_setupg")[0]||"",exec_grade:getChips("c_execg")[0]||"",conviction:getChips("c_conv")[0]||"",reviewed:$("#f_reviewed").checked};
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){await loadAll();route();
@@ -1171,6 +1227,7 @@ async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;$("#closeBtn").onclick=closeModal;
 $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;$("#bulkClose").onclick=closeBulk;
 chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);chipsInto("c_mistake",MISTAKES,true);
+chipsInto("c_setupg",SETUP_GRADES,false);chipsInto("c_execg",EXEC_GRADES,false);chipsInto("c_conv",CONV,false);
 chipsInto("cb_emo",EMOS,false);
 $("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};

@@ -223,6 +223,19 @@ td .num,td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .jreview .jrl{font-family:var(--f-mono);font-size:var(--fs-micro);color:var(--amber);text-transform:uppercase;letter-spacing:.06em;margin-right:6px}
 .jchart{margin-top:6px;font-size:var(--fs-sm)} .jchart a{color:var(--azure);text-decoration:none} .jchart a:hover{text-decoration:underline}
 .jcard .jfill{margin-top:9px;color:var(--ember);box-shadow:inset 0 0 0 1px rgba(var(--neg-rgb),.45)}
+/* 자기 채점 — 카드 배지(질에 따라 색) · 모달 등급 칩 · 준수율 카드 */
+.jgrades{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.gb{font-family:var(--f-mono);font-size:var(--fs-cap);font-weight:510;padding:2px 8px;border-radius:var(--r-badge);background:var(--card-2);color:var(--pebble);border:1px solid var(--line)}
+.gb.g-a{background:var(--pos-soft);color:var(--mint);border-color:rgba(var(--pos-rgb),.4)}
+.gb.g-b{color:var(--frost);border-color:rgba(94,106,210,.4)}
+.gb.g-c{background:var(--warn-soft);color:var(--amber);border-color:rgba(210,153,34,.4)}
+.gb.g-f{background:var(--neg-soft);color:var(--ember);border-color:rgba(var(--neg-rgb),.4)}
+.gb.g-conv{color:var(--mist)}
+.gradebox{background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-card);padding:11px 12px;margin:4px 0 12px}
+.chips.grades .fchip{min-width:32px;text-align:center}
+.adcard{display:flex;align-items:baseline;gap:11px;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-card);padding:12px 15px;margin-bottom:13px}
+.adcard .adv{font-family:var(--f-display);font-size:var(--fs-xl);font-weight:560;font-variant-numeric:tabular-nums;line-height:1}
+.adcard .adl{font-size:var(--fs-sm);color:var(--text)}
 .vbtn[aria-pressed="true"]{box-shadow:inset 0 0 0 1px var(--frost);color:var(--glacier);background:var(--info-soft)}
 
 /* ---- badges (6px) ---- */

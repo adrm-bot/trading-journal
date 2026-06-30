@@ -13,7 +13,8 @@ TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo",
               "exit_count", "exit_legs", "mae_price", "mfe_price"]  # 분할청산 레그 + 최대 역행/순행(D)
 _INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "tp3", "emotion", "memo",
-           "review", "mistake_tag", "chart_url", "status"}  # review=복기(교훈), mistake_tag=실수태그, chart_url=차트링크
+           "review", "mistake_tag", "chart_url", "status",
+           "setup_grade", "exec_grade", "conviction"}  # 자기채점: 셋업 A/B/C·실행 A~F·확신 1~5
 
 
 def conn():
@@ -43,6 +44,7 @@ def init():
           status TEXT DEFAULT '의도 미기입',
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL, emotion TEXT, memo TEXT,
           review TEXT, mistake_tag TEXT, chart_url TEXT,
+          setup_grade TEXT, exec_grade TEXT, conviction INTEGER,
           exit_count INTEGER, exit_legs TEXT, mae_price REAL, mfe_price REAL,
           PRIMARY KEY(user_id, trade_id));
         """)
@@ -50,6 +52,7 @@ def init():
         cols = {r[1] for r in c.execute("PRAGMA table_info(trades)")}
         for name, typ in (("tp", "REAL"), ("strategy", "TEXT"), ("tp2", "REAL"), ("tp3", "REAL"),
                           ("review", "TEXT"), ("mistake_tag", "TEXT"), ("chart_url", "TEXT"),
+                          ("setup_grade", "TEXT"), ("exec_grade", "TEXT"), ("conviction", "INTEGER"),
                           ("exit_count", "INTEGER"), ("exit_legs", "TEXT"),
                           ("mae_price", "REAL"), ("mfe_price", "REAL"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
@@ -151,7 +154,8 @@ def get_trades(uid):
 
 # 일괄 기입에서 금지하는 필드: strategy를 한 번에 박으면 충동거래가 '계획 전략거래'로
 # 둔갑해 전략별 통계가 세탁됨(안티-조작 약속 위배). 전략은 거래별 개별 기입만 허용.
-_BULK_FORBIDDEN = {"status", "strategy", "setup", "sl", "tp", "tp2", "tp3", "mistake_tag", "review"}
+_BULK_FORBIDDEN = {"status", "strategy", "setup", "sl", "tp", "tp2", "tp3", "mistake_tag", "review",
+                   "setup_grade", "exec_grade", "conviction"}  # 채점 일괄기입 금지(통계 세탁 방지)
 
 
 def bulk_fill_unplanned(uid, fields: dict) -> int:
