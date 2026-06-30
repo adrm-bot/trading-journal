@@ -333,14 +333,40 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .badge.xr.pos{background:var(--pos-soft);color:var(--pos)} .badge.xr.neg{background:var(--neg-soft);color:var(--ember)} .badge.xr.muted{background:var(--card-2);color:var(--muted)}
 
 /* ---- 상대강도 (BTC vs 알트) ---- */
-.rscard{padding:var(--s4) var(--s5)}
-.rshead{display:flex;align-items:center;gap:var(--s3);margin-bottom:var(--s4);flex-wrap:wrap}
-.rsbadge{font-family:var(--f-display);font-weight:510;font-size:var(--fs-md);padding:3px 12px;border-radius:var(--r-badge);background:var(--info-soft);color:var(--frost)}
-.rsbadge.pos{background:var(--pos-soft);color:var(--mint)} .rsbadge.muted{background:var(--card-2);color:var(--pebble)}
-.rshint{color:var(--muted);font-size:var(--fs-sm)}
-.rsbody{display:flex;flex-direction:column;gap:7px;margin-bottom:8px}
+.rscard{padding:var(--s5) var(--s5)}
+/* 주인공: BTC ←→ ALT 스펙트럼 슬라이더 */
+.rsspec{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--s3);margin:10px 0 var(--s5)}
+.rsend{font-family:var(--f-mono);font-size:var(--fs-cap);letter-spacing:.06em;color:var(--fog)}
+.rstrack{position:relative;height:8px;border-radius:var(--r-pill);display:flex;overflow:visible}
+.rszone{height:100%}
+.rszone:first-child{border-radius:var(--r-pill) 0 0 var(--r-pill)} .rszone:last-child{border-radius:0 var(--r-pill) var(--r-pill) 0}
+.z-btc{flex:35;background:rgba(var(--info-rgb),.32)}
+.z-mid{flex:30;background:var(--iron)}
+.z-alt{flex:35;background:rgba(var(--pos-rgb),.30)}
+.rsmark{position:absolute;top:50%;width:14px;height:14px;border-radius:var(--r-pill);transform:translate(-50%,-50%);background:var(--snow);box-shadow:0 0 0 3px var(--charcoal),0 1px 4px rgba(0,0,0,.5);transition:left .4s cubic-bezier(.4,0,.2,1)}
+.rsflag{position:absolute;bottom:18px;left:50%;transform:translateX(-50%);white-space:nowrap;font-family:var(--f-display);font-weight:510;font-size:var(--fs-sm);padding:2px 9px;border-radius:var(--r-badge);background:var(--graphite);color:var(--mist)}
+.rsflag::after{content:"";position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:var(--graphite)}
+.rsspec.btc .rsmark{background:var(--azure)} .rsspec.btc .rsflag{color:#aeb6ff}
+.rsspec.alt .rsmark{background:var(--mint)} .rsspec.alt .rsflag{color:var(--mint)}
+.rsspec.neutral .rsmark{background:var(--fog)} .rsspec.neutral .rsflag{color:var(--pebble)}
+/* 액션 카드 2장: 무엇을 하라 */
+.rsact{display:grid;grid-template-columns:1fr 1fr;gap:var(--s3);margin-bottom:var(--s3)}
+.rsa{display:flex;flex-direction:column;gap:2px;padding:10px 14px;border-radius:var(--r-btn);border:1px solid var(--line);min-width:0}
+.rsa.long{background:var(--pos-soft)} .rsa.short{background:var(--neg-soft)}
+.rsa-k{font-family:var(--f-mono);font-size:var(--fs-micro);letter-spacing:.08em;text-transform:uppercase}
+.rsa.long .rsa-k{color:var(--mint)} .rsa.short .rsa-k{color:var(--ember)}
+.rsa-v{font-family:var(--f-display);font-size:var(--fs-lg);font-weight:510;color:var(--ice);letter-spacing:-.01em;overflow-wrap:anywhere}
+.rsa-d{font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--muted)}
+.rsethline{margin-bottom:var(--s3);font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--muted)}
+/* 상세(조연·접힘) */
+.rsmore{margin-bottom:6px}
+.rsmore summary{cursor:pointer;font-size:var(--fs-sm);color:var(--muted);list-style:none;padding:4px 0}
+.rsmore summary::-webkit-details-marker{display:none}
+.rsmore summary::before{content:"▸ ";color:var(--fog)} .rsmore[open] summary::before{content:"▾ "}
+.rsbody{display:flex;flex-direction:column;gap:7px;padding-top:6px}
 .rsrow{display:grid;grid-template-columns:108px 1fr 56px;gap:var(--s3);align-items:center;font-size:var(--fs-sm)}
-.rssym{font-weight:510;color:var(--moonlight);display:flex;align-items:center;gap:6px}
+.rssym{font-weight:510;color:var(--moonlight);display:flex;align-items:center;gap:6px;min-width:0;flex-wrap:wrap}
+@media(max-width:560px){.rsact{grid-template-columns:1fr}}
 .rstag{font-family:var(--f-mono);font-size:9px;padding:1px 5px;border-radius:4px;text-transform:uppercase;letter-spacing:.04em}
 .rstag.long{background:var(--pos-soft);color:var(--mint)} .rstag.short{background:var(--neg-soft);color:var(--ember)}
 .rsbarwrap{position:relative;height:8px;background:var(--card-2);border-radius:4px}

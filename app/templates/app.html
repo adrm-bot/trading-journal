@@ -361,28 +361,44 @@ function marketStrip(m){
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
 /* 상대강도 — BTC vs 알트 (7일 상대수익률) */
-const RS_REGIME={
-  btc:["BTC 우위","롱 → BTC · 숏 → 약세 알트(하단)","pos"],
-  alt:["알트 우위","롱 → 강세 알트(상단) · 숏 → BTC","pos"],
-  neutral:["혼조","페어 → 롱 강세(상단) / 숏 약세(하단)","muted"],
-};
+const RS_REGIME={ btc:["BTC 우위","btc"], alt:["알트 우위","alt"], neutral:["혼조","neutral"] };
 function rsPanel(m){
   const rs=m&&m.rs; if(!rs||!(rs.board||[]).length)return "";
-  const reg=RS_REGIME[rs.regime]||["—","",""], eth=m&&m.eth;
-  const mx=Math.max(...rs.board.map(b=>Math.abs(b.vs_btc_7d)),1), last=rs.board.length-1;
-  const rows=rs.board.map((b,i)=>{
+  const reg=RS_REGIME[rs.regime]||["—","neutral"], eth=m&&m.eth;
+  const board=rs.board, last=board.length-1, top=board[0], bot=board[last];
+  const pos=Math.max(5,Math.min(95,Math.round(rs.outperform/rs.n*100)));  // 슬라이더 위치(끝 잘림 방지)
+  const fmtv=v=>(v>=0?'+':'')+v+'%';
+  // 롱/숏 후보: BTC 우위면 롱=BTC, 알트 우위면 숏=BTC, 그 외엔 최강/최약 알트
+  const longSym = rs.regime==='btc' ? 'BTC' : esc(top.sym);
+  const longVal = rs.regime==='btc' ? '도미넌스 우위' : `BTC 대비 ${fmtv(top.vs_btc_7d)}`;
+  const shortSym= rs.regime==='alt' ? 'BTC' : esc(bot.sym);
+  const shortVal= rs.regime==='alt' ? '알트에 밀림' : `BTC 대비 ${fmtv(bot.vs_btc_7d)}`;
+  const mx=Math.max(...board.map(b=>Math.abs(b.vs_btc_7d)),1);
+  const rows=board.map((b,i)=>{
     const strong=b.vs_btc_7d>=0, w=(Math.abs(b.vs_btc_7d)/mx*50).toFixed(1);
-    const tag=i===0?'<span class="rstag long">강세·롱</span>':i===last?'<span class="rstag short">약세·숏</span>':'';
+    const tag=i===0?'<span class="rstag long">최강</span>':i===last?'<span class="rstag short">최약</span>':'';
     const ethtag=b.sym==='ETH'?'<span class="rstag eth">대장</span>':'';
-    return `<div class="rsrow${b.sym==='ETH'?' iseth':''}"><span class="rssym">${esc(b.sym)}${ethtag}${tag}</span>
-      <span class="rsbarwrap"><span class="rsbar ${strong?'pos':'neg'}" style="width:${w}%"></span></span>
-      <span class="num ${strong?'pos':'neg'}">${(b.vs_btc_7d>=0?'+':'')+b.vs_btc_7d}%</span></div>`;
+    return `<div class="rsrow${b.sym==='ETH'?' iseth':''}"><span class="rssym">${esc(b.sym)}${ethtag}${tag}</span>`
+      +`<span class="rsbarwrap"><span class="rsbar ${strong?'pos':'neg'}" style="width:${w}%"></span></span>`
+      +`<span class="num ${strong?'pos':'neg'}">${fmtv(b.vs_btc_7d)}</span></div>`;
   }).join("");
   const ethsnap=eth?`<span class="rseth">ETH ${usd(eth.price)} · 24h ${chgTxt(eth.chg24)} · 7d ${chgTxt(eth.chg7)}</span>`:'';
   return `<div class="section-title">상대강도 · BTC vs 알트 (7일)</div>
-    <div class="card rscard"><div class="rshead"><span class="rsbadge ${reg[2]}">${reg[0]}</span><span class="rshint">${reg[1]}</span>${ethsnap}</div>
-    <div class="rsbody">${rows}</div>
-    <div class="ccap muted">BTC 대비 7일 상대수익률 · 위=강세(롱 후보) 아래=약세(숏 후보) · ${rs.outperform}/${rs.n} 알트가 BTC 우위</div></div>`;
+    <div class="card rscard">
+      <div class="rsspec ${reg[1]}">
+        <span class="rsend">BTC</span>
+        <span class="rstrack"><span class="rszone z-btc"></span><span class="rszone z-mid"></span><span class="rszone z-alt"></span>
+          <span class="rsmark" style="left:${pos}%"><span class="rsflag">${reg[0]}</span></span></span>
+        <span class="rsend">ALT</span>
+      </div>
+      <div class="rsact">
+        <div class="rsa long"><span class="rsa-k">롱 후보</span><span class="rsa-v">${longSym}</span><span class="rsa-d">${longVal}</span></div>
+        <div class="rsa short"><span class="rsa-k">숏 후보</span><span class="rsa-v">${shortSym}</span><span class="rsa-d">${shortVal}</span></div>
+      </div>
+      ${ethsnap?`<div class="rsethline">${ethsnap}</div>`:''}
+      <details class="rsmore"><summary>알트 ${rs.n}개 상세 · 7일 상대수익률</summary><div class="rsbody">${rows}</div></details>
+      <div class="ccap muted">슬라이더 위치 = ${rs.outperform}/${rs.n} 알트가 BTC보다 강함 · 표본 ${rs.n}개라 방향 참고용</div>
+    </div>`;
 }
 /* 자금 흐름(TOTAL2/3/OTHERS) + 섹터 강도 */
 function fmtBig(n){if(n==null)return"—";const a=Math.abs(n);
