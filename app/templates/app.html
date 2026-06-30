@@ -440,11 +440,12 @@ async function ensurePositions(){
 function renderDashboard(el){
   const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div>`;
   if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();return;}
-  const rail=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
+  const mine=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +`<div id="posHost"></div>`
-    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`);
-  el.innerHTML=`<div class="dash3"><div class="dash-main">${market}</div><div class="dash-rail">${rail}</div></div>`
-    +`<div class="section-title">최근 일지</div><div class="dash-journal">`+journalCards(DATA.trades.slice(0,8))+`</div>`;
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">눈에 띄는 위험 신호 없음 — 깔끔하네요.</p>`)
+    +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
+  // 좌=시장 맥락(보조) · 우=내 트레이딩(KPI·포지션·인사이트·매매일지, 주). 내정보/시장정보 분리.
+  el.innerHTML=`<div class="dash3"><div class="dash-main">${market}</div><div class="dash-rail">${mine}</div></div>`;
   bindCards();ensureMarket();ensurePositions();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
