@@ -23,6 +23,25 @@ def test_partial_exit_legs_r_short():
     assert t["legs_r"] == [2.0, 4.0]
 
 
+def test_mae_mfe_r_long():
+    # 롱 진입100·SL90(1R=10)·청산120(+2R) · MAE 93(-0.7R)·MFE 130(+3R) → 못 먹은 1R
+    t = analytics.enrich({"entry": 100, "exit": 120, "sl": 90, "qty": 1, "direction": "Long",
+                          "mae_price": 93, "mfe_price": 130})
+    assert t["r"] == 2.0
+    assert t["mae_r"] == -0.7
+    assert t["mfe_r"] == 3.0
+    assert t["left_on_table_r"] == 1.0
+
+
+def test_mae_mfe_r_short():
+    # 숏 진입200·SL210(1R=10)·청산190(+1R) · MAE 207(-0.7R)·MFE 160(+4R)
+    t = analytics.enrich({"entry": 200, "exit": 190, "sl": 210, "qty": 1, "direction": "Short",
+                          "mae_price": 207, "mfe_price": 160})
+    assert t["mae_r"] == -0.7
+    assert t["mfe_r"] == 4.0
+    assert t["left_on_table_r"] == 3.0
+
+
 def test_long_winner_wrongside_sl_no_negative_r():
     # 롱인데 SL을 진입가 위(110)에 오기입 — 수익 거래가 음수 R로 둔갑하면 안 됨
     t = analytics.enrich({"entry": 100, "exit": 120, "sl": 110, "qty": 1, "direction": "Long"})

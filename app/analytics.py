@@ -90,4 +90,14 @@ def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
             t["legs_r"] = [round(((p - e) / rd) * (-1 if short else 1), 2) for p, q in legs if p]
         except (ValueError, TypeError):
             pass
+    # MAE/MFE의 R 환산 + 'MFE 대비 못 먹은 R'(청산 충실도) — SL 유효할 때
+    if e and sl and e != sl:
+        rd = abs(e - sl)
+        mae_p, mfe_p = t.get("mae_price"), t.get("mfe_price")
+        if mae_p is not None:  # 최대 역행(보통 음수 R)
+            t["mae_r"] = round((mae_p - e) / rd * (-1 if short else 1), 2)
+        if mfe_p is not None:  # 최대 순행(보통 양수 R)
+            t["mfe_r"] = round((mfe_p - e) / rd * (-1 if short else 1), 2)
+            if r is not None:
+                t["left_on_table_r"] = round(t["mfe_r"] - r, 2)  # 먹을 수 있었는데 못 먹은 R
     return t

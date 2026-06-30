@@ -125,6 +125,27 @@ def test_idempotent_keys_stable():
     assert [r["trade_id"] for r in a] == [r["trade_id"] for r in b]
 
 
+def test_mae_mfe_prices_long():
+    # ohlcv: [ts, open, high, low, close, vol] — 구간 [100, 300]
+    oh = [[50, 0, 105, 95, 0, 0],      # 구간 밖(ts<100) → 제외
+          [100, 0, 112, 98, 0, 0],
+          [200, 0, 130, 93, 0, 0],     # 최고 130, 최저 93
+          [400, 0, 999, 1, 0, 0]]      # 구간 밖(ts>300) → 제외
+    mae, mfe = engine._mae_mfe_prices(oh, "Long", 100, 300)
+    assert mae == 93 and mfe == 130  # 롱: mae=최저, mfe=최고
+
+
+def test_mae_mfe_prices_short():
+    oh = [[100, 0, 112, 98, 0, 0], [200, 0, 130, 93, 0, 0]]
+    mae, mfe = engine._mae_mfe_prices(oh, "Short", 100, 300)
+    assert mae == 130 and mfe == 93  # 숏: mae=최고(불리), mfe=최저(유리)
+
+
+def test_mae_mfe_prices_no_candles_in_window():
+    oh = [[50, 0, 105, 95, 0, 0], [400, 0, 110, 90, 0, 0]]
+    assert engine._mae_mfe_prices(oh, "Long", 100, 300) == (None, None)
+
+
 def test_realized_sum_invariant():
     trades = [fill(1, "BUY", 100, 1, T0, pnl=0.0), fill(2, "SELL", 110, 1, T0 + 1, pnl=10.0),
               fill(3, "BUY", 100, 1, T0 + 2, pnl=0.0), fill(4, "SELL", 95, 1, T0 + 3, pnl=-5.0)]

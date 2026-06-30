@@ -320,6 +320,26 @@ def _finalize_pos(exchange, symbol, pos, closing_id):
                          exit_count=len(legs), exit_legs=(json.dumps(legs) if len(legs) > 1 else None))
 
 
+def _mae_mfe_prices(ohlcv, direction, o_ms, c_ms):
+    """보유구간[o_ms,c_ms]에 걸친 캔들(ccxt OHLCV [ts,o,h,l,c,v])의 최저/최고가 →
+    (mae_price, mfe_price). 롱: mae=최저(가장 불리)·mfe=최고(가장 유리), 숏: 반대.
+    구간 캔들 없으면 (None,None). 순수함수 — 네트워크 비의존(단위테스트 가능)."""
+    lows, highs = [], []
+    for c in ohlcv or []:
+        if not c or len(c) < 5 or c[0] is None:
+            continue
+        if c[0] < o_ms or c[0] > c_ms:
+            continue
+        if c[3] is not None:
+            lows.append(c[3])   # low
+        if c[2] is not None:
+            highs.append(c[2])  # high
+    if not lows or not highs:
+        return None, None
+    lo, hi = min(lows), max(highs)
+    return (hi, lo) if direction == "Short" else (lo, hi)
+
+
 def fetch_binance(key, secret, lookback):
     ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
     try:
