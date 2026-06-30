@@ -825,7 +825,7 @@ function drawdownPanel(ts){
   if(!eps.length)return `<div class="card"><p class="muted" style="margin:0">낙폭 없음 — 줄곧 고점 갱신 중. 👍</p></div>`;
   eps.forEach(e=>{e.depth=e.trough-e.peak;e.days=Math.max(0,Math.round((e.recoverT-e.startT)/86400000));});
   const sorted=[...eps].sort((a,b)=>a.depth-b.depth), ongoing=eps.find(e=>!e.recovered);
-  const rows=sorted.slice(0,6).map(e=>`<div class="srow"><span class="snm">${e.recovered?'':'<span class="neg">● </span>'}<b class="neg">${money(e.depth)}</b> <span class="muted">· ${e.days}일</span></span><span class="muted num">${e.recovered?'회복':'진행 중'}</span></div>`).join('');
+  const rows=sorted.slice(0,6).map(e=>`<div class="srow s2"><span class="snm">${e.recovered?'':'<span class="neg">● </span>'}<b class="neg">${money(e.depth)}</b> <span class="muted">· ${e.days}일</span></span><span class="muted num">${e.recovered?'회복':'진행 중'}</span></div>`).join('');
   const deepest=sorted[0].depth;
   const cap=`고점→저점→회복 ${eps.length}구간${ongoing?` · 현재 낙폭 <b class="neg">${money(ongoing.depth)}</b> (${ongoing.days}일째, 최대 대비 ${deepest?Math.round(ongoing.depth/deepest*100):0}%)`:' · 현재 낙폭 없음'}${eps.length<3?' · 표본 적음(참고용)':''}`;
   return `<div class="card"><div class="sess">${rows}</div><div class="ccap muted">${cap}</div></div>`;
@@ -861,7 +861,7 @@ function sessionCard(ts){
   const inR=(h,a,b)=>a<b?(h>=a&&h<b):(h>=a||h<b);
   const sess=[['아시아장','09–17',9,17],['유럽장','17–22',17,22],['미국장','22–06',22,6],['그 외','06–09',6,9]];
   const rows=sess.map(([nm,lbl,a,b])=>{let p=0,n=0;for(let h=0;h<24;h++){if(inR(h,a,b)){p+=hp[h];n+=hn[h];}}
-    return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} KST</span></span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span><span class="muted num">${n}건</span></div>`;}).join('');
+    return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} KST</span></span><span class="muted num">${n}건</span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span></div>`;}).join('');
   return `<div class="card"><div class="hours">${hours}</div><div class="sess">${rows}</div><div class="ccap muted">한국시간(KST·UTC+9) 기준 · 위 칸 숫자=시(0~23시)</div></div>`;
 }
 function rHist(ts){
