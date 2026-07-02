@@ -108,7 +108,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
-let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
+let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const EFF_BUCKETS={b0:[-1e9,.25],b1:[.25,.5],b2:[.5,.75],b3:[.75,1],b4:[1,1e9]};  // 청산효율 드릴다운 구간
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
@@ -599,6 +599,9 @@ function jtMatch(t){
   if(JT.eff!=='all'){  // 청산효율 구간 — SL·TP1 입력된 수익 거래만
     const B=EFF_BUCKETS[JT.eff];
     if(!B||!(t.r!=null&&t.r>0)||t.exit_eff==null||!(t.exit_eff>=B[0]&&t.exit_eff<B[1]))return false;}
+  if(JT.setupg!=='all'&&t.setup_grade!==JT.setupg)return false;
+  if(JT.execg!=='all'&&t.exec_grade!==JT.execg)return false;
+  if(JT.conv!=='all'&&String(t.conviction??'')!==JT.conv)return false;
   if(JT.mistake!=='all'&&!((t.mistake_tag||'').split(',').map(s=>s.trim()).includes(JT.mistake)))return false;
   if(JT.q){const hay=[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion,t.review,t.mistake_tag].join(' ').toLowerCase();if(!hay.includes(JT.q.toLowerCase()))return false;}
   return true;
@@ -646,7 +649,7 @@ function viewsKey(){return 'mmj_views_'+((ME&&ME.email)||'');}
 function getViews(){try{const v=JSON.parse(localStorage.getItem(viewsKey()));if(Array.isArray(v))return v;}catch(e){}return [{name:'계획 미기입',jt:{status:'pending'}}];}
 function setViews(a){try{localStorage.setItem(viewsKey(),JSON.stringify(a));}catch(e){}}
 function viewsBar(){return `<div class="jviews"><span class="flbl">뷰</span>`+getViews().map(v=>`<button class="btn sm jview" data-v="${esc(v.name)}">${esc(v.name)}<span class="vx" data-del="${esc(v.name)}" role="button" aria-label="${esc(v.name)} 삭제">×</span></button>`).join('')+`<button class="btn sm" id="jSaveView">+ 현재 필터 저장</button></div>`;}
-function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
+function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
 function saveCurrentView(){const name=(prompt('이 필터를 저장할 이름은?','내 뷰')||'').trim();if(!name)return;
   const jt={from:JT.from,to:JT.to,q:JT.q,exchange:JT.exchange,dir:JT.dir,status:JT.status};
   setViews([...getViews().filter(v=>v.name!==name),{name,jt}]);renderJournal($("#view-journal"));toast('뷰 저장됨 · '+name);}
@@ -654,7 +657,7 @@ function delView(name){setViews(getViews().filter(v=>v.name!==name));renderJourn
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
   const exs=[...new Set(DATA.trades.map(t=>t.exchange).filter(Boolean))];
-  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all',JT.strategy!=='all',JT.emotion!=='all',JT.outcome!=='all',JT.mistake!=='all',JT.stop!=='all',JT.eff!=='all'].filter(Boolean).length;
+  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all',JT.strategy!=='all',JT.emotion!=='all',JT.outcome!=='all',JT.mistake!=='all',JT.stop!=='all',JT.eff!=='all',JT.setupg!=='all',JT.execg!=='all',JT.conv!=='all'].filter(Boolean).length;
   el.innerHTML=`<div class="jbar top">
       <input type="search" id="jQ" value="${esc(JT.q)}" placeholder="심볼·전략·메모 검색" aria-label="검색">
       <span class="cgrp" id="jView" role="group" aria-label="보기 방식"><button class="btn sm vbtn" data-v="cards">일지</button><button class="btn sm vbtn" data-v="table">표</button></span>
@@ -678,6 +681,9 @@ function renderJournal(el){
       <div class="frow"><span class="flbl">감정</span><span class="cgrp" id="jEmo"></span></div>
       <div class="frow" id="jMisRow" hidden><span class="flbl">실수</span><span class="cgrp" id="jMis"></span></div>
       <div class="frow" id="jEffRow" hidden><span class="flbl">효율</span><span class="cgrp" id="jEff"></span></div>
+      <div class="frow" id="jSgRow" hidden><span class="flbl">셋업</span><span class="cgrp" id="jSg"></span></div>
+      <div class="frow" id="jEgRow" hidden><span class="flbl">실행</span><span class="cgrp" id="jEg"></span></div>
+      <div class="frow" id="jCvRow" hidden><span class="flbl">확신</span><span class="cgrp" id="jCv"></span></div>
       <div class="frow"><span class="flbl">표시</span><select id="jSize" aria-label="페이지당 행수"><option value="25">25개</option><option value="50">50개</option><option value="100">100개</option></select><button class="btn sm" id="jReset">초기화</button></div>
     </div>
     <div id="jt"></div><div class="pager" id="jPager"></div>`;
@@ -694,12 +700,15 @@ function renderJournal(el){
   if(mis.length){$("#jMisRow").hidden=false;$("#jMis").innerHTML=chipGroup('mistake',[['all','전체'],...mis.map(s=>[s,s])]);}
   if(DATA.trades.some(t=>t.r!=null&&t.r>0&&t.exit_eff!=null)){$("#jEffRow").hidden=false;
     $("#jEff").innerHTML=chipGroup('eff',[['all','전체'],['b0','~25%'],['b1','25~50%'],['b2','50~75%'],['b3','75~100%'],['b4','100%+']]);}
+  if(DATA.trades.some(t=>t.setup_grade)){$("#jSgRow").hidden=false;$("#jSg").innerHTML=chipGroup('setupg',[['all','전체'],...SETUP_GRADES.map(g=>[g,g])]);}
+  if(DATA.trades.some(t=>t.exec_grade)){$("#jEgRow").hidden=false;$("#jEg").innerHTML=chipGroup('execg',[['all','전체'],...EXEC_GRADES.map(g=>[g,g])]);}
+  if(DATA.trades.some(t=>t.conviction!=null&&t.conviction!=='')){$("#jCvRow").hidden=false;$("#jCv").innerHTML=chipGroup('conv',[['all','전체'],...CONV.map(g=>[g,g])]);}
   $("#jSize").value=String(JT.size);
   $("#jFrom").onchange=e=>{JT.from=e.target.value;JT.page=1;applyJournal();};
   $("#jTo").onchange=e=>{JT.to=e.target.value;JT.page=1;applyJournal();};
   $("#jQ").oninput=e=>{clearTimeout(jtDebounce);const v=e.target.value;jtDebounce=setTimeout(()=>{JT.q=v;JT.page=1;applyJournal();},180);};
   $("#jSize").onchange=e=>{JT.size=Number(e.target.value);JT.page=1;applyJournal();};
-  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
+  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
   $$(".jpreset").forEach(b=>b.onclick=()=>{const days=+b.dataset.d;JT.to=iso(new Date());JT.from=iso(new Date(Date.now()-days*86400000));JT.page=1;$("#jFrom").value=JT.from;$("#jTo").value=JT.to;applyJournal();});
   $$("#view-journal .fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
     $$(`#view-journal .fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");applyJournal();});
@@ -728,15 +737,16 @@ function mistakeTally(){
   const rows=ks.map(([k,v])=>`<tr class="grow" data-jf="mistake" data-jv="${esc(k)}" tabindex="0" role="button" aria-label="${esc(k)} 거래 보기"><td>${esc(k)}</td><td class="num">${v.n}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`).join("");
   return `<div class="table-wrap"><table><thead><tr><th>실수 태그</th><th class="num">횟수</th><th class="num">실현손익</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
-/* 자기채점 집계 — 등급/확신도별 거래수·평균R·승률·손익(고정 순서, 손익순 아님) */
-function gradeStats(field,order,head){
+/* 자기채점 집계 — 등급/확신도별 거래수·평균R·승률·손익(고정 순서, 손익순 아님). jf 주면 행 클릭→저널 드릴다운 */
+function gradeStats(field,order,head,jf){
   const by={};DATA.trades.forEach(t=>{let k=t[field];if(k==null||k==='')return;k=String(k);
     (by[k]=by[k]||{n:0,pnl:0,w:0,l:0,rs:[]});const o=oc(t);by[k].n++;by[k].pnl+=(t.pnl||0);
     if(o==='win')by[k].w++;else if(o==='loss')by[k].l++;if(t.r!=null)by[k].rs.push(t.r);});
   const ks=order.filter(k=>by[k]);if(!ks.length)return"";
   const rows=ks.map(k=>{const v=by[k],ar=v.rs.length?v.rs.reduce((a,b)=>a+b,0)/v.rs.length:null,
     wr=(v.w+v.l)?Math.round(v.w/(v.w+v.l)*100):0;
-    return `<tr><td><b>${esc(k)}</b></td><td class="num">${v.n}</td><td class="num ${ar==null?'':(ar>=0?'pos':'neg')}">${ar==null?'—':(ar>=0?'+':'')+ar.toFixed(2)+'R'}</td><td class="num">${wr}%</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`;}).join("");
+    const drill=jf?` class="grow" data-jf="${jf}" data-jv="${esc(k)}" tabindex="0" role="button" aria-label="${head} ${esc(k)} 거래 보기"`:'';
+    return `<tr${drill}><td><b>${esc(k)}</b></td><td class="num">${v.n}</td><td class="num ${ar==null?'':(ar>=0?'pos':'neg')}">${ar==null?'—':(ar>=0?'+':'')+ar.toFixed(2)+'R'}</td><td class="num">${wr}%</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`;}).join("");
   return `<div class="table-wrap"><table><thead><tr><th>${head}</th><th class="num">거래수</th><th class="num">평균R</th><th class="num">승률</th><th class="num">실현손익</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /* 규율 준수율(파생) — 기록된 거래 중 손절 준수 & 실수태그 없음 비율 */
@@ -747,9 +757,9 @@ function adherenceStat(){
   return {pct:Math.round(ok/rec.length*100),ok,n:rec.length};
 }
 function selfGradePanel(ts){
-  const sg=gradeStats('setup_grade',['A','B','C'],'셋업 등급'),
-        eg=gradeStats('exec_grade',['A','B','C','D','F'],'실행 등급'),
-        cv=gradeStats('conviction',['1','2','3','4','5'],'확신도'),
+  const sg=gradeStats('setup_grade',['A','B','C'],'셋업 등급','setupg'),
+        eg=gradeStats('exec_grade',['A','B','C','D','F'],'실행 등급','execg'),
+        cv=gradeStats('conviction',['1','2','3','4','5'],'확신도','conv'),
         ad=adherenceStat();
   if(!sg&&!eg&&!cv)return"";  // 채점 0건이면 패널 자체를 숨김(준수율만으론 안 띄움)
   let html="";
@@ -757,7 +767,7 @@ function selfGradePanel(ts){
   html+=`<div class="ins-grid">`
     +(sg?`<div class="ins-cell"><div class="section-title">셋업 등급별 성과</div>${sg}</div>`:"")
     +(eg?`<div class="ins-cell"><div class="section-title">실행 등급별 성과</div>${eg}</div>`:"")
-    +(cv?`<div class="ins-cell"><div class="section-title">확신도 → 평균R (캘리브레이션)</div>${cv}<p class="ccap muted">확신이 높을수록 평균R이 높으면 자기 확신이 잘 보정된 것 · 역전되면 과신 신호.</p></div>`:"")
+    +(cv?`<div class="ins-cell"><div class="section-title">확신도 → 평균R (캘리브레이션)</div>${cv}<p class="ccap muted">확신이 높을수록 평균R이 높으면 자기 확신이 잘 보정된 것 · 역전되면 과신 신호 · 행 클릭 → 해당 거래.</p></div>`:"")
     +`</div>`;
   return html;
 }
