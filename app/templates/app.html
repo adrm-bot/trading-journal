@@ -761,6 +761,26 @@ function adherenceStat(){
   const ok=rec.filter(t=>!t.stop_violated&&!((t.mistake_tag||'').trim())).length;
   return {pct:Math.round(ok/rec.length*100),ok,n:rec.length};
 }
+/* 채점 편향 진단 — 확신도↔실현R 상관(피어슨) + 등급 역전 감지. 표본 기준 명시(상관 n≥5, 역전 등급별 n≥3) */
+function convCorr(ts){
+  const pts=ts.filter(t=>t.conviction!=null&&t.conviction!==''&&t.r!=null).map(t=>[+t.conviction,t.r]);
+  if(pts.length<5)return null;
+  const n=pts.length,mx=pts.reduce((s,p)=>s+p[0],0)/n,my=pts.reduce((s,p)=>s+p[1],0)/n;
+  let sxy=0,sxx=0,syy=0;pts.forEach(([x,y])=>{sxy+=(x-mx)*(y-my);sxx+=(x-mx)*(x-mx);syy+=(y-my)*(y-my);});
+  if(!sxx||!syy)return null;
+  return {c:sxy/Math.sqrt(sxx*syy),n};
+}
+function gradeInversions(ts,field,order,label){
+  const by={};ts.forEach(t=>{const k=t[field];if(!k||t.r==null)return;(by[k]=by[k]||[]).push(t.r);});
+  const avg=k=>by[k].reduce((a,b)=>a+b,0)/by[k].length, f=v=>(v>=0?'+':'')+v.toFixed(2)+'R';
+  const out=[];
+  for(let i=0;i<order.length;i++)for(let j=i+1;j<order.length;j++){
+    const hi=order[i],lo=order[j];
+    if(by[hi]&&by[lo]&&by[hi].length>=3&&by[lo].length>=3&&avg(lo)-avg(hi)>0.2)
+      out.push(`${label} ${lo}(평균 ${f(avg(lo))} · ${by[lo].length}건)가 ${hi}(${f(avg(hi))} · ${by[hi].length}건)보다 좋습니다 — 채점 기준 점검 신호`);
+  }
+  return out;
+}
 function selfGradePanel(ts){
   const sg=gradeStats('setup_grade',['A','B','C'],'셋업 등급','setupg'),
         eg=gradeStats('exec_grade',['A','B','C','D','F'],'실행 등급','execg'),
@@ -769,6 +789,11 @@ function selfGradePanel(ts){
   if(!sg&&!eg&&!cv)return"";  // 채점 0건이면 패널 자체를 숨김(준수율만으론 안 띄움)
   let html="";
   if(ad)html+=`<div class="adcard"><span class="adv ${ad.pct>=80?'pos':ad.pct>=60?'muted':'neg'}">${ad.pct}%</span><span class="adl">규율 준수율<span class="muted"> · ${ad.n}건 중 ${ad.ok}건 · 손절 준수 & 실수태그 없음</span></span></div>`;
+  const cc=convCorr(ts);
+  if(cc){const lbl=cc.c>=0.2?'양호':(cc.c<=-0.1?'과신 신호':'중립');
+    html+=`<div class="mgrid" style="margin-bottom:13px">`+mcard('확신도 캘리브레이션',lbl,cc.c>=0.2?'pos':(cc.c<=-0.1?'neg':''),`확신↔실현R 상관 ${cc.c.toFixed(2)} · ${cc.n}건${cc.n<10?' · 표본 적음':''}`)+`</div>`;}
+  const inv=[...gradeInversions(ts,'setup_grade',['A','B','C'],'셋업'),...gradeInversions(ts,'exec_grade',['A','B','C','D','F'],'실행')];
+  if(inv.length)html+=`<div class="flags" style="margin-bottom:13px">`+inv.map(x=>`<div class="flag warn"><span class="fi" aria-hidden="true">${ICONS.warn}</span><span>${esc(x)}</span></div>`).join('')+`</div>`;
   html+=`<div class="ins-grid">`
     +(sg?`<div class="ins-cell"><div class="section-title">셋업 등급별 성과</div>${sg}</div>`:"")
     +(eg?`<div class="ins-cell"><div class="section-title">실행 등급별 성과</div>${eg}</div>`:"")
