@@ -283,6 +283,13 @@ textarea{resize:vertical;min-height:64px}
 .mclose{position:absolute;top:12px;right:12px;width:34px;height:34px;display:flex;align-items:center;justify-content:center;
   border:none;background:transparent;color:var(--muted);font-size:22px;line-height:1;cursor:pointer;border-radius:var(--r-btn)}
 .mclose:hover{background:var(--card-2);color:var(--glacier)}
+/* 모달 이전/다음 로테이션 — 닫기(X) 좌측 */
+.mnav{position:absolute;top:12px;right:50px;display:flex;align-items:center;gap:2px}
+.mnavb{width:30px;height:34px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;
+  color:var(--muted);font-size:19px;line-height:1;cursor:pointer;border-radius:var(--r-btn)}
+.mnavb:hover{background:var(--card-2);color:var(--glacier)}
+.mnavb:disabled{opacity:.35;cursor:default}
+.mcount{font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--muted);min-width:40px;text-align:center;font-variant-numeric:tabular-nums}
 
 /* ---- settings ---- */
 .conn{display:flex;align-items:center;justify-content:space-between;gap:var(--s4)}

@@ -41,6 +41,7 @@
 
 <div class="modal-bg" id="modalBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMeta">
   <button type="button" class="mclose" id="closeBtn" aria-label="닫기">×</button>
+  <div class="mnav"><button type="button" class="mnavb" id="mPrev" aria-label="이전 거래 (Alt+위 화살표)" data-tip="이전 거래 · Alt+↑">‹</button><span class="mcount" id="mCount" aria-live="polite"></span><button type="button" class="mnavb" id="mNext" aria-label="다음 거래 (Alt+아래 화살표)" data-tip="다음 거래 · Alt+↓">›</button></div>
   <h3 id="modalTitle">거래 상세 · 사후 기록</h3><div class="meta" id="modalMeta"></div>
   <div class="facts" id="modalFacts"></div>
   <div class="field"><label for="f_plan">계획·의도 <span class="muted">· 왜 들어갔나</span></label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
@@ -1239,6 +1240,22 @@ function updateRR(){
   if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
 }
+/* 복기 모달 로테이션 — 저널에선 현재 필터·정렬 순서, 그 외 뷰에선 최신순으로 이전/다음 순회 */
+function modalList(){
+  if(curView()==='journal')return DATA.trades.filter(jtMatch).sort(jtCmp).map(t=>t.trade_id);
+  return [...DATA.trades].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?1:-1).map(t=>t.trade_id);
+}
+function modalNavUpdate(){
+  if(!EDIT)return;const list=modalList(),i=list.indexOf(EDIT.trade_id);
+  const ct=$("#mCount");if(ct)ct.textContent=i>=0?`${i+1}/${list.length}`:'';
+  const p=$("#mPrev"),n=$("#mNext");
+  if(p)p.disabled=!(i>0);if(n)n.disabled=!(i>=0&&i<list.length-1);
+}
+function modalNav(d){
+  if(!EDIT)return;const list=modalList(),i=list.indexOf(EDIT.trade_id),j=i+d;
+  if(i<0||j<0||j>=list.length)return;
+  openModal(list[j]);
+}
 function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document.activeElement;
   const liq=r.liquidated?' · 강제청산':'';
   $("#modalMeta").textContent=`${EXN(r.exchange)} · ${r.symbol} ${r.direction?dirKo(r.direction):''} · ${(toKST(r.closed_at)||{}).str||''} KST${liq}`;
@@ -1252,6 +1269,7 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   updateRR();
   const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo);
   const rev=$("#reviewFields"); if(rev)rev.open=!!(r.review||r.mistake_tag||r.chart_url||r.setup_grade||r.exec_grade||r.conviction!=null||r.status==='복기완료');
+  modalNavUpdate();
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
@@ -1400,6 +1418,7 @@ async function saveBulk(){const btn=$("#bulkSave");btn.disabled=true;
   catch(e){toast("기록하지 못했습니다. 잠시 후 다시 시도해 주세요");}finally{btn.disabled=false;}}
 
 $("#saveBtn").onclick=saveIntent;$("#cancelBtn").onclick=closeModal;$("#closeBtn").onclick=closeModal;
+$("#mPrev").onclick=()=>modalNav(-1);$("#mNext").onclick=()=>modalNav(1);
 $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;$("#bulkClose").onclick=closeBulk;
 chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);chipsInto("c_mistake",MISTAKES,true);
 chipsInto("c_setupg",SETUP_GRADES,false);chipsInto("c_execg",EXEC_GRADES,false);chipsInto("c_conv",CONV,false);
@@ -1420,6 +1439,11 @@ function trapTab(e){const m=openModalEl();if(!m)return;
   else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus();}}
 document.addEventListener("keydown",e=>{
   if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();if($("#cmdkBg").classList.contains("show"))closeCmdk();else openCmdk();return;}
+  // 복기 모달 로테이션: Alt+↑↓는 언제나, 맨 ↑↓는 입력 필드 밖에서만(텍스트 커서와 충돌 방지)
+  if($("#modalBg").classList.contains("show")&&(e.key==='ArrowUp'||e.key==='ArrowDown')){
+    const inField=e.target&&e.target.closest&&e.target.closest('input,textarea,select');
+    if(e.altKey||!inField){e.preventDefault();modalNav(e.key==='ArrowUp'?-1:1);return;}
+  }
   if(e.key==="Tab"){trapTab(e);return;}
   if(e.key!=="Escape")return;
   if($("#cmdkBg").classList.contains("show"))closeCmdk();
