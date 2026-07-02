@@ -147,8 +147,52 @@ def _tv_market():
     return out
 
 
-# 상대강도 비교군(메이저 알트). BTC 대비 7일 상대수익률로 강약 순위.
-ALTS = ["ETH", "SOL", "BNB", "XRP", "DOGE", "ADA", "AVAX", "LINK"]
+# 상대강도 비교군 — 섹터 다양성 확보(BTC 대비 7일 상대수익률로 강약 순위).
+# 심볼은 Bybit/Binance 현물 /USDT 기준. 거래소에 없거나(신규·미상장) 조회 실패하는
+# 심볼은 _alt_board가 개별적으로 건너뜀 → 전체 보드를 죽이지 않는다(빠진 심볼은 조용히 제외).
+# ETH는 첫 항목 유지(대장 스냅샷 eth로 별도 사용). 순서 무관 — 최종 vs_btc_7d로 재정렬.
+ALTS = [
+    # L1 · 대형 기반체인
+    "ETH", "SOL", "BNB", "ADA", "AVAX", "SUI",
+    # 결제·송금
+    "XRP",
+    # 밈
+    "DOGE",
+    # 오라클 · DeFi 블루칩
+    "LINK", "UNI", "AAVE",
+    # L2 · 확장성
+    "ARB", "OP",
+    # AI · DePIN
+    "FET", "RENDER", "WLD", "TAO",
+    # RWA(실물자산)
+    "ONDO",
+    # 스테이블 · 이자수익(DeFi)
+    "ENA",
+    # 신형 perp-DEX
+    "HYPE",
+]
+
+
+def _alt_board(ex, btc):
+    """ALTS 각각의 BTC 대비 7일 상대수익률 보드 + ETH 스냅샷.
+    심볼별 조회를 개별 try로 감싼다 — 거래소에 없거나(신규·미상장) 타임아웃 나는 알트
+    하나가 전체 보드를 죽이지 않게. 빠진 심볼은 조용히 제외(정직: 없는 데이터는 안 만든다)."""
+    btc_chg7 = btc.get("chg7") if btc else None
+    eth, board = None, []
+    for sym in ALTS:
+        try:
+            c = _coin(ex, f"{sym}/USDT")
+        except Exception:  # noqa: BLE001 — BadSymbol·타임아웃 등, 개별 스킵
+            logger.debug("market 알트 %s 조회 실패 — 보드에서 제외", sym)
+            continue
+        if sym == "ETH":
+            eth = c
+        if c and c.get("chg7") is not None and btc_chg7 is not None:
+            board.append({"sym": sym, "chg24": c.get("chg24"), "chg7": c.get("chg7"),
+                          "chg90": c.get("chg90"),
+                          "vs_btc_7d": round(c["chg7"] - btc_chg7, 2)})
+    board.sort(key=lambda b: b["vs_btc_7d"], reverse=True)
+    return eth, board
 
 
 def _regime(board, btc):
@@ -186,16 +230,7 @@ def _market_data():
             btc = _coin(ex, "BTC/USDT", mtf=True)  # BTC만 1h/4h/1d 멀티TF
             if not btc:
                 continue
-            eth, board = None, []
-            for sym in ALTS:
-                c = _coin(ex, f"{sym}/USDT")
-                if sym == "ETH":
-                    eth = c
-                if c and c.get("chg7") is not None and btc.get("chg7") is not None:
-                    board.append({"sym": sym, "chg24": c.get("chg24"), "chg7": c.get("chg7"),
-                                  "chg90": c.get("chg90"),
-                                  "vs_btc_7d": round(c["chg7"] - btc["chg7"], 2)})
-            board.sort(key=lambda b: b["vs_btc_7d"], reverse=True)
+            eth, board = _alt_board(ex, btc)
             btcd_tf, usdtd_tf = _dom_proxy(ex)
             return {"btc": btc, "eth": eth, "rs": _regime(board, btc), "src": name,
                     "btcd_tf": btcd_tf, "usdtd_tf": usdtd_tf, "altseason": _altseason(board, btc)}

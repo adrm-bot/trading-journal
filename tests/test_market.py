@@ -1,0 +1,53 @@
+"""market._alt_board — 알트 상대강도 보드의 저항성.
+신규·미상장 심볼(HYPE 등)을 늘려도, 거래소에 없는 심볼 하나가 전체 보드를 죽이지 않아야 한다.
+실 ccxt/네트워크는 쓰지 않고 가짜 거래소로 형태·저항성만 고정한다."""
+from app import market
+
+
+def _candles(n=300, base=100.0, step=0.5):
+    v = [base + i * step for i in range(n)]
+    return [[i, v[i], v[i], v[i], v[i], 1.0] for i in range(n)]  # closes만 쓰이므로 o=h=l=c
+
+
+class _FakeEx:
+    """fetch_ohlcv만 노출. bad에 든 베이스 심볼은 BadSymbol처럼 예외."""
+    def __init__(self, bad=()):
+        self.bad = set(bad)
+        self.calls = []
+
+    def fetch_ohlcv(self, symbol, timeframe="1d", limit=300):
+        self.calls.append(symbol)
+        base = symbol.split("/")[0]
+        if base in self.bad:
+            raise ValueError("BadSymbol: " + symbol)
+        return _candles()
+
+
+def test_alt_board_skips_missing_symbol_keeps_rest():
+    ex = _FakeEx(bad={"HYPE"})  # HYPE가 이 거래소 현물에 없다고 가정
+    eth, board = market._alt_board(ex, {"chg7": 5.0})
+    syms = {b["sym"] for b in board}
+    assert "HYPE" not in syms                    # 미상장 심볼은 조용히 제외
+    assert {"ETH", "ONDO", "ENA", "RENDER"} <= syms  # 정상 심볼은 유지
+    assert eth is not None                        # ETH 대장 스냅샷 확보
+    vs = [b["vs_btc_7d"] for b in board]
+    assert vs == sorted(vs, reverse=True)         # vs_btc_7d 내림차순 정렬
+
+
+def test_alt_board_all_missing_returns_empty_not_crash():
+    ex = _FakeEx(bad=set(market.ALTS))
+    eth, board = market._alt_board(ex, {"chg7": 1.0})
+    assert board == [] and eth is None            # 전부 실패해도 예외 없이 빈 보드
+
+
+def test_alt_board_no_btc_chg7_yields_no_rows():
+    # BTC 7일 수익률을 모르면 상대수익률을 만들 수 없음 → 행 없음(추정치 날조 금지)
+    eth, board = market._alt_board(_FakeEx(), {"chg7": None})
+    assert board == []
+
+
+def test_alts_are_unique_and_include_requested_sectors():
+    assert len(market.ALTS) == len(set(market.ALTS))       # 중복 없음
+    assert market.ALTS[0] == "ETH"                          # 대장 스냅샷용 첫 항목
+    for s in ("HYPE", "ONDO", "ENA", "RENDER", "FET", "WLD"):
+        assert s in market.ALTS
