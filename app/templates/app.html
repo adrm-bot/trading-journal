@@ -47,6 +47,7 @@
   <div class="field"><label for="f_plan">계획·의도 <span class="muted">· 왜 들어갔나</span></label><textarea id="f_plan" placeholder="예: 0.087 지지선 반등 베팅, 4시간 추세 눌림목"></textarea></div>
   <div class="hh">한 줄만 적어도 됩니다. 아래 칩을 탭하면 더 빨라요.</div>
   <div class="field"><label>감정</label><div class="chips" id="c_emo"></div></div>
+  <div class="hh" id="histHint" hidden></div>
   <details class="more" id="moreFields"><summary>전략 · 근거 · 예상 손절/익절 · 메모 추가</summary>
     <div class="field"><label>진입전략 <span class="muted">· 하나 선택</span></label><div class="chips" id="c_strategy"></div></div>
     <div class="field"><label>진입근거 <span class="muted">· 여러 개 탭</span></label><div class="chips" id="c_setup"></div>
@@ -592,6 +593,7 @@ function jtMatch(t){
   if(JT.status==='pending'&&t.status!=='의도 미기입')return false;
   if(JT.status==='done'&&t.status!=='기록완료')return false;
   if(JT.status==='reviewed'&&t.status!=='복기완료')return false;
+  if(JT.status==='unreviewed'&&t.status==='복기완료')return false;
   if(JT.strategy!=='all'&&t.strategy!==JT.strategy)return false;
   if(JT.emotion!=='all'&&t.emotion!==JT.emotion)return false;
   if(JT.outcome!=='all'&&oc(t)!==JT.outcome)return false;
@@ -655,7 +657,9 @@ function setViews(a){try{localStorage.setItem(viewsKey(),JSON.stringify(a));}cat
 function viewsBar(){return `<div class="jviews"><span class="flbl">뷰</span>`+getViews().map(v=>`<button class="btn sm jview" data-v="${esc(v.name)}">${esc(v.name)}<span class="vx" data-del="${esc(v.name)}" role="button" aria-label="${esc(v.name)} 삭제">×</span></button>`).join('')+`<button class="btn sm" id="jSaveView">+ 현재 필터 저장</button></div>`;}
 function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
 function saveCurrentView(){const name=(prompt('이 필터를 저장할 이름은?','내 뷰')||'').trim();if(!name)return;
-  const jt={from:JT.from,to:JT.to,q:JT.q,exchange:JT.exchange,dir:JT.dir,status:JT.status};
+  // 현재 필터 전체 스냅샷 — 활성값만 저장(applyView가 나머지를 초기화하므로 하위호환)
+  const jt={};['from','to','q','exchange','dir','status','strategy','emotion','outcome','mistake','stop','eff','setupg','execg','conv','exitr','qr']
+    .forEach(k=>{if(JT[k]&&JT[k]!=='all'&&JT[k]!=='')jt[k]=JT[k];});
   setViews([...getViews().filter(v=>v.name!==name),{name,jt}]);renderJournal($("#view-journal"));toast('뷰 저장됨 · '+name);}
 function delView(name){setViews(getViews().filter(v=>v.name!==name));renderJournal($("#view-journal"));}
 function renderJournal(el){
@@ -695,7 +699,7 @@ function renderJournal(el){
   $("#jFilterT").onclick=()=>{const f=$("#jFilters"),open=f.hidden;f.hidden=!open;$("#jFilterT").setAttribute("aria-expanded",String(open));};
   $("#jEx").innerHTML=chipGroup('exchange',[['all','전체'],...exs.map(e=>[e,e])]);
   $("#jDir").innerHTML=chipGroup('dir',[['all','전체'],['Long','롱'],['Short','숏']]);
-  $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','계획 미기입 '+(DATA.summary.unplanned||0)],['done','기록완료'],['reviewed','복기완료']]);
+  $("#jStat").innerHTML=chipGroup('status',[['all','전체'],['pending','계획 미기입 '+(DATA.summary.unplanned||0)],['done','기록완료'],['reviewed','복기완료'],['unreviewed','복기 미완료']]);
   const strats=[...new Set(DATA.trades.map(t=>t.strategy).filter(Boolean))], emos=[...new Set(DATA.trades.map(t=>t.emotion).filter(Boolean))];
   $("#jOut").innerHTML=chipGroup('outcome',[['all','전체'],['win','승'],['loss','패'],['be','무']]);
   $("#jStop").innerHTML=chipGroup('stop',[['all','전체'],['kept','준수'],['violated','미준수']]);
@@ -764,6 +768,25 @@ function adherenceStat(){
   const ok=rec.filter(t=>!t.stop_violated&&!((t.mistake_tag||'').trim())).length;
   return {pct:Math.round(ok/rec.length*100),ok,n:rec.length};
 }
+/* 주간 규율 준수율 추이 — 주(월요일 시작)별 (손절 준수 & 실수태그 없음) ÷ 기록된 거래. 2주+ 데이터부터 */
+function adherenceTrend(ts){
+  const rec=ts.filter(t=>t.status&&t.status!=='의도 미기입');
+  if(rec.length<4)return'';
+  const by={};rec.forEach(t=>{const d=toKST(t.closed_at);if(!d)return;
+    const dt=new Date(d.date+'T00:00:00Z'),wd=(dt.getUTCDay()+6)%7;dt.setUTCDate(dt.getUTCDate()-wd);
+    const k=dt.toISOString().slice(0,10);(by[k]=by[k]||{ok:0,n:0});by[k].n++;
+    if(!t.stop_violated&&!((t.mistake_tag||'').trim()))by[k].ok++;});
+  const ks=Object.keys(by).sort().slice(-8);
+  if(ks.length<2)return'';
+  const s=ks.map(k=>({week:k,pct:Math.round(by[k].ok/by[k].n*100),n:by[k].n}));
+  const W=600,H=96,pad=28;
+  const X=i=>pad+i/(s.length-1)*(W-2*pad), Y=p=>H-18-(p/100)*(H-40);
+  const pts=s.map((d,i)=>`${X(i).toFixed(1)},${Y(d.pct).toFixed(1)}`).join(' ');
+  const dots=s.map((d,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(d.pct).toFixed(1)}" r="3.2" fill="${d.pct>=80?'var(--pos)':d.pct>=60?'var(--frost)':'var(--neg)'}" data-tip="${d.week} 주 · 준수 ${d.pct}% · 기록 ${d.n}건"/>`).join('');
+  const labels=s.map((d,i)=>`<text x="${X(i).toFixed(1)}" y="${(Y(d.pct)-8).toFixed(1)}" text-anchor="middle" class="hn">${d.pct}%</text>`).join('');
+  const xl=s.map((d,i)=>`<text x="${X(i).toFixed(1)}" y="${H-3}" text-anchor="middle" class="hx">${d.week.slice(5)}</text>`).join('');
+  return `<div class="section-title">주간 준수율 추이</div><div class="card chartc"><svg class="adtr" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="주간 규율 준수율 추이"><polyline points="${pts}" fill="none" stroke="var(--frost)" stroke-width="1.5" vector-effect="non-scaling-stroke"/>${dots}${labels}${xl}</svg><div class="ccap muted">주(월요일 시작) 단위 · 규율 준수율과 같은 정의 · 주당 표본이 적으면 변동이 큽니다</div></div>`;
+}
 /* 채점 편향 진단 — 확신도↔실현R 상관(피어슨) + 등급 역전 감지. 표본 기준 명시(상관 n≥5, 역전 등급별 n≥3) */
 function convCorr(ts){
   const pts=ts.filter(t=>t.conviction!=null&&t.conviction!==''&&t.r!=null).map(t=>[+t.conviction,t.r]);
@@ -792,11 +815,15 @@ function selfGradePanel(ts){
   if(!sg&&!eg&&!cv)return"";  // 채점 0건이면 패널 자체를 숨김(준수율만으론 안 띄움)
   let html="";
   if(ad)html+=`<div class="adcard"><span class="adv ${ad.pct>=80?'pos':ad.pct>=60?'muted':'neg'}">${ad.pct}%</span><span class="adl">규율 준수율<span class="muted"> · ${ad.n}건 중 ${ad.ok}건 · 손절 준수 & 실수태그 없음</span></span></div>`;
+  // 복기 완료율 — 클릭하면 미복기 거래로 드릴다운(복기가 밀리는 걸 눈앞에)
+  const revN=ts.filter(t=>t.status==='복기완료').length, revPct=ts.length?Math.round(revN/ts.length*100):0;
+  html+=`<div class="adcard grow" data-jf="status" data-jv="unreviewed" tabindex="0" role="button" aria-label="복기 미완료 거래 보기"><span class="adv ${revPct>=70?'pos':revPct>=40?'muted':'neg'}">${revPct}%</span><span class="adl">복기 완료율<span class="muted"> · ${ts.length}건 중 ${revN}건 · 클릭 → 미복기 거래</span></span></div>`;
   const cc=convCorr(ts);
   if(cc){const lbl=cc.c>=0.2?'양호':(cc.c<=-0.1?'과신 신호':'중립');
     html+=`<div class="mgrid" style="margin-bottom:13px">`+mcard('확신도 캘리브레이션',lbl,cc.c>=0.2?'pos':(cc.c<=-0.1?'neg':''),`확신↔실현R 상관 ${cc.c.toFixed(2)} · ${cc.n}건${cc.n<10?' · 표본 적음':''}`)+`</div>`;}
   const inv=[...gradeInversions(ts,'setup_grade',['A','B','C'],'셋업'),...gradeInversions(ts,'exec_grade',['A','B','C','D','F'],'실행')];
   if(inv.length)html+=`<div class="flags" style="margin-bottom:13px">`+inv.map(x=>`<div class="flag warn"><span class="fi" aria-hidden="true">${ICONS.warn}</span><span>${esc(x)}</span></div>`).join('')+`</div>`;
+  html+=adherenceTrend(ts);
   html+=`<div class="ins-grid">`
     +(sg?`<div class="ins-cell"><div class="section-title">셋업 등급별 성과</div>${sg}</div>`:"")
     +(eg?`<div class="ins-cell"><div class="section-title">실행 등급별 성과</div>${eg}</div>`:"")
@@ -1005,9 +1032,13 @@ function exitHabits(ts){
       +`<td class="num ${ar==null?'muted':(ar>=0?'pos':'neg')}">${ar==null?'—':(ar>=0?'+':'')+ar.toFixed(2)+'R'}${ar!=null&&v.rs.length<v.n?`<span class="muted"> ·${v.rs.length}건</span>`:''}</td>`
       +`<td class="num">${wr==null?'—':wr+'%'}</td><td class="num ${v.pnl>=0?'pos':'neg'}">${money(v.pnl)}</td></tr>`;}).join("");
   const effAvg=effs.length?effs.reduce((s,t)=>s+t.exit_eff,0)/effs.length:null;
+  // '테이블에 남긴 몫' 비율 — TP 설정 수익 거래의 실현손익 대비 money_left (가격 기준 근사)
+  const mlN=ts.filter(t=>t.money_left>0).length;
+  const mlRealized=ts.filter(t=>t.tp!=null&&t.tp!==''&&oc(t)==='win').reduce((s,t)=>s+(t.pnl||0),0);
+  const mlRatio=(moneyLeft>0&&mlRealized+moneyLeft>0)?Math.round(moneyLeft/(mlRealized+moneyLeft)*100):null;
   const cards=`<div class="mgrid" style="margin-bottom:var(--s3)">`
     +mcard("스탑 안 지켜 더 잃음",overLoss>0?money(-overLoss):"—",overLoss>0?"neg":"","계획 손절 너머 청산 누적")
-    +mcard("두고 온 이익",moneyLeft>0?"$"+Math.round(moneyLeft).toLocaleString():"—","","계획 익절 전 조기청산 누적")
+    +mcard("두고 온 이익",moneyLeft>0?"$"+Math.round(moneyLeft).toLocaleString():"—","",mlRatio!=null?`TP 설정 수익의 ≈${mlRatio}%를 조기청산으로 놓침 · ${mlN}건`:"계획 익절 전 조기청산 누적")
     +(effAvg!=null?mcard("청산효율 (계획 대비)",Math.round(effAvg*100)+"%",effAvg>=1?"pos":"",`실현R ÷ 계획R:R · 수익 ${effs.length}건`):"")
     +`</div>`;
   let effBlock='';
@@ -1246,6 +1277,20 @@ function updateRR(){
   if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
 }
+/* 과거 패턴 힌트 — 같은 심볼·방향 최근 3건의 감정·실수 최빈값을 힌트로만 표시(자동 선택은 통계 세탁 위험이라 안 함) */
+function patternHint(r){
+  const past=DATA.trades.filter(t=>t.trade_id!==r.trade_id&&t.symbol===r.symbol&&t.direction===r.direction&&(t.closed_at||'')<(r.closed_at||''))
+    .sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?1:-1).slice(0,3);
+  if(!past.length)return'';
+  const top=arr=>{const c={};arr.forEach(x=>c[x]=(c[x]||0)+1);const s=Object.entries(c).sort((a,b)=>b[1]-a[1]);return s.length?s[0]:null;};
+  const te=top(past.map(t=>t.emotion).filter(Boolean));
+  const tm=top(past.flatMap(t=>(t.mistake_tag||'').split(',').map(s=>s.trim()).filter(Boolean)));
+  if(!te&&!tm)return'';
+  const parts=[];
+  if(te)parts.push(`감정 '${te[0]}' ${te[1]}회`);
+  if(tm)parts.push(`실수 '${tm[0]}' ${tm[1]}회`);
+  return `${r.symbol} ${dirKo(r.direction)} 최근 ${past.length}건: ${parts.join(' · ')} — 이번에도 해당되나요?`;
+}
 /* 복기 모달 로테이션 — 저널에선 현재 필터·정렬 순서, 그 외 뷰에선 최신순으로 이전/다음 순회 */
 function modalList(){
   if(curView()==='journal')return DATA.trades.filter(jtMatch).sort(jtCmp).map(t=>t.trade_id);
@@ -1276,6 +1321,7 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   // 모바일에선 SL 비어 있으면 펼쳐서 바로 입력 유도 (장중 폰 기입 마찰 제거 — R 통계의 원천)
   const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo)||(innerWidth<=560&&(r.sl==null||r.sl===''));
   const rev=$("#reviewFields"); if(rev)rev.open=!!(r.review||r.mistake_tag||r.chart_url||r.setup_grade||r.exec_grade||r.conviction!=null||r.status==='복기완료');
+  const hh=$("#histHint");if(hh){const h=patternHint(r);hh.textContent=h;hh.hidden=!h;}
   modalNavUpdate();
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
@@ -1354,6 +1400,21 @@ function autoSync(){
     localStorage.setItem('lastAutoPull',String(Date.now()));
     pull({silent:true});
   }catch(e){}
+}
+/* 연속 손실 경고 — 현재 진행 중 연패(본절 스킵)가 3+면 절제된 배너 1개(세션당 디스미스, 다른 배너 우선) */
+function curLossStreak(ts){
+  const ord=[...ts].sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  let cur=0;
+  for(let i=ord.length-1;i>=0;i--){const o=oc(ord[i]);if(o==='be')continue;if(o==='loss')cur++;else break;}
+  return cur;
+}
+function streakWarn(){
+  try{if(sessionStorage.getItem('streakOff'))return;}catch(e){}
+  const el=$("#pullbanner");if(!el||el.innerHTML)return;
+  const cur=curLossStreak(DATA.trades);
+  if(cur<3)return;
+  setBanner(`<div class="banner warn">${ICONS.warn} 손실 <b>${cur}연속</b> 청산 중 · 잠깐 물러나 마지막 거래부터 복기해 보는 건 어떨까요<button class="bx" aria-label="닫기">×</button></div>`);
+  const bx=$("#pullbanner .bx");if(bx)bx.onclick=()=>{try{sessionStorage.setItem('streakOff','1');}catch(e){}setBanner('');};
 }
 /* 폐루프: 미기입 거래가 있으면 상단 nudge 배너로 '지금 채우기' 유도(세션당 1회 디스미스 가능) */
 function nudgeUnplanned(){
@@ -1477,5 +1538,5 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;c
   b.onclick=()=>set(!sh.classList.contains('nav-off'));
   try{if(localStorage.getItem('navOff'))set(true);}catch(e){}
 })();
-(async()=>{paintBootSkeleton();try{await loadAll();route();nudgeUnplanned();autoSync();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
+(async()=>{paintBootSkeleton();try{await loadAll();route();nudgeUnplanned();streakWarn();autoSync();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>
