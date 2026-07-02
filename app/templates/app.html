@@ -1216,7 +1216,7 @@ async function saveIntent(){
   try{
     const res=await(await postJSON("/api/intent",p)).json();
     if(res.ok){await loadAll();route();
-      const pend=DATA.trades.filter(t=>t.status==='의도 미기입');
+      const pend=DATA.trades.filter(t=>t.status==='의도 미기입').sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);  // 오래된 것부터(체이닝과 동일 순서)
       if(pend.length){openModal(pend[0].trade_id);toast(`저장됨 · 미기입 ${pend.length}건 남음 · 이어서 채우기`);}
       else{closeModal();toast("저장 완료 · 미기입 거래 모두 정리됨");}
     }else toast("저장하지 못했습니다. 해당 거래를 찾지 못했습니다");
@@ -1249,6 +1249,8 @@ async function pull(opt){opt=opt||{};
       const anyErr=Object.values(rs).some(v=>v.error);
       if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건`:`최근 거래 없음 · 새 거래가 청산되면 자동 반영`);
       else if(!opt.silent) toast(ok.length?`불러옴: ${ok.map(([k,v])=>`${EXN(k)} +${v.added}`).join(' · ')}`:`연결된 거래소 없음`);
+      // 사용자가 직접 불러온 직후(백그라운드 autoSync 제외)엔 배너 대신 바로 복기 체이닝 — 기억이 생생할 때 기입
+      if((!opt.silent||opt.banner)&&!anyErr)chainUnplanned();
     }else{errBanner(esc(res.error||"거래를 불러오지 못했습니다"));}
   }catch(err){const m=err&&err.message;
     if(m&&m.indexOf("http ")!==0&&!opt.silent)toast(m);  /* 쿨다운(429) 등 명확한 메시지는 토스트로(자동 동기화는 조용히) */
@@ -1256,6 +1258,14 @@ async function pull(opt){opt=opt||{};
   finally{const x=$("#pullBtn");if(x){x.disabled=false;x.textContent=orig||"↻ 불러오기";}}
 }
 
+/* pull 직후 복기 체이닝 — 가장 오래된 미기입부터 모달 자동 오픈(Esc로 언제든 닫기, 저장→다음은 saveIntent 체이닝 재사용) */
+function chainUnplanned(){
+  const pend=DATA.trades.filter(t=>t.status==='의도 미기입').sort((a,b)=>(a.closed_at||'')<(b.closed_at||'')?-1:1);
+  if(!pend.length)return;
+  setBanner('');
+  openModal(pend[0].trade_id);
+  toast(`계획 미기입 ${pend.length}건 · 오래된 것부터 이어서 채웁니다`);
+}
 /* 폐루프: 앱 진입 시 stale면 자동 동기화 — 거래소 연결돼 있고 마지막 자동풀이 6h+ 지났으면 조용히 1회 */
 function autoSync(){
   try{
