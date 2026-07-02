@@ -52,12 +52,12 @@
     <div class="field"><label>진입근거 <span class="muted">· 여러 개 탭</span></label><div class="chips" id="c_setup"></div>
       <input id="f_setup_etc" placeholder="기타 근거 직접 입력 (선택)" style="margin-top:6px"></div>
     <div class="row2">
-      <div class="field"><label for="f_sl">예상 손절가 (SL)</label><input id="f_sl" type="number" step="any" placeholder="0.086"></div>
-      <div class="field"><label for="f_tp">예상 익절가1 (TP1)</label><input id="f_tp" type="number" step="any" placeholder="0.092"></div>
+      <div class="field"><label for="f_sl">예상 손절가 (SL)</label><input id="f_sl" type="number" step="any" inputmode="decimal" placeholder="0.086"></div>
+      <div class="field"><label for="f_tp">예상 익절가1 (TP1)</label><input id="f_tp" type="number" step="any" inputmode="decimal" placeholder="0.092"></div>
     </div>
     <div class="row2">
-      <div class="field"><label for="f_tp2">예상 익절가2 (TP2)</label><input id="f_tp2" type="number" step="any" placeholder="0.098"></div>
-      <div class="field"><label for="f_tp3">예상 익절가3 (TP3)</label><input id="f_tp3" type="number" step="any" placeholder="0.104"></div>
+      <div class="field"><label for="f_tp2">예상 익절가2 (TP2)</label><input id="f_tp2" type="number" step="any" inputmode="decimal" placeholder="0.098"></div>
+      <div class="field"><label for="f_tp3">예상 익절가3 (TP3)</label><input id="f_tp3" type="number" step="any" inputmode="decimal" placeholder="0.104"></div>
     </div>
     <div class="rr-line" id="rrLine"></div>
     <div class="field"><label for="f_memo">메모</label><textarea id="f_memo" placeholder="물려서 분할로 던짐 / 손절 못 지킴…"></textarea></div>
@@ -1267,7 +1267,8 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   setChips("c_mistake",(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean));
   const _etc=setChips("c_setup",(r.setup||"").split(",").map(s=>s.trim()).filter(Boolean));$("#f_setup_etc").value=_etc.join(", ");
   updateRR();
-  const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo);
+  // 모바일에선 SL 비어 있으면 펼쳐서 바로 입력 유도 (장중 폰 기입 마찰 제거 — R 통계의 원천)
+  const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo)||(innerWidth<=560&&(r.sl==null||r.sl===''));
   const rev=$("#reviewFields"); if(rev)rev.open=!!(r.review||r.mistake_tag||r.chart_url||r.setup_grade||r.exec_grade||r.conviction!=null||r.status==='복기완료');
   modalNavUpdate();
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}

@@ -531,6 +531,10 @@ svg.uw{width:100%;height:46px;display:block}
 #toast{transition:bottom .2s;animation:toastIn .22s cubic-bezier(.2,.7,.3,1)}
 @keyframes toastIn{from{opacity:0;transform:translate(-50%,8px)}to{opacity:1;transform:translate(-50%,0)}}
 @media(max-width:560px){#toast{bottom:90px!important}}
+/* 모바일 모달: SL/TP 입력 중 라이브 R:R 라인이 화면 하단에 붙어 항상 보이게 */
+@media(max-width:560px){
+  .rr-line{position:sticky;bottom:-24px;background:var(--plate);padding:8px 0;border-top:1px solid var(--line);margin:0 0 8px;z-index:2}
+}
 
 /* ---- 명령 팔레트 (⌘K) ---- */
 .tbar-right{display:flex;align-items:center;gap:var(--s3)}
