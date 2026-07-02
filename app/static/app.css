@@ -219,6 +219,7 @@ td .num,td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .jlevels .lv{font-family:var(--f-mono);font-size:var(--fs-xs);font-weight:510;padding:2px 8px;border-radius:var(--r-badge);background:var(--card-2);color:var(--pebble)}
 .jlevels .lvsl{background:var(--neg-soft);color:var(--ember)}
 .jlevels .lvtp{background:var(--pos-soft);color:var(--mint)}
+.jlegs{cursor:help} .jlegs .lvleg.pos{background:var(--pos-soft);color:var(--mint)} .jlegs .lvleg.neg{background:var(--neg-soft);color:var(--ember)}
 .jplan{margin-top:8px;font-size:var(--fs-sm);color:var(--text);line-height:1.5;overflow-wrap:anywhere}
 .jmemo{margin-top:4px;font-size:var(--fs-sm);color:var(--muted);overflow-wrap:anywhere}
 .jmis{margin-top:6px}

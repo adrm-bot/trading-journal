@@ -275,6 +275,20 @@ function planLevels(r){
   if(has(r.tp3))lv.push(`<span class="lv lvtp">TP3 ${fmtP(r.tp3)}</span>`);
   return lv.length?`<div class="jlevels">${lv.join("")}</div>`:"";
 }
+/* 분할청산 레그 파싱 — exit_legs(JSON [[가격,수량],…]) × legs_r(SL 유효 거래만) 인덱스 정합 */
+function legRows(r){
+  if(!(r.exit_count>1)||!r.exit_legs)return null;
+  let legs;try{legs=typeof r.exit_legs==='string'?JSON.parse(r.exit_legs):r.exit_legs;}catch(e){return null;}
+  if(!Array.isArray(legs))return null;
+  const fl=legs.filter(l=>l&&l[0]);if(!fl.length)return null;
+  const rs=r.legs_r||[];
+  return fl.map((l,i)=>({price:l[0],qty:l[1],r:rs.length===fl.length?rs[i]:null}));
+}
+function legsLine(r){
+  const legs=legRows(r);if(!legs)return'';
+  const chips=legs.map((l,i)=>`<span class="lv lvleg${l.r!=null?(l.r>=0?' pos':' neg'):''}">${i+1}차 ${fmtP(l.price)} · ${fmtP(l.qty)}${l.r!=null?` · ${(l.r>=0?'+':'')+l.r}R`:''}</span>`).join('');
+  return `<div class="jlevels jlegs" data-tip="분할청산 레그별 도달 R = (레그가−진입가) ÷ (진입~손절 거리) · SL 입력 거래만 R 표시">${chips}</div>`;
+}
 /* 자기채점 배지 — 셋업·실행 등급은 질에 따라 색(A 좋음 ~ F 나쁨), 확신도는 중립 */
 function gq(g){return g==='A'?'g-a':g==='B'?'g-b':g==='F'?'g-f':(g==='C'||g==='D')?'g-c':'';}
 function gradeBadges(r){const b=[];
@@ -308,13 +322,13 @@ function tradeCard(r){
       +((!t&&!gb&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">탭해서 계획 · 근거 · 감정 채우기</div>`:"");}
   const mv=r.move_pct==null?"":` · <span class="${r.move_pct>=0?'pos':'neg'}">${(r.move_pct>=0?'+':'')+r.move_pct}%</span>`;
   const risk=r.risk_usd?` · 리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}`:"";
-  const split=r.exit_count>1?` · <span class="muted" data-tip="${(r.legs_r&&r.legs_r.length)?'레그 R '+r.legs_r.map(x=>(x>=0?'+':'')+x).join(' · '):'분할 청산'}">분할 ${r.exit_count}회</span>`:"";
+  const split=r.exit_count>1?` · <span class="muted">분할 ${r.exit_count}회</span>`:"";
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}${split}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${svb}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}${eff}${rx}</div></div>
-    <div class="jmeta">${meta}</div>${stats}${planLevels(r)}${body}</div>`;
+    <div class="jmeta">${meta}</div>${stats}${legsLine(r)}${planLevels(r)}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
 function bindCards(){$$(".jcard").forEach(c=>{c.onclick=()=>openModal(c.dataset.id);
@@ -1141,6 +1155,9 @@ function renderFacts(r){
     +(r.risk_usd?fact("리스크",`$${Math.round(r.risk_usd).toLocaleString()}${r.risk_pct!=null?` · ${r.risk_pct}%`:''}`):"");
   if(r.fees!=null)h+=fact("수수료",`-$${Number(r.fees).toLocaleString(undefined,{maximumFractionDigits:2})}`);
   if(r.funding)h+=fact("펀딩",`<span class="${r.funding>=0?'pos':'neg'}">${money(r.funding)}</span>`);
+  const legs=legRows(r);
+  if(legs)h+=`<div class="fact" style="grid-column:1/-1"><span class="fl">분할청산 레그 · 가격 × 수량 (도달 R)</span><span class="fv">`
+    +legs.map((l,i)=>`${i+1}차 ${fmtP(l.price)} × ${fmtP(l.qty)}${l.r!=null?` <span class="${l.r>=0?'pos':'neg'}">(${(l.r>=0?'+':'')+l.r}R)</span>`:''}`).join(' · ')+`</span></div>`;
   $("#modalFacts").innerHTML=h;
 }
 function updateRR(){
