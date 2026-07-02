@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import time
+import urllib.request
 from datetime import datetime, timezone
 
 import ccxt
@@ -449,7 +450,185 @@ def probe_readonly(kind, key, secret):
     return fn(key, secret)
 
 
-ADAPTERS = {"bybit": fetch_bybit, "binance": fetch_binance, "gate": fetch_gate}
+# ---------- NinjaTrader — 공식 API(Tradovate 백엔드) REST ----------
+# 크립토 거래소와 달리 read-only 키 개념이 없다(계정 인증 + 앱 키). 저장은 봉투암호화,
+# 등록 시 사용자 명시 확인(ack) 필수. 손익은 USD 기준(표시는 USDT 단위와 동일 취급).
+NT_BASES = ("https://live.tradovateapi.com/v1", "https://demo.tradovateapi.com/v1")
+NT_APP_ID, NT_APP_VER = "mmj-journal", "1.0"
+NT_TIMEOUT = int(os.getenv("NT_TIMEOUT_SEC", "20"))
+
+
+def _nt_http(base, path, token=None, payload=None):
+    """Tradovate REST 1회 호출(stdlib) — payload 있으면 POST(JSON), 없으면 GET."""
+    data = json.dumps(payload).encode() if payload is not None else None
+    req = urllib.request.Request(base + path, data=data, method="POST" if data else "GET")
+    req.add_header("Accept", "application/json")
+    if data is not None:
+        req.add_header("Content-Type", "application/json")
+    if token:
+        req.add_header("Authorization", "Bearer " + token)
+    with urllib.request.urlopen(req, timeout=NT_TIMEOUT) as r:
+        return json.loads(r.read().decode())
+
+
+def _nt_auth(cred):
+    """저장된 env 우선, 그다음 live→demo 순으로 인증. 성공 시 (base, token).
+    MFA/캡차 요구(p-ticket)는 진행 불가 — 명시 에러로 안내."""
+    try:
+        cid = int(str(cred.get("cid")).strip())
+    except (TypeError, ValueError):
+        raise RuntimeError("ninjatrader API CID는 숫자여야 합니다") from None
+    body = {"name": cred.get("name"), "password": cred.get("password"),
+            "appId": NT_APP_ID, "appVersion": NT_APP_VER,
+            "cid": cid, "sec": cred.get("sec"),
+            "deviceId": ("mmj-" + str(cred.get("name") or ""))[:64]}
+    order = NT_BASES if cred.get("env") != "demo" else (NT_BASES[1], NT_BASES[0])
+    errs = []
+    for base in order:
+        env = "demo" if "demo" in base else "live"
+        try:
+            j = _nt_http(base, "/auth/accesstokenrequest", payload=body)
+        except Exception:  # noqa: BLE001 — 4xx 포함
+            errs.append(f"{env} 인증 거부")
+            continue
+        if j.get("accessToken"):
+            return base, j["accessToken"]
+        if j.get("p-ticket"):
+            raise RuntimeError("ninjatrader 인증에 추가 확인(MFA/캡차)이 걸렸습니다. "
+                               "Tradovate/NinjaTrader 웹에서 전용 API 키(cid/sec)를 발급해 등록해 주세요")
+        errs.append(f"{env}: {j.get('errorText') or '인증 거부'}")
+    raise RuntimeError("ninjatrader 인증 실패 · " + " / ".join(errs))
+
+
+def _nt_items(base, tok, entity, ids):
+    """/{entity}/items?ids=… 배치 조회(50개씩). 실패 청크는 건너뜀(부분 성공 허용)."""
+    uniq = sorted({int(i) for i in ids if i is not None})
+    out = []
+    for i in range(0, len(uniq), 50):
+        chunk = ",".join(map(str, uniq[i:i + 50]))
+        try:
+            out += _nt_http(base, f"/{entity}/items?ids={chunk}", token=tok) or []
+        except Exception:  # noqa: BLE001
+            logger.warning("ninjatrader %s 배치 조회 실패", entity)
+    return out
+
+
+def _nt_contract_map(base, tok, contract_ids):
+    """contractId → (심볼명, 포인트가치). contract→maturity→product 체인.
+    해석 실패 계약은 제외 — 잘못된 배수로 손익을 오염시키지 않는다."""
+    contracts = _nt_items(base, tok, "contract", contract_ids)
+    mats = {m["id"]: m for m in _nt_items(base, tok, "contractMaturity",
+                                          [c.get("contractMaturityId") for c in contracts]) if m.get("id") is not None}
+    prods = {p["id"]: p for p in _nt_items(base, tok, "product",
+                                           [m.get("productId") for m in mats.values()]) if p.get("id") is not None}
+    out = {}
+    for c in contracts:
+        m = mats.get(c.get("contractMaturityId")) or {}
+        p = prods.get(m.get("productId")) or {}
+        vpp = p.get("valuePerPoint")
+        if c.get("id") is None or not c.get("name") or not vpp:
+            continue
+        out[c["id"]] = (str(c["name"]), float(vpp))
+    return out
+
+
+def _nt_ts_ms(s):
+    """Tradovate ISO 타임스탬프('…Z') → unix ms. 파싱 불가면 None. (순수함수)"""
+    try:
+        return int(datetime.fromisoformat(str(s).replace("Z", "+00:00")).timestamp() * 1000)
+    except (TypeError, ValueError):
+        return None
+
+
+def _nt_fill_fee_map(base, tok, fill_ids):
+    """fillId → 수수료 합(커미션+거래소·청산·NFA·라우팅). 조회 실패 시 빈 dict(수수료 0 처리)."""
+    fees = {}
+    for f in _nt_items(base, tok, "fillFee", fill_ids):
+        if f.get("id") is None:
+            continue
+        fees[f["id"]] = sum(float(f.get(k) or 0) for k in
+                            ("commission", "clearingFee", "exchangeFee", "nfaFee", "brokerageFee", "orderRoutingFee"))
+    return fees
+
+
+def _nt_normalize_fills(fills, fees_by_id, start_ms):
+    """Tradovate fill → reconstruct_walk용 정규화, contractId별 그룹. (순수함수 — 단위테스트 가능)
+    lookback 이전·필드 불량 체결은 제외. realizedPnl은 0 — 손익은 _nt_scale_pnl에서 포인트가치로 계산."""
+    by_contract = {}
+    for f in fills or []:
+        ts = _nt_ts_ms(f.get("timestamp"))
+        if ts is None or ts < start_ms:
+            continue
+        act = str(f.get("action") or "").upper()
+        if act not in ("BUY", "SELL") or f.get("price") is None or not f.get("qty"):
+            continue
+        by_contract.setdefault(f.get("contractId"), []).append({
+            "id": f.get("id"), "time": ts, "side": act, "price": float(f["price"]),
+            "qty": abs(float(f["qty"])), "commission": float(fees_by_id.get(f.get("id")) or 0.0),
+            "realizedPnl": 0.0, "positionSide": "BOTH"})
+    by_contract.pop(None, None)
+    return by_contract
+
+
+def _nt_scale_pnl(rows, vpp):
+    """선물 포인트가치(vpp) 반영해 pnl 재계산 — walk의 가격차 폴백은 계약 배수를 모른다. (순수함수)"""
+    for r in rows:
+        dsign = 1 if r["direction"] == "Long" else -1
+        gross = dsign * (r["exit"] - r["entry"]) * r["qty"] * vpp
+        r["pnl"] = round(gross - (r.get("fees") or 0.0), 8)
+    return rows
+
+
+def fetch_ninjatrader(cred, lookback):
+    base, tok = _nt_auth(cred)
+    start_ms = int(time.time() * 1000) - lookback * 86_400_000
+    try:
+        fills = _nt_http(base, "/fill/list", token=tok) or []
+    except Exception:  # noqa: BLE001
+        raise RuntimeError("ninjatrader 체결 조회 실패. API 키(cid/sec) 권한과 계정 상태를 확인하세요") from None
+    recent_ids = [f.get("id") for f in fills if (_nt_ts_ms(f.get("timestamp")) or 0) >= start_ms]
+    fees = _nt_fill_fee_map(base, tok, recent_ids)
+    by_contract = _nt_normalize_fills(fills, fees, start_ms)
+    cmap = _nt_contract_map(base, tok, by_contract.keys())
+    rows = []
+    for cid, cf in by_contract.items():
+        info = cmap.get(cid)
+        if not info:
+            logger.warning("ninjatrader 계약 %s 해석 실패 — 해당 체결 건너뜀(손익 오염 방지)", cid)
+            continue
+        sym, vpp = info
+        rows += _nt_scale_pnl(reconstruct_walk("ninjatrader", sym, cf), vpp)
+    return rows
+
+
+def probe_ninjatrader(cred):
+    """등록 전 인증 확인 — read-only 제한이 불가한 API라 권한 프로빙 대신 인증 성공 여부와
+    환경(live/demo)만 확인해 반환."""
+    base, _ = _nt_auth(cred)
+    return "demo" if "demo" in base else "live"
+
+
+def _nt_open_positions(cred):
+    base, tok = _nt_auth(cred)
+    poss = _nt_http(base, "/position/list", token=tok) or []
+    live = [p for p in poss if p.get("netPos")]
+    cmap = _nt_contract_map(base, tok, [p.get("contractId") for p in live])
+    rows = []
+    for p in live:
+        n = float(p.get("netPos") or 0)
+        info = cmap.get(p.get("contractId"))
+        rows.append({"exchange": "ninjatrader", "symbol": (info[0] if info else str(p.get("contractId"))),
+                     "direction": "Long" if n > 0 else "Short", "entry": p.get("netPrice"),
+                     "qty": abs(n), "leverage": None, "upnl": None, "mark": None})
+    return rows
+
+
+ADAPTERS = {
+    "bybit": lambda cred, lb: fetch_bybit(cred["key"], cred["secret"], lb),
+    "binance": lambda cred, lb: fetch_binance(cred["key"], cred["secret"], lb),
+    "gate": lambda cred, lb: fetch_gate(cred["key"], cred["secret"], lb),
+    "ninjatrader": fetch_ninjatrader,
+}
 
 
 def _closed_ts(s):
@@ -501,7 +680,7 @@ def pull_user(uid):
         cred = db.get_connection(uid, kind)
         try:
             added, new_rows = 0, []
-            for r in ADAPTERS[kind](cred["key"], cred["secret"], LOOKBACK):
+            for r in ADAPTERS[kind](cred, LOOKBACK):
                 if db.upsert_trade(uid, r):
                     added += 1
                     new_rows.append(r)
@@ -553,7 +732,10 @@ def fetch_open_positions(uid):
             continue
         cred = db.get_connection(uid, kind)
         try:
-            out += _open_positions(kind, cred["key"], cred["secret"])
+            if kind == "ninjatrader":
+                out += _nt_open_positions(cred)
+            else:
+                out += _open_positions(kind, cred["key"], cred["secret"])
         except Exception:  # noqa: BLE001
             logger.warning("보유포지션 %s 조회 실패 uid=%s", kind, uid)
     return out

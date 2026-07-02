@@ -138,8 +138,8 @@ const EFF_BUCKETS={b0:[-1e9,.25],b1:[.25,.5],b2:[.5,.75],b3:[.75,1],b4:[1,1e9]};
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
 const esc=s=>(s==null?"":String(s)).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
-const EXCH=new Set(["bybit","binance","gate"]);
-const EXN_MAP={bybit:"Bybit",binance:"Binance",gate:"Gate.io",notion:"Notion",telegram:"Telegram",sheets:"Google Sheets"};
+const EXCH=new Set(["bybit","binance","gate","ninjatrader"]);
+const EXN_MAP={bybit:"Bybit",binance:"Binance",gate:"Gate.io",ninjatrader:"NinjaTrader",notion:"Notion",telegram:"Telegram",sheets:"Google Sheets"};
 const EXN=k=>EXN_MAP[k]||k;
 const dirKo=d=>d==='Long'?'롱':d==='Short'?'숏':'—';
 const oc=t=>t.outcome||((t.pnl||0)>0?'win':((t.pnl||0)<0?'loss':'be'));  // 승/패/본절 — 서버 enrich 판정 우선
@@ -1216,6 +1216,9 @@ const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"binance",nm:"Binance",hint:"USDⓈ-M 선물 read-only 키",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
   {k:"gate",nm:"Gate.io",hint:"USDT 무기한 선물 read-only 키",read:1,ack:"이 키는 '읽기 전용'입니다. Gate는 권한 자동 검증이 안 돼 직접 확인합니다",fields:[["key","API Key","text"],["secret","API Secret","password"]]},
+  {k:"ninjatrader",nm:"NinjaTrader",hint:"공식 API(Tradovate) · 선물 체결 자동 기록 · 손익 USD",
+   ack:"NinjaTrader API는 read-only 제한이 불가합니다(계정 인증 방식). 계정에 MFA와 전용 API 키(CID·Secret)를 쓰고 있으며, 이 위험을 이해했습니다",
+   fields:[["name","계정 이메일/유저명","text"],["password","계정 비밀번호","password"],["cid","API CID","text"],["sec","API Secret","password"]]},
   {k:"notion",nm:"Notion",hint:"일지를 Notion으로 내보내기",soon:1,fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
   {k:"telegram",nm:"Telegram",hint:"행동 요약 알림 받기",soon:1,fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
   {k:"sheets",nm:"Google Sheets",hint:"일지를 Google Sheets로 내보내기",soon:1,fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},

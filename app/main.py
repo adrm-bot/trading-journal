@@ -30,7 +30,7 @@ logger = logging.getLogger("app")
 
 from . import db, engine, crypto, market, analytics  # noqa: E402
 
-EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io",
+EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
               "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
 
 # /api/pull 유저별 쿨다운(초) — 거래소 키 throttle/ban 방지 + 단일 워커 보호 (in-memory, 재시작 시 초기화)
@@ -369,6 +369,22 @@ async def api_save_connection(request: Request):
             logger.warning("키 프로빙 실패 kind=%s uid=%s", kind, uid)
             raise HTTPException(400, f"{EXCH_NAMES.get(kind, kind)} 키 권한을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요") from None
         data = {"key": key, "secret": sec}
+    elif kind == "ninjatrader":
+        # 공식 API(Tradovate)는 read-only 제한이 불가(계정 인증 + 앱 키) → 명시 확인 필수 + 인증 프로빙
+        name = (b.get("name") or "").strip()
+        pw = (b.get("password") or "").strip()
+        cid_, sec_ = (b.get("cid") or "").strip(), (b.get("sec") or "").strip()
+        if not (name and pw and cid_ and sec_):
+            raise HTTPException(400, "NinjaTrader 계정(이메일·비밀번호)과 API 키(CID·Secret)를 모두 입력해 주세요")
+        if not b.get("ack_readonly"):
+            raise HTTPException(400, "NinjaTrader API는 read-only 제한이 불가합니다. 위험 고지를 확인한 뒤 등록해 주세요")
+        data = {"name": name, "password": pw, "cid": cid_, "sec": sec_}
+        try:
+            data["env"] = engine.probe_ninjatrader(data)
+        except RuntimeError as e:
+            raise HTTPException(400, str(e)) from None
+        warn = ("NinjaTrader 연결됨" + (" (demo 환경)" if data["env"] == "demo" else "")
+                + " · API 특성상 거래 권한 차단이 불가하니 계정 MFA·전용 API 키를 유지하세요")
     elif kind == "notion":
         tok = (b.get("token") or "").strip()
         if not tok:
