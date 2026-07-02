@@ -337,6 +337,8 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .banner .bx{margin-left:auto;background:none;border:none;color:inherit;font-size:var(--fs-lg);cursor:pointer;line-height:1;padding:0 4px;flex:0 0 auto}
 .badge.liq,.badge.sv{background:var(--neg-soft);color:var(--ember);font-size:var(--fs-micro);padding:1px 6px}
 .badge.sv{cursor:help}
+.xeff{font-family:var(--f-mono);font-size:var(--fs-cap);color:var(--muted);cursor:help}
+.xeff.pos{color:var(--mint)}
 /* R 통계 제외 표시 — SL 미입력(점선·중립) vs 반대편 SL 오기입(amber·교정 필요) */
 .rx{font-family:var(--f-mono);font-size:var(--fs-cap);font-weight:400;color:var(--dim);border:1px dashed var(--line-2);border-radius:var(--r-badge);padding:1px 6px;white-space:nowrap;cursor:help}
 .rx.bad{color:var(--amber);border-style:solid;border-color:rgba(210,153,34,.5);background:var(--warn-soft)}
