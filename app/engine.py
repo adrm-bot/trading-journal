@@ -571,11 +571,13 @@ def _nt_normalize_fills(fills, fees_by_id, start_ms):
 
 
 def _nt_scale_pnl(rows, vpp):
-    """선물 포인트가치(vpp) 반영해 pnl 재계산 — walk의 가격차 폴백은 계약 배수를 모른다. (순수함수)"""
+    """선물 포인트가치(vpp) 반영해 pnl 재계산 — walk의 가격차 폴백은 계약 배수를 모른다.
+    point_value도 행에 저장 → enrich의 리스크·습관비용 달러 환산에 쓰임. (순수함수)"""
     for r in rows:
         dsign = 1 if r["direction"] == "Long" else -1
         gross = dsign * (r["exit"] - r["entry"]) * r["qty"] * vpp
         r["pnl"] = round(gross - (r.get("fees") or 0.0), 8)
+        r["point_value"] = vpp
     return rows
 
 
@@ -619,7 +621,8 @@ def _nt_open_positions(cred):
         info = cmap.get(p.get("contractId"))
         rows.append({"exchange": "ninjatrader", "symbol": (info[0] if info else str(p.get("contractId"))),
                      "direction": "Long" if n > 0 else "Short", "entry": p.get("netPrice"),
-                     "qty": abs(n), "leverage": None, "upnl": None, "mark": None})
+                     "qty": abs(n), "leverage": None, "upnl": None, "mark": None,
+                     "point_value": (info[1] if info else None)})
     return rows
 
 

@@ -138,6 +138,19 @@ def test_sl_direction_error_blocks_wrongside():
     assert analytics.sl_direction_error("Long", None, 110) is None     # 진입가 미상 → 판정 불가
 
 
+def test_point_value_scales_dollar_amounts():
+    # NT 선물(MES $5/pt): 리스크·초과손실 달러 환산에 포인트가치 반영, R은 가격 비율이라 무관
+    t = analytics.enrich({"entry": 5000, "exit": 4990, "sl": 4995, "qty": 2, "direction": "Long",
+                          "pnl": -100, "point_value": 5.0}, equity=10000)
+    assert t["risk_usd"] == 50.0    # 5pt × 2계약 × $5
+    assert t["risk_pct"] == 0.5
+    assert t["over_loss"] == 50.0   # 손절 5pt 초과 × 2 × $5
+    assert t["r"] == -2.0
+    # point_value 없으면 기존과 동일(×1)
+    t2 = analytics.enrich({"entry": 5000, "exit": 4990, "sl": 4995, "qty": 2, "direction": "Long", "pnl": -20})
+    assert t2["risk_usd"] == 10.0
+
+
 def test_rr_uses_abs_distance():
     t = analytics.enrich({"entry": 100, "exit": 100, "sl": 95, "tp": 115, "tp2": 130,
                           "qty": 1, "direction": "Long"})

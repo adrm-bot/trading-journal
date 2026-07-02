@@ -70,8 +70,9 @@ def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
         t["rr2"] = round(abs(tp2 - e) / abs(e - sl), 2)
     if e and sl and tp3 and e != sl:
         t["rr3"] = round(abs(tp3 - e) / abs(e - sl), 2)
+    pv = t.get("point_value") or 1.0  # 선물 포인트가치(NT) — 크립토 선형은 1
     if e and sl and qty:
-        t["risk_usd"] = round(abs(e - sl) * qty, 2)  # 계획 리스크 = 진입~손절 거리 × 수량
+        t["risk_usd"] = round(abs(e - sl) * qty * pv, 2)  # 계획 리스크 = 진입~손절 거리 × 수량 × 포인트가치
         if equity and equity > 0:
             t["risk_pct"] = round(t["risk_usd"] / equity * 100, 2)  # 계좌 대비 리스크%
     oa, ca = t.get("opened_at"), t.get("closed_at")
@@ -87,11 +88,11 @@ def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
             violated = (x < sl) if not short else (x > sl)
             t["stop_violated"] = bool(violated)
             if violated and qty:
-                t["over_loss"] = round(abs(x - sl) * qty, 2)  # 손절 너머로 더 간 거리 × 수량(가격 기준)
+                t["over_loss"] = round(abs(x - sl) * qty * pv, 2)  # 손절 너머 거리 × 수량 × 포인트가치
         elif r > 0 and tp:  # 이익: 계획 익절 못 미쳐 조기청산했나
             early = (x < tp) if not short else (x > tp)
             if early and qty:
-                t["money_left"] = round(abs(tp - x) * qty, 2)  # 테이블에 두고 온 이익
+                t["money_left"] = round(abs(tp - x) * qty * pv, 2)  # 테이블에 두고 온 이익
     if t.get("rr"):
         t["exit_eff"] = round(r / t["rr"], 2) if r is not None else None
     # 분할청산 레그별 R(가격 기준) — SL 유효 + 레그 보존(워크 재구성)된 거래만. 분할익절 충실도 가시화.

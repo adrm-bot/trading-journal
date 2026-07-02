@@ -54,10 +54,13 @@
       <input id="f_setup_etc" placeholder="기타 근거 직접 입력 (선택)" style="margin-top:6px"></div>
     <div class="row2">
       <div class="field"><label for="f_sl">예상 손절가 (SL)</label><input id="f_sl" type="number" step="any" inputmode="decimal" placeholder="0.086"></div>
-      <div class="field"><label for="f_tp">예상 익절가1 (TP1)</label><input id="f_tp" type="number" step="any" inputmode="decimal" placeholder="0.092"></div>
+      <div class="field"><label for="f_risk">리스크 % <span class="muted">· 계좌 대비</span></label><input id="f_risk" type="number" step="0.01" min="0" inputmode="decimal" placeholder="1.0"></div>
     </div>
     <div class="row2">
+      <div class="field"><label for="f_tp">예상 익절가1 (TP1)</label><input id="f_tp" type="number" step="any" inputmode="decimal" placeholder="0.092"></div>
       <div class="field"><label for="f_tp2">예상 익절가2 (TP2)</label><input id="f_tp2" type="number" step="any" inputmode="decimal" placeholder="0.098"></div>
+    </div>
+    <div class="row2">
       <div class="field"><label for="f_tp3">예상 익절가3 (TP3)</label><input id="f_tp3" type="number" step="any" inputmode="decimal" placeholder="0.104"></div>
     </div>
     <div class="rr-line" id="rrLine"></div>
@@ -98,10 +101,13 @@
   <div class="field"><label>진입근거 <span class="muted">· 여러 개 탭</span></label><div class="chips" id="cp_setup"></div></div>
   <div class="row2">
     <div class="field"><label for="p_sl">손절가 (SL)</label><input id="p_sl" type="number" step="any" inputmode="decimal"></div>
-    <div class="field"><label for="p_tp">익절가1 (TP1)</label><input id="p_tp" type="number" step="any" inputmode="decimal"></div>
+    <div class="field"><label for="p_risk">리스크 % <span class="muted">· 계좌 대비</span></label><input id="p_risk" type="number" step="0.01" min="0" inputmode="decimal" placeholder="1.0"></div>
   </div>
   <div class="row2">
+    <div class="field"><label for="p_tp">익절가1 (TP1)</label><input id="p_tp" type="number" step="any" inputmode="decimal"></div>
     <div class="field"><label for="p_tp2">익절가2 (TP2)</label><input id="p_tp2" type="number" step="any" inputmode="decimal"></div>
+  </div>
+  <div class="row2">
     <div class="field"><label for="p_tp3">익절가3 (TP3)</label><input id="p_tp3" type="number" step="any" inputmode="decimal"></div>
   </div>
   <div class="rr-line" id="prrLine"></div>
@@ -537,7 +543,7 @@ function posSection(list){
     const lev=p.leverage?` <span class="ex">${p.leverage}x</span>`:"";
     const pi=p.direction?pintFor(p):null;
     const plan=p.direction
-      ?`<button class="btn sm pplan${pi?' on':''}" data-ex="${esc(p.exchange)}" data-sym="${esc(p.symbol)}" data-dir="${esc(p.direction)}" data-entry="${p.entry??''}" data-qty="${p.qty??''}" data-tip="${pi?'사전 계획 있음 · 청산되면 자동으로 일지에 붙습니다 · 클릭해 수정':'청산 전에 계획을 적어두면 일지에 자동 반영 + 사전 기입 표식'}">${pi?'계획 ✓':'계획 적기'}</button>`
+      ?`<button class="btn sm pplan${pi?' on':''}" data-ex="${esc(p.exchange)}" data-sym="${esc(p.symbol)}" data-dir="${esc(p.direction)}" data-entry="${p.entry??''}" data-qty="${p.qty??''}" data-pv="${p.point_value??''}" data-tip="${pi?'사전 계획 있음 · 청산되면 자동으로 일지에 붙습니다 · 클릭해 수정':'청산 전에 계획을 적어두면 일지에 자동 반영 + 사전 기입 표식'}">${pi?'계획 ✓':'계획 적기'}</button>`
       :'<span class="muted">—</span>';
     return `<tr><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td>
       <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td><td>${plan}</td></tr>`;
@@ -545,7 +551,7 @@ function posSection(list){
   return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
     <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
-function bindPosPlan(){$$(".pplan").forEach(b=>b.onclick=()=>openPint({exchange:b.dataset.ex,symbol:b.dataset.sym,direction:b.dataset.dir,entry:parseFloat(b.dataset.entry)||null,qty:parseFloat(b.dataset.qty)||null}));}
+function bindPosPlan(){$$(".pplan").forEach(b=>b.onclick=()=>openPint({exchange:b.dataset.ex,symbol:b.dataset.sym,direction:b.dataset.dir,entry:parseFloat(b.dataset.entry)||null,qty:parseFloat(b.dataset.qty)||null,point_value:parseFloat(b.dataset.pv)||null}));}
 async function ensurePositions(){
   const h=$("#posHost"); if(!h)return;
   if(OPENPOS!==null){h.outerHTML=posSection(OPENPOS);bindPosPlan();return;}
@@ -1309,12 +1315,35 @@ function updateRR(){
   if(wrong){$("#rrLine").innerHTML=`<span class="neg">${ICONS.warn} ${d==='Short'?'숏은 손절가가 진입가보다 높아야 합니다':'롱은 손절가가 진입가보다 낮아야 합니다'} · 이대로는 R 계산 불가</span>`;return;}
   const p=[];
   if(e&&x&&!isNaN(sl)&&e!==sl){const r=d==='Short'?(e-x)/(sl-e):(x-e)/(e-sl);p.push(`실현 <b class="${r>=0?'pos':'neg'}">${(r>=0?'+':'')+r.toFixed(2)}R</b>`);}
-  if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
+  if(e&&!isNaN(sl)&&qty){const pv=EDIT.point_value||1,rk=Math.abs(e-sl)*qty*pv,eq=ME&&ME.account_equity;
+    p.push(`리스크 <b>$${rk.toLocaleString(undefined,{maximumFractionDigits:1})}</b>${eq?` (${(rk/eq*100).toFixed(2)}%)`:''}`);}
   if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl)p.push(`TP1 R:R <b>1:${(Math.abs(tp-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp2)&&e!==sl)p.push(`TP2 R:R <b>1:${(Math.abs(tp2-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
-  $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
+  $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL) 또는 리스크 %를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
 }
+/* 리스크% ↔ SL 양방향 변환 — 진입 시 '계좌의 몇 %를 거는가'로 손절을 잡는 워크플로우.
+   저장은 SL만(파생값 중복 저장 없음) · 계좌 자산(설정) 필요 · 선물은 포인트가치(point_value) 반영 */
+function riskPctOf(entry,sl,qty,pv){const eq=ME&&ME.account_equity;
+  if(!eq||!entry||!qty||isNaN(sl)||sl===entry)return null;
+  return Math.abs(entry-sl)*qty*(pv||1)/eq*100;}
+function slFromRiskPct(entry,pct,qty,pv,dir){const eq=ME&&ME.account_equity;
+  if(!eq||!entry||!qty||isNaN(pct)||pct<=0)return null;
+  const d=pct/100*eq/(qty*(pv||1));
+  return dir==='Short'?entry+d:entry-d;}
+function fmtPx(v){return v==null?'':String(Number(v.toPrecision(6)));}
+function syncRisk(slId,riskId,ctx,from){
+  const slEl=$('#'+slId),rEl=$('#'+riskId);if(!slEl||!rEl)return;
+  if(!ctx||!ctx.entry||!ctx.qty||!(ME&&ME.account_equity)){
+    rEl.disabled=true;rEl.value='';rEl.placeholder=(ME&&ME.account_equity)?'—':'설정에서 계좌 자산 입력';return;}
+  rEl.disabled=false;rEl.placeholder='1.0';
+  if(from==='risk'){const sl=slFromRiskPct(ctx.entry,parseFloat(rEl.value),ctx.qty,ctx.pv,ctx.dir);
+    if(sl!=null)slEl.value=fmtPx(sl);}
+  else{const p=riskPctOf(ctx.entry,parseFloat(slEl.value),ctx.qty,ctx.pv);
+    rEl.value=p==null?'':p.toFixed(2);}
+}
+const editCtx=()=>EDIT?{entry:EDIT.entry,qty:EDIT.qty,pv:EDIT.point_value||1,dir:EDIT.direction}:null;
+const pintCtx=()=>PEDIT?{entry:PEDIT.entry,qty:PEDIT.qty,pv:PEDIT.point_value||1,dir:PEDIT.direction}:null;
 /* ---------- 사전 계획(보유 포지션) 모달 — 청산 전에 적는 진짜 ex-ante 계획 ---------- */
 function openPint(p){
   if(!p.direction){toast('방향 정보가 없는 포지션엔 사전 계획을 붙일 수 없습니다');return;}
@@ -1327,6 +1356,7 @@ function openPint(p){
   setChips("cp_emo",pi.emotion?[pi.emotion]:[]);
   setChips("cp_conv",pi.conviction!=null?[String(pi.conviction)]:[]);
   $("#pintDel").hidden=!pintFor(p);
+  syncRisk('p_sl','p_risk',pintCtx(),'sl');
   updatePRR();
   $("#shell").inert=true;$("#pintBg").classList.add("show");$("#p_plan").focus();
 }
@@ -1338,11 +1368,12 @@ function updatePRR(){
   $("#p_sl").classList.toggle('err',wrong);
   if(wrong){$("#prrLine").innerHTML=`<span class="neg">${ICONS.warn} ${d==='Short'?'숏은 손절가가 진입가보다 높아야 합니다':'롱은 손절가가 진입가보다 낮아야 합니다'}</span>`;return;}
   const p=[];
-  if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
+  if(e&&!isNaN(sl)&&qty){const pv=PEDIT.point_value||1,rk=Math.abs(e-sl)*qty*pv,eq=ME&&ME.account_equity;
+    p.push(`리스크 <b>$${rk.toLocaleString(undefined,{maximumFractionDigits:1})}</b>${eq?` (${(rk/eq*100).toFixed(2)}%)`:''}`);}
   if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl)p.push(`TP1 R:R <b>1:${(Math.abs(tp-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp2)&&e!==sl)p.push(`TP2 R:R <b>1:${(Math.abs(tp2-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
-  $("#prrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 리스크·목표 R:R이 계산됩니다</span>';
+  $("#prrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL) 또는 리스크 %를 입력하면 리스크·목표 R:R이 계산됩니다</span>';
 }
 async function savePint(){
   if(!PEDIT||PINT_SAVING)return;
@@ -1406,6 +1437,7 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   setChips("c_setupg",r.setup_grade?[r.setup_grade]:[]);setChips("c_execg",r.exec_grade?[r.exec_grade]:[]);setChips("c_conv",r.conviction!=null?[String(r.conviction)]:[]);
   setChips("c_mistake",(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean));
   const _etc=setChips("c_setup",(r.setup||"").split(",").map(s=>s.trim()).filter(Boolean));$("#f_setup_etc").value=_etc.join(", ");
+  syncRisk('f_sl','f_risk',editCtx(),'sl');
   updateRR();
   // 모바일에선 SL 비어 있으면 펼쳐서 바로 입력 유도 (장중 폰 기입 마찰 제거 — R 통계의 원천)
   const more=$("#moreFields"); if(more)more.open=!!(r.strategy||r.setup||r.sl!=null||r.tp!=null||r.tp2!=null||r.tp3!=null||r.memo)||(innerWidth<=560&&(r.sl==null||r.sl===''));
@@ -1586,8 +1618,12 @@ chipsInto("cb_emo",EMOS,false);
 chipsInto("cp_strategy",STRATS,false);chipsInto("cp_setup",RATIONALES,true);chipsInto("cp_emo",EMOS,false);chipsInto("cp_conv",CONV,false);
 $("#pintSave").onclick=savePint;$("#pintCancel").onclick=closePint;$("#pintClose").onclick=closePint;$("#pintDel").onclick=delPint;
 $("#pintBg").onclick=e=>{if(e.target===$("#pintBg"))closePint();};
-$("#p_sl").oninput=updatePRR;$("#p_tp").oninput=updatePRR;$("#p_tp2").oninput=updatePRR;$("#p_tp3").oninput=updatePRR;
-$("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
+$("#p_sl").oninput=()=>{syncRisk('p_sl','p_risk',pintCtx(),'sl');updatePRR();};
+$("#p_risk").oninput=()=>{syncRisk('p_sl','p_risk',pintCtx(),'risk');updatePRR();};
+$("#p_tp").oninput=updatePRR;$("#p_tp2").oninput=updatePRR;$("#p_tp3").oninput=updatePRR;
+$("#f_sl").oninput=()=>{syncRisk('f_sl','f_risk',editCtx(),'sl');updateRR();};
+$("#f_risk").oninput=()=>{syncRisk('f_sl','f_risk',editCtx(),'risk');updateRR();};
+$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
 $("#delAcctClose").onclick=closeDelAcct;$("#delAcctCancel").onclick=closeDelAcct;$("#delAcctDo").onclick=doDelAcct;

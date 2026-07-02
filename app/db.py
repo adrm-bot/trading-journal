@@ -11,7 +11,8 @@ DB_PATH = os.getenv("APP_DB_PATH", os.path.join(os.path.dirname(__file__), "data
 TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "opened_at", "closed_at", "fees", "funding", "leverage", "fill_count",
               "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo",
-              "exit_count", "exit_legs", "mae_price", "mfe_price"]  # 분할청산 레그 + 최대 역행/순행(D)
+              "exit_count", "exit_legs", "mae_price", "mfe_price",
+              "point_value"]  # 분할청산 레그 + 최대 역행/순행(D) + 선물 포인트가치(NT — 달러 환산용)
 _INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "tp3", "emotion", "memo",
            "review", "mistake_tag", "chart_url", "status",
            "setup_grade", "exec_grade", "conviction"}  # 자기채점: 셋업 A/B/C·실행 A~F·확신 1~5
@@ -51,7 +52,7 @@ def init():
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL, emotion TEXT, memo TEXT,
           review TEXT, mistake_tag TEXT, chart_url TEXT,
           setup_grade TEXT, exec_grade TEXT, conviction INTEGER,
-          exit_count INTEGER, exit_legs TEXT, mae_price REAL, mfe_price REAL,
+          exit_count INTEGER, exit_legs TEXT, mae_price REAL, mfe_price REAL, point_value REAL,
           PRIMARY KEY(user_id, trade_id));
         """)
         # 마이그레이션: 기존 DB에 누락 컬럼 추가 (idempotent)
@@ -61,6 +62,7 @@ def init():
                           ("setup_grade", "TEXT"), ("exec_grade", "TEXT"), ("conviction", "INTEGER"),
                           ("exit_count", "INTEGER"), ("exit_legs", "TEXT"),
                           ("mae_price", "REAL"), ("mfe_price", "REAL"), ("preplanned", "INTEGER"),
+                          ("point_value", "REAL"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
                           ("leverage", "REAL"), ("fill_count", "INTEGER"), ("liquidated", "INTEGER"),
                           ("exit_reason", "TEXT")):
