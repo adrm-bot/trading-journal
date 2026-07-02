@@ -89,6 +89,28 @@
   <div class="modal-actions"><button class="btn ghost" id="bulkCancel">취소</button><button class="btn primary" id="bulkSave">전부 기록 완료로</button></div>
 </div></div>
 
+<div class="modal-bg" id="pintBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="pintTitle" aria-describedby="pintMeta">
+  <button type="button" class="mclose" id="pintClose" aria-label="닫기">×</button>
+  <h3 id="pintTitle">보유 포지션 · 사전 계획</h3><div class="meta" id="pintMeta"></div>
+  <div class="hh">청산 <b>전</b>에 적는 진짜 사전 계획입니다. 이 포지션이 청산돼 일지에 들어올 때 자동으로 붙고, <b>사전 기입</b> 표식으로 사후 기입과 구분됩니다.</div>
+  <div class="field"><label for="p_plan">계획·의도 <span class="muted">· 왜 들어갔고 어디서 나올 건가</span></label><textarea id="p_plan" placeholder="예: 4H 눌림목 매수 · SL 전저 아래 · TP1 전고"></textarea></div>
+  <div class="field"><label>진입전략 <span class="muted">· 하나 선택</span></label><div class="chips" id="cp_strategy"></div></div>
+  <div class="field"><label>진입근거 <span class="muted">· 여러 개 탭</span></label><div class="chips" id="cp_setup"></div></div>
+  <div class="row2">
+    <div class="field"><label for="p_sl">손절가 (SL)</label><input id="p_sl" type="number" step="any" inputmode="decimal"></div>
+    <div class="field"><label for="p_tp">익절가1 (TP1)</label><input id="p_tp" type="number" step="any" inputmode="decimal"></div>
+  </div>
+  <div class="row2">
+    <div class="field"><label for="p_tp2">익절가2 (TP2)</label><input id="p_tp2" type="number" step="any" inputmode="decimal"></div>
+    <div class="field"><label for="p_tp3">익절가3 (TP3)</label><input id="p_tp3" type="number" step="any" inputmode="decimal"></div>
+  </div>
+  <div class="rr-line" id="prrLine"></div>
+  <div class="field"><label>감정</label><div class="chips" id="cp_emo"></div></div>
+  <div class="field"><label>확신도 <span class="muted">· 1(반신반의) ~ 5(강한 확신)</span></label><div class="chips grades" id="cp_conv"></div></div>
+  <div class="field"><label for="p_memo">메모</label><textarea id="p_memo"></textarea></div>
+  <div class="modal-actions"><button class="btn danger" id="pintDel" hidden>계획 삭제</button><button class="btn ghost" id="pintCancel">취소</button><button class="btn primary" id="pintSave">사전 계획 저장</button></div>
+</div></div>
+
 <div class="modal-bg" id="delAcctBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="delAcctTitle">
   <button type="button" class="mclose" id="delAcctClose" aria-label="닫기">×</button>
   <h3 id="delAcctTitle">계정·데이터를 삭제할까요?</h3>
@@ -110,6 +132,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
+let PINTS=[], PEDIT=null, PINT_SAVING=false;  // 보유 포지션 사전 계획
 let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const EFF_BUCKETS={b0:[-1e9,.25],b1:[.25,.5],b2:[.5,.75],b3:[.75,1],b4:[1,1e9]};  // 청산효율 드릴다운 구간
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
@@ -329,7 +352,7 @@ function tradeCard(r){
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}${split}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
-    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${svb}${qrb}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
+    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${svb}${qrb}${r.preplanned?' <span class="badge pp" data-tip="청산 전에 적어둔 계획이 자동으로 붙은 거래 — 사후 기입과 구분되는 진짜 사전 계획">사전 기입</span>':''}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}${eff}${rx}</div></div>
     <div class="jmeta">${meta}</div>${stats}${legsLine(r)}${planLevels(r)}${body}</div>`;
 }
@@ -504,6 +527,7 @@ async function ensureMarket(){
 
 /* 보유 중(미청산) 포지션 — 일지는 닫힌 거래만, 현재 보유는 거래소에서 실시간 조회 */
 function retryPositions(){OPENPOS=null;POS_ERR=null;ensurePositions();}
+function pintFor(p){return PINTS.find(x=>x.exchange===p.exchange&&x.symbol===p.symbol&&x.direction===p.direction)||null;}
 function posSection(list){
   if(POS_ERR&&(!list||!list.length))return `<div id="posHost"><div class="empty-sm" style="display:flex;align-items:center;gap:12px;justify-content:center;flex-wrap:wrap"><span class="neg">${ICONS.warn} ${esc(POS_ERR)}</span><button class="btn sm" onclick="retryPositions()">다시 시도</button></div></div>`;
   if(!list||!list.length)return `<div id="posHost"></div>`;
@@ -511,19 +535,30 @@ function posSection(list){
     const dir=p.direction?`<span class="badge ${p.direction==='Long'?'long':'short'}">${dirKo(p.direction)}</span>`:"—";
     const up=p.upnl==null?'<span class="muted">—</span>':`<span class="${p.upnl>=0?'pos':'neg'}">${money(p.upnl)}</span>`;
     const lev=p.leverage?` <span class="ex">${p.leverage}x</span>`:"";
+    const pi=p.direction?pintFor(p):null;
+    const plan=p.direction
+      ?`<button class="btn sm pplan${pi?' on':''}" data-ex="${esc(p.exchange)}" data-sym="${esc(p.symbol)}" data-dir="${esc(p.direction)}" data-entry="${p.entry??''}" data-qty="${p.qty??''}" data-tip="${pi?'사전 계획 있음 · 청산되면 자동으로 일지에 붙습니다 · 클릭해 수정':'청산 전에 계획을 적어두면 일지에 자동 반영 + 사전 기입 표식'}">${pi?'계획 ✓':'계획 적기'}</button>`
+      :'<span class="muted">—</span>';
     return `<tr><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td>
-      <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td></tr>`;
+      <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td><td>${plan}</td></tr>`;
   }).join("");
   return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
-    <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
+function bindPosPlan(){$$(".pplan").forEach(b=>b.onclick=()=>openPint({exchange:b.dataset.ex,symbol:b.dataset.sym,direction:b.dataset.dir,entry:parseFloat(b.dataset.entry)||null,qty:parseFloat(b.dataset.qty)||null}));}
 async function ensurePositions(){
   const h=$("#posHost"); if(!h)return;
-  if(OPENPOS!==null){h.outerHTML=posSection(OPENPOS);return;}
+  if(OPENPOS!==null){h.outerHTML=posSection(OPENPOS);bindPosPlan();return;}
   if(POS_LOADING)return; POS_LOADING=true;
-  try{const j=await(await api("/api/positions")).json();OPENPOS=j.positions||[];POS_ERR=j.error||null;}
+  try{const [j,pj]=await Promise.all([api("/api/positions").then(r=>r.json()),
+    api("/api/position-intents").then(r=>r.json()).catch(()=>({intents:[]}))]);
+    OPENPOS=j.positions||[];POS_ERR=j.error||null;PINTS=pj.intents||[];}
   catch(e){OPENPOS=[];POS_ERR="보유 포지션을 불러오지 못했습니다";}
-  POS_LOADING=false; const h2=$("#posHost"); if(h2)h2.outerHTML=posSection(OPENPOS);
+  POS_LOADING=false; const h2=$("#posHost"); if(h2){h2.outerHTML=posSection(OPENPOS);bindPosPlan();}
+}
+async function reloadPints(){
+  try{PINTS=(await(await api("/api/position-intents")).json()).intents||[];}catch(e){}
+  const h=$("#posHost"); if(h&&OPENPOS!==null){h.outerHTML=posSection(OPENPOS);bindPosPlan();}
 }
 
 /* 일일 R 집계 — 거래일별 ΣR(R 있는 거래만). 사용자 1순위 지표 R/일 */
@@ -1277,6 +1312,57 @@ function updateRR(){
   if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
   $("#rrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 실현 R·리스크·목표 R:R이 자동 계산됩니다</span>';
 }
+/* ---------- 사전 계획(보유 포지션) 모달 — 청산 전에 적는 진짜 ex-ante 계획 ---------- */
+function openPint(p){
+  if(!p.direction){toast('방향 정보가 없는 포지션엔 사전 계획을 붙일 수 없습니다');return;}
+  PEDIT=p;LAST_FOCUS=document.activeElement;
+  const pi=pintFor(p)||{};
+  $("#pintMeta").textContent=`${EXN(p.exchange)} · ${p.symbol} ${dirKo(p.direction)} · 진입가 ${p.entry!=null?p.entry:'—'}`;
+  $("#p_plan").value=pi.plan||"";$("#p_sl").value=pi.sl??"";$("#p_tp").value=pi.tp??"";$("#p_tp2").value=pi.tp2??"";$("#p_tp3").value=pi.tp3??"";$("#p_memo").value=pi.memo||"";
+  setChips("cp_strategy",pi.strategy?[pi.strategy]:[]);
+  setChips("cp_setup",(pi.setup||"").split(",").map(s=>s.trim()).filter(Boolean));
+  setChips("cp_emo",pi.emotion?[pi.emotion]:[]);
+  setChips("cp_conv",pi.conviction!=null?[String(pi.conviction)]:[]);
+  $("#pintDel").hidden=!pintFor(p);
+  updatePRR();
+  $("#shell").inert=true;$("#pintBg").classList.add("show");$("#p_plan").focus();
+}
+function closePint(){$("#pintBg").classList.remove("show");$("#shell").inert=false;PEDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
+function updatePRR(){
+  if(!PEDIT)return;const e=PEDIT.entry,d=PEDIT.direction,qty=PEDIT.qty;
+  const sl=parseFloat($("#p_sl").value),tp=parseFloat($("#p_tp").value),tp2=parseFloat($("#p_tp2").value),tp3=parseFloat($("#p_tp3").value);
+  const wrong=!isNaN(sl)&&e&&(d==='Short'?sl<=e:sl>=e);
+  $("#p_sl").classList.toggle('err',wrong);
+  if(wrong){$("#prrLine").innerHTML=`<span class="neg">${ICONS.warn} ${d==='Short'?'숏은 손절가가 진입가보다 높아야 합니다':'롱은 손절가가 진입가보다 낮아야 합니다'}</span>`;return;}
+  const p=[];
+  if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
+  if(e&&!isNaN(sl)&&!isNaN(tp)&&e!==sl)p.push(`TP1 R:R <b>1:${(Math.abs(tp-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
+  if(e&&!isNaN(sl)&&!isNaN(tp2)&&e!==sl)p.push(`TP2 R:R <b>1:${(Math.abs(tp2-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
+  if(e&&!isNaN(sl)&&!isNaN(tp3)&&e!==sl)p.push(`TP3 R:R <b>1:${(Math.abs(tp3-e)/Math.abs(e-sl)).toFixed(1)}</b>`);
+  $("#prrLine").innerHTML=p.length?p.join(' · '):'<span class="muted">손절가(SL)를 입력하면 리스크·목표 R:R이 계산됩니다</span>';
+}
+async function savePint(){
+  if(!PEDIT||PINT_SAVING)return;
+  const slv=parseFloat($("#p_sl").value);
+  if(!isNaN(slv)&&PEDIT.entry&&(PEDIT.direction==='Short'?slv<=PEDIT.entry:slv>=PEDIT.entry)){
+    updatePRR();$("#p_sl").focus();
+    toast(PEDIT.direction==='Short'?'숏은 손절가가 진입가보다 높아야 합니다. 손절가를 확인해 주세요':'롱은 손절가가 진입가보다 낮아야 합니다. 손절가를 확인해 주세요');return;}
+  PINT_SAVING=true;const btn=$("#pintSave");btn.disabled=true;
+  const body={exchange:PEDIT.exchange,symbol:PEDIT.symbol,direction:PEDIT.direction,entry:PEDIT.entry,
+    plan:$("#p_plan").value,setup:getChips("cp_setup").join(","),strategy:getChips("cp_strategy")[0]||"",
+    sl:$("#p_sl").value,tp:$("#p_tp").value,tp2:$("#p_tp2").value,tp3:$("#p_tp3").value,
+    emotion:getChips("cp_emo")[0]||"",memo:$("#p_memo").value,conviction:getChips("cp_conv")[0]||""};
+  try{await postJSON("/api/position-intent",body);closePint();await reloadPints();toast("사전 계획 저장 · 청산되면 자동으로 일지에 붙습니다");}
+  catch(err){const m=err&&err.message;toast(m&&m.indexOf("http ")!==0?m:"저장하지 못했습니다. 잠시 후 다시 시도해 주세요");}
+  finally{PINT_SAVING=false;btn.disabled=false;}
+}
+async function delPint(){
+  if(!PEDIT)return;const btn=$("#pintDel");btn.disabled=true;
+  try{await postJSON("/api/position-intent/delete",{exchange:PEDIT.exchange,symbol:PEDIT.symbol,direction:PEDIT.direction});
+    closePint();await reloadPints();toast("사전 계획 삭제됨");}
+  catch(e){toast("삭제하지 못했습니다. 잠시 후 다시 시도해 주세요");}
+  finally{btn.disabled=false;}
+}
 /* 과거 패턴 힌트 — 같은 심볼·방향 최근 3건의 감정·실수 최빈값을 힌트로만 표시(자동 선택은 통계 세탁 위험이라 안 함) */
 function patternHint(r){
   const past=DATA.trades.filter(t=>t.trade_id!==r.trade_id&&t.symbol===r.symbol&&t.direction===r.direction&&(t.closed_at||'')<(r.closed_at||''))
@@ -1371,9 +1457,12 @@ async function pull(opt){opt=opt||{};
       const rs=res.results||{}; setPullBanner(rs);
       const ok=Object.entries(rs).filter(([k,v])=>!v.error);
       const added=ok.reduce((s,[k,v])=>s+(v.added||0),0);
+      const preN=ok.reduce((s,[k,v])=>s+(v.preplanned||0),0);
+      const preTxt=preN?` · 사전 계획 ${preN}건 자동 반영`:'';
       const anyErr=Object.values(rs).some(v=>v.error);
-      if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건`:`최근 거래 없음 · 새 거래가 청산되면 자동 반영`);
-      else if(!opt.silent) toast(ok.length?`불러옴: ${ok.map(([k,v])=>`${EXN(k)} +${v.added}`).join(' · ')}`:`연결된 거래소 없음`);
+      if(opt.banner&&!anyErr) toast(added?`불러오기 완료 · 신규 ${added}건${preTxt}`:`최근 거래 없음 · 새 거래가 청산되면 자동 반영`);
+      else if(!opt.silent) toast(ok.length?`불러옴: ${ok.map(([k,v])=>`${EXN(k)} +${v.added}`).join(' · ')}${preTxt}`:`연결된 거래소 없음`);
+      if(preN){PINTS=[];OPENPOS=null;}  // 소비된 사전 계획 반영 위해 다음 렌더에서 재조회
       // 사용자가 직접 불러온 직후(백그라운드 autoSync 제외)엔 배너 대신 바로 복기 체이닝 — 기억이 생생할 때 기입
       if((!opt.silent||opt.banner)&&!anyErr)chainUnplanned();
     }else{errBanner(esc(res.error||"거래를 불러오지 못했습니다"));}
@@ -1491,6 +1580,10 @@ $("#bulkSave").onclick=saveBulk;$("#bulkCancel").onclick=closeBulk;$("#bulkClose
 chipsInto("c_strategy",STRATS,false);chipsInto("c_setup",RATIONALES,true);chipsInto("c_emo",EMOS,false);chipsInto("c_mistake",MISTAKES,true);
 chipsInto("c_setupg",SETUP_GRADES,false);chipsInto("c_execg",EXEC_GRADES,false);chipsInto("c_conv",CONV,false);
 chipsInto("cb_emo",EMOS,false);
+chipsInto("cp_strategy",STRATS,false);chipsInto("cp_setup",RATIONALES,true);chipsInto("cp_emo",EMOS,false);chipsInto("cp_conv",CONV,false);
+$("#pintSave").onclick=savePint;$("#pintCancel").onclick=closePint;$("#pintClose").onclick=closePint;$("#pintDel").onclick=delPint;
+$("#pintBg").onclick=e=>{if(e.target===$("#pintBg"))closePint();};
+$("#p_sl").oninput=updatePRR;$("#p_tp").oninput=updatePRR;$("#p_tp2").oninput=updatePRR;$("#p_tp3").oninput=updatePRR;
 $("#f_sl").oninput=updateRR;$("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
@@ -1498,7 +1591,7 @@ $("#delAcctClose").onclick=closeDelAcct;$("#delAcctCancel").onclick=closeDelAcct
 $("#delConfirm").oninput=e=>{$("#delAcctDo").disabled=e.target.value.trim()!=="삭제";};
 $("#delAcctBg").onclick=e=>{if(e.target===$("#delAcctBg"))closeDelAcct();};
 /* 열린 모달의 .modal 엘리먼트 (없으면 null) */
-function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):($("#cmdkBg").classList.contains("show")?$("#cmdkBg .cmdk"):null)));}
+function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#pintBg").classList.contains("show")?$("#pintBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):($("#cmdkBg").classList.contains("show")?$("#cmdkBg .cmdk"):null))));}
 /* 포커스 트랩 — Tab이 모달 밖(브라우저 크롬)으로 새지 않게 첫↔끝 순환 */
 function trapTab(e){const m=openModalEl();if(!m)return;
   const f=[...m.querySelectorAll('button,[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
@@ -1515,7 +1608,7 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Tab"){trapTab(e);return;}
   if(e.key!=="Escape")return;
   if($("#cmdkBg").classList.contains("show"))closeCmdk();
-  else if($("#modalBg").classList.contains("show"))closeModal();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
+  else if($("#modalBg").classList.contains("show"))closeModal();else if($("#pintBg").classList.contains("show"))closePint();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
 /* 커스텀 다크 툴팁 — [data-tip] 위임(브라우저 기본 title 대체) */
 (function(){const tip=$("#tip");if(!tip)return;let cur=null;
   const move=e=>{if(!tip.classList.contains('show'))return;const r=tip.getBoundingClientRect();

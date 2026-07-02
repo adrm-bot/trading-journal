@@ -297,6 +297,50 @@ async def api_intent_bulk(request: Request):
     return {"ok": True, "filled": db.bulk_fill_unplanned(uid, fields)}
 
 
+# --- 사전 계획(보유 중 포지션) — 청산 전에 적은 계획을 저장했다가 pull 때 자동 매칭 ---
+@app.get("/api/position-intents")
+def api_position_intents(request: Request):
+    return {"intents": db.get_position_intents(_require(request))}
+
+
+@app.post("/api/position-intent")
+async def api_set_position_intent(request: Request):
+    uid = _require(request)
+    _csrf(request)
+    b = await request.json()
+    kind, sym, d = b.get("exchange"), (b.get("symbol") or "").strip(), b.get("direction")
+    if kind not in ("bybit", "binance", "gate") or not sym or d not in ("Long", "Short"):
+        raise HTTPException(400, "포지션 정보(거래소·심볼·방향)를 확인해 주세요")
+
+    def _num(v):
+        try:
+            return float(v) if v not in (None, "") else None
+        except (TypeError, ValueError):
+            return None
+    sl, tp, tp2, tp3 = _num(b.get("sl")), _num(b.get("tp")), _num(b.get("tp2")), _num(b.get("tp3"))
+    entry = _num(b.get("entry"))  # 검증용 스냅샷(현재 평균 진입가) — 매칭 키엔 안 씀
+    err = analytics.sl_direction_error(d, entry, sl)
+    if err:
+        raise HTTPException(400, err)
+    conviction = _num(b.get("conviction"))
+    conviction = int(conviction) if conviction is not None and 1 <= conviction <= 5 else None
+    fields = {"plan": b.get("plan"), "setup": b.get("setup"), "strategy": b.get("strategy"),
+              "sl": sl, "tp": tp, "tp2": tp2, "tp3": tp3,
+              "emotion": b.get("emotion"), "memo": b.get("memo"),
+              "conviction": conviction, "entry_snap": entry}
+    db.set_position_intent(uid, kind, sym, d, fields)
+    return {"ok": True}
+
+
+@app.post("/api/position-intent/delete")
+async def api_del_position_intent(request: Request):
+    uid = _require(request)
+    _csrf(request)
+    b = await request.json()
+    db.delete_position_intent(uid, b.get("exchange"), (b.get("symbol") or "").strip(), b.get("direction"))
+    return {"ok": True}
+
+
 @app.get("/api/connections")
 def api_connections(request: Request):
     return {"connected": db.list_connections(_require(request))}

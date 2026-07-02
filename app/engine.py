@@ -452,22 +452,67 @@ def probe_readonly(kind, key, secret):
 ADAPTERS = {"bybit": fetch_bybit, "binance": fetch_binance, "gate": fetch_gate}
 
 
+def _closed_ts(s):
+    """'YYYY-MM-DD HH:MM:SS'(UTC 저장 포맷) → unix sec. 파싱 불가면 None."""
+    try:
+        return datetime.fromisoformat(s).replace(tzinfo=timezone.utc).timestamp()
+    except (TypeError, ValueError):
+        return None
+
+
+def apply_position_intents(uid, kind, new_rows) -> int:
+    """새로 적재된 거래에 '보유 중 적어둔 사전 계획'을 매칭·적용. 반환=적용 건수.
+    매칭: (거래소·심볼·방향) 동일 + 계획 작성 시각 < 청산 시각. 같은 키의 청산이 여러 건이면
+    가장 이른 청산 1건에만 적용하고 소비(삭제) — 이후 청산엔 새로 적은 계획만 붙는다.
+    적용된 거래는 preplanned=1 (자동 매칭 경로 전용 표식 — 사후 기입과 구분)."""
+    pints = [p for p in db.get_position_intents(uid) if p["exchange"] == kind]
+    if not pints or not new_rows:
+        return 0
+    applied = 0
+    for p in pints:
+        cands = []
+        for r in new_rows:
+            if r.get("symbol") != p["symbol"] or r.get("direction") != p["direction"]:
+                continue
+            ct = _closed_ts(r.get("closed_at"))
+            if ct is not None and p["created"] < ct:
+                cands.append((ct, r))
+        if not cands:
+            continue
+        target = min(cands, key=lambda x: x[0])[1]
+        fields = {k: p.get(k) for k in ("plan", "setup", "strategy", "sl", "tp", "tp2", "tp3",
+                                        "emotion", "memo", "conviction")}
+        fields = {k: v for k, v in fields.items() if v not in (None, "")}
+        if fields:
+            fields["status"] = "기록완료"
+            if db.update_intent(uid, target["trade_id"], fields):
+                db.mark_preplanned(uid, target["trade_id"])
+                applied += 1
+        db.delete_position_intent(uid, kind, p["symbol"], p["direction"])
+    return applied
+
+
 def pull_user(uid):
-    """거래소별 적재 결과를 반환: {exchange: {"added": n, "error": str|None}}."""
+    """거래소별 적재 결과를 반환: {exchange: {"added": n, "preplanned": n, "error": str|None}}."""
     results = {}
     for kind in db.list_connections(uid):
         if kind not in ADAPTERS:
             continue
         cred = db.get_connection(uid, kind)
         try:
-            added = sum(db.upsert_trade(uid, r) for r in ADAPTERS[kind](cred["key"], cred["secret"], LOOKBACK))
-            results[kind] = {"added": added, "error": None}
+            added, new_rows = 0, []
+            for r in ADAPTERS[kind](cred["key"], cred["secret"], LOOKBACK):
+                if db.upsert_trade(uid, r):
+                    added += 1
+                    new_rows.append(r)
+            preplanned = apply_position_intents(uid, kind, new_rows)
+            results[kind] = {"added": added, "preplanned": preplanned, "error": None}
         except RuntimeError as e:
             logger.warning("pull %s 실패 uid=%s: %s", kind, uid, e)
-            results[kind] = {"added": 0, "error": str(e)}
+            results[kind] = {"added": 0, "preplanned": 0, "error": str(e)}
         except Exception:  # noqa: BLE001
             logger.exception("pull %s 예외 uid=%s", kind, uid)
-            results[kind] = {"added": 0, "error": f"{kind} 적재 중 알 수 없는 오류"}
+            results[kind] = {"added": 0, "preplanned": 0, "error": f"{kind} 적재 중 알 수 없는 오류"}
     return results
 
 

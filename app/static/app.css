@@ -346,6 +346,8 @@ th.sortable{cursor:pointer;user-select:none} th.sortable:hover{color:var(--moonl
 .badge.liq,.badge.sv{background:var(--neg-soft);color:var(--ember);font-size:var(--fs-micro);padding:1px 6px}
 .badge.sv{cursor:help}
 .badge.qr{background:var(--warn-soft);color:var(--amber);font-size:var(--fs-micro);padding:1px 6px;cursor:help}
+.badge.pp{background:var(--pos-soft);color:var(--mint);font-size:var(--fs-micro);padding:1px 6px;cursor:help}
+.pplan.on{box-shadow:inset 0 0 0 1px var(--frost);color:var(--glacier);background:var(--info-soft)}
 .mcard.grow{cursor:pointer;transition:border-color .12s} .mcard.grow:hover{border-color:var(--line-2)}
 .xeff{font-family:var(--f-mono);font-size:var(--fs-cap);color:var(--muted);cursor:help}
 .xeff.pos{color:var(--mint)}

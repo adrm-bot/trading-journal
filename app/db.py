@@ -36,6 +36,12 @@ def init():
         CREATE TABLE IF NOT EXISTS connections(
           user_id INTEGER, kind TEXT, data_enc TEXT, updated INTEGER,
           PRIMARY KEY(user_id, kind));
+        CREATE TABLE IF NOT EXISTS position_intents(
+          user_id INTEGER, exchange TEXT, symbol TEXT, direction TEXT,
+          plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL,
+          emotion TEXT, memo TEXT, conviction INTEGER,
+          entry_snap REAL, created INTEGER,
+          PRIMARY KEY(user_id, exchange, symbol, direction));
         CREATE TABLE IF NOT EXISTS trades(
           user_id INTEGER, trade_id TEXT,
           exchange TEXT, symbol TEXT, direction TEXT, entry REAL, exit REAL, qty REAL, pnl REAL,
@@ -54,7 +60,7 @@ def init():
                           ("review", "TEXT"), ("mistake_tag", "TEXT"), ("chart_url", "TEXT"),
                           ("setup_grade", "TEXT"), ("exec_grade", "TEXT"), ("conviction", "INTEGER"),
                           ("exit_count", "INTEGER"), ("exit_legs", "TEXT"),
-                          ("mae_price", "REAL"), ("mfe_price", "REAL"),
+                          ("mae_price", "REAL"), ("mfe_price", "REAL"), ("preplanned", "INTEGER"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
                           ("leverage", "REAL"), ("fill_count", "INTEGER"), ("liquidated", "INTEGER"),
                           ("exit_reason", "TEXT")):
@@ -156,6 +162,38 @@ def get_trade(uid, trade_id):
     with conn() as c:
         r = c.execute("SELECT * FROM trades WHERE user_id=? AND trade_id=?", (uid, trade_id)).fetchone()
     return dict(r) if r else None
+
+
+# --- 사전 계획(보유 중 포지션) — (거래소·심볼·방향)당 1건, 덮어쓰기=수정. 청산 적재 시 소비 ---
+_PINTENT_FIELDS = ["plan", "setup", "strategy", "sl", "tp", "tp2", "tp3",
+                   "emotion", "memo", "conviction", "entry_snap"]
+
+
+def set_position_intent(uid, exchange, symbol, direction, fields: dict):
+    cols = ",".join(_PINTENT_FIELDS)
+    ph = ",".join("?" for _ in _PINTENT_FIELDS)
+    with conn() as c:
+        c.execute(f"INSERT OR REPLACE INTO position_intents(user_id,exchange,symbol,direction,{cols},created) "
+                  f"VALUES(?,?,?,?,{ph},?)",
+                  [uid, exchange, symbol, direction, *[fields.get(k) for k in _PINTENT_FIELDS], int(time.time())])
+
+
+def get_position_intents(uid):
+    with conn() as c:
+        return [dict(r) for r in c.execute("SELECT * FROM position_intents WHERE user_id=?", (uid,))]
+
+
+def delete_position_intent(uid, exchange, symbol, direction) -> bool:
+    with conn() as c:
+        cur = c.execute("DELETE FROM position_intents WHERE user_id=? AND exchange=? AND symbol=? AND direction=?",
+                        (uid, exchange, symbol, direction))
+        return cur.rowcount > 0
+
+
+def mark_preplanned(uid, trade_id):
+    """사전 계획이 자동 적용된 거래 표식. _INTENT 밖이라 /api/intent로는 못 세움 — 사후 세탁 불가."""
+    with conn() as c:
+        c.execute("UPDATE trades SET preplanned=1 WHERE user_id=? AND trade_id=?", (uid, trade_id))
 
 
 # 일괄 기입에서 금지하는 필드: strategy를 한 번에 박으면 충동거래가 '계획 전략거래'로
