@@ -437,6 +437,8 @@ input.err:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(var(--neg-rg
 svg.uw{width:100%;height:46px;display:block}
 .uwwrap{margin-top:3px;border-top:1px solid var(--line)}
 .ccap{font-size:var(--fs-xs);margin-top:8px;font-family:var(--f-mono)}
+.rhlg i{display:inline-block;width:9px;height:9px;border-radius:2px;margin:0 3px 0 6px;vertical-align:-1px}
+.rhlg i:first-child{margin-left:0}
 .trustcard{padding:var(--s4) var(--s5)}
 .tscore{display:flex;align-items:center;gap:var(--s4);margin-bottom:var(--s3);padding-bottom:var(--s3);border-bottom:1px solid var(--line)}
 .tnum{font-family:var(--f-display);font-size:40px;font-weight:510;color:var(--glacier);letter-spacing:-.02em;line-height:1}

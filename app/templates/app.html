@@ -926,21 +926,40 @@ function sessionCard(ts){
     return `<div class="srow"><span class="snm">${nm} <span class="muted">${lbl} KST</span></span><span class="muted num">${n}건</span><span class="num ${p>=0?'pos':'neg'}">${money(p)}</span></div>`;}).join('');
   return `<div class="card"><div class="hours">${hours}</div><div class="sess">${rows}</div><div class="ccap muted">한국시간(KST·UTC+9) 기준 · 위 칸 숫자=시(0~23시)</div></div>`;
 }
+let RH_MODE='all';  // R분포 모드: 'all' | 'conv'(확신도 스택 — 과신/저신뢰가 어느 R 구간에 몰리는지)
+const CONV_COL={'5':'rgba(94,106,210,1)','4':'rgba(94,106,210,.78)','3':'rgba(94,106,210,.58)','2':'rgba(94,106,210,.4)','1':'rgba(94,106,210,.25)','0':'var(--iron)'};
 function rHist(ts){
-  const rs=ts.map(t=>t.r).filter(r=>r!=null);
+  const rts=ts.filter(t=>t.r!=null), rs=rts.map(t=>t.r);
   if(rs.length<3)return `<p class="empty-inline">R 입력 거래가 적습니다. 손절가(SL)를 채우면 R 분포가 그려집니다.</p>`;
+  const convN=rts.filter(t=>t.conviction!=null&&t.conviction!=='').length;
+  const hasConv=convN>0, isConv=RH_MODE==='conv'&&hasConv;
+  const toggle=hasConv?`<div class="eqhead"><span class="cgrp"><button class="btn sm rhbtn" data-rh="all" aria-pressed="${!isConv}">전체</button><button class="btn sm rhbtn" data-rh="conv" aria-pressed="${isConv}">확신도별</button></span></div>`:'';
   const B=[["≤-2",-1e9,-2],["-2~-1",-2,-1],["-1~0",-1,0],["0~1",0,1],["1~2",1,2],["2~3",2,3],[">3",3,1e9]];
   const cnt=B.map(([l,lo,hi])=>rs.filter(r=>r>lo&&r<=hi).length);
-  const mx=Math.max(...cnt,1), W=600,H=170,pad=26,bw=(W-2*pad)/B.length;
-  const bars=B.map((b,i)=>{const h=cnt[i]/mx*(H-2*pad-12),x=pad+i*bw,y=H-pad-h,neg=b[2]<=0;
-    return `<rect x="${(x+5).toFixed(1)}" y="${y.toFixed(1)}" width="${(bw-10).toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" rx="2" fill="${neg?'var(--neg)':'var(--pos)'}" opacity="0.85"/>`
-      +`<text x="${(x+bw/2).toFixed(1)}" y="${H-pad+14}" text-anchor="middle" class="hx">${b[0]}</text>`
-      +(cnt[i]?`<text x="${(x+bw/2).toFixed(1)}" y="${(y-5).toFixed(1)}" text-anchor="middle" class="hn">${cnt[i]}</text>`:"");
+  const mx=Math.max(...cnt,1), W=600,H=170,pad=26,bw=(W-2*pad)/B.length, unit=(H-2*pad-12)/mx;
+  const bars=B.map((b,i)=>{const x=pad+i*bw, hTot=cnt[i]*unit, yTop=H-pad-hTot;
+    let rects='';
+    if(isConv){
+      const g=rts.filter(t=>t.r>b[1]&&t.r<=b[2]);
+      let yCur=H-pad;
+      ['0','1','2','3','4','5'].forEach(k=>{
+        const n=g.filter(t=>String(k)==='0'?(t.conviction==null||t.conviction===''):String(t.conviction)===k).length;
+        if(!n)return; const h=n*unit; yCur-=h;
+        rects+=`<rect x="${(x+5).toFixed(1)}" y="${yCur.toFixed(1)}" width="${(bw-10).toFixed(1)}" height="${Math.max(0,h).toFixed(1)}" fill="${CONV_COL[k]}" data-tip="${b[0]}R 구간 · ${k==='0'?'확신도 미기입':'확신 '+k}: ${n}건"/>`;});
+    }else{
+      const neg=b[2]<=0;
+      rects=`<rect x="${(x+5).toFixed(1)}" y="${yTop.toFixed(1)}" width="${(bw-10).toFixed(1)}" height="${Math.max(0,hTot).toFixed(1)}" rx="2" fill="${neg?'var(--neg)':'var(--pos)'}" opacity="0.85"/>`;
+    }
+    return rects+`<text x="${(x+bw/2).toFixed(1)}" y="${H-pad+14}" text-anchor="middle" class="hx">${b[0]}</text>`
+      +(cnt[i]?`<text x="${(x+bw/2).toFixed(1)}" y="${(yTop-5).toFixed(1)}" text-anchor="middle" class="hn">${cnt[i]}</text>`:"");
   }).join("");
   const avg=rs.reduce((a,b)=>a+b,0)/rs.length;
-  return `<div class="card chartc"><svg class="rh" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="R 분포 히스토그램"><line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--line-2)" stroke-width="1" vector-effect="non-scaling-stroke"/>${bars}</svg>`
-    +`<div class="ccap muted">SL 입력 ${rs.length}건 · 평균 ${(avg>=0?'+':'')+avg.toFixed(2)}R · 빨강=손실 / 초록=수익 · SL 입력한 거래만이라 상향 편향될 수 있음</div></div>`;
+  const legend=isConv?`<span class="rhlg">${['1','2','3','4','5'].map(k=>`<i style="background:${CONV_COL[k]}"></i>${k}`).join(' ')} <i style="background:var(--iron)"></i>미기입</span> · 확신 입력 ${convN}/${rs.length}건`
+    :`빨강=손실 / 초록=수익`;
+  return `<div class="card chartc">${toggle}<svg class="rh" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" role="img" aria-label="R 분포 히스토그램${isConv?' (확신도 스택)':''}"><line x1="${pad}" y1="${H-pad}" x2="${W-pad}" y2="${H-pad}" stroke="var(--line-2)" stroke-width="1" vector-effect="non-scaling-stroke"/>${bars}</svg>`
+    +`<div class="ccap muted">SL 입력 ${rs.length}건 · 평균 ${(avg>=0?'+':'')+avg.toFixed(2)}R · ${legend} · SL 입력한 거래만이라 상향 편향될 수 있음</div></div>`;
 }
+function bindRHist(){$$("#rhHost .rhbtn").forEach(b=>b.onclick=()=>{RH_MODE=b.dataset.rh;$("#rhHost").innerHTML=rHist(DATA.trades);bindRHist();});}
 function exitHabits(ts){
   const closed=ts.filter(t=>t.exit_reason&&t.exit_reason!=='unknown');
   const overLoss=ts.reduce((s,t)=>s+((t.over_loss>0)?t.over_loss:0),0);
@@ -1078,7 +1097,7 @@ function renderInsights(el){
     +trustBoard(ts)
     +`<div class="group-title"><span class="gti">${ICONS.shield}</span>자본 · 리스크</div><div class="section-title">자산 곡선 · 낙폭</div><div id="eqHost">`+equityPanel(ts)+`</div>`
     +(ddp?`<div class="section-title">낙폭 이력 · 회복</div>`+ddp:'')
-    +`<div class="section-title">R 분포 (거래당 R배수)</div>`+rHist(ts)
+    +`<div class="section-title">R 분포 (거래당 R배수)</div><div id="rhHost">`+rHist(ts)+`</div>`
     +`<div class="group-title"><span class="gti">${ICONS.check}</span>실행 · 비용</div><div class="section-title">청산 습관 · 계획 vs 실제</div>`+exitHabits(ts)
     +`<div class="section-title">비용 분해 (수수료·펀딩)</div>`+feeCard(m)
     +`<div class="section-title">일별 손익 캘린더</div>`+calCard(ts)
@@ -1093,7 +1112,7 @@ function renderInsights(el){
     +(mistakeTally()?`<div class="ins-cell"><div class="section-title">반복 실수 (손실 큰 순)</div>`+mistakeTally()+`</div>`:"")
     +`<div class="ins-cell"><div class="section-title">종목별 성과 (손실 큰 순)</div>`+groupTable(t=>t.symbol||"?","심볼",true)+`</div>`
     +`</div>`;
-  bindEq();
+  bindEq();bindRHist();
 }
 const CONN_DEFS=[
   {k:"bybit",nm:"Bybit",hint:"read-only 키 (주문·출금 OFF)",read:1,fields:[["key","API Key","text"],["secret","API Secret","password"]]},
