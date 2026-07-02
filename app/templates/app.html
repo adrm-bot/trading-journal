@@ -109,7 +109,7 @@
 const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
-let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
+let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const EFF_BUCKETS={b0:[-1e9,.25],b1:[.25,.5],b2:[.5,.75],b3:[.75,1],b4:[1,1e9]};  // 청산효율 드릴다운 구간
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
 const fmtP=n=>(n==null||n==='')?'<span class="muted">—</span>':Number(n).toLocaleString(undefined,{maximumFractionDigits:8});
@@ -307,6 +307,7 @@ function tradeCard(r){
     :((r.sl==null||r.sl==='')?` <span class="rx" data-tip="손절가(SL) 미입력 · R 통계에서 제외되는 거래">R 제외</span>`:'')):'';
   const svb=r.stop_violated?` <span class="badge sv" data-tip="계획 손절(SL) 너머에서 청산 · 초과손실 = |청산−SL|×수량 (가격 기준, 수수료 제외)">${ICONS.warn}손절 미준수${r.over_loss?` −$${Math.round(r.over_loss).toLocaleString()}`:''}</span>`:'';
   const eff=(!pending&&r.r!=null&&r.r>0&&r.exit_eff!=null)?` <span class="xeff ${r.exit_eff>=1?'pos':''}" data-tip="청산효율 ${Math.round(r.exit_eff*100)}% = 실현 +${r.r}R ÷ 계획 R:R ${r.rr} — 100%면 계획 익절(TP1) 달성">${Math.round(r.exit_eff*100)}%</span>`:'';
+  const qrb=((DATA.summary&&DATA.summary.quick_reentry_ids)||[]).includes(r.trade_id)?` <span class="badge qr" data-tip="직전 손실 청산 후 30분 내 청산된 거래 — 분할청산인지 뇌동 재진입인지 복기로 구분해 주세요">30분 재진입</span>`:'';
   let body;
   if(pending){body=`<span class="btn sm jfill">${ICONS.pencil} 왜 들어갔는지 채우기</span>`;}
   else{const t=tagChips(r);
@@ -327,7 +328,7 @@ function tradeCard(r){
   const stats=`<div class="jstats">진입 <b>${fmtP(r.entry)}</b> → 청산 <b>${fmtP(r.exit)}</b> · 수량 ${fmtP(r.qty)}${mv}${risk}${split}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
-    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${svb}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
+    <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${svb}${qrb}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}${eff}${rx}</div></div>
     <div class="jmeta">${meta}</div>${stats}${legsLine(r)}${planLevels(r)}${body}</div>`;
 }
@@ -604,6 +605,7 @@ function jtMatch(t){
   if(JT.execg!=='all'&&t.exec_grade!==JT.execg)return false;
   if(JT.conv!=='all'&&String(t.conviction??'')!==JT.conv)return false;
   if(JT.exitr!=='all'&&t.exit_reason!==JT.exitr)return false;
+  if(JT.qr==='y'&&!((DATA.summary&&DATA.summary.quick_reentry_ids)||[]).includes(t.trade_id))return false;
   if(JT.mistake!=='all'&&!((t.mistake_tag||'').split(',').map(s=>s.trim()).includes(JT.mistake)))return false;
   if(JT.q){const hay=[t.symbol,t.strategy,t.setup,t.plan,t.memo,t.emotion,t.review,t.mistake_tag].join(' ').toLowerCase();if(!hay.includes(JT.q.toLowerCase()))return false;}
   return true;
@@ -651,7 +653,7 @@ function viewsKey(){return 'mmj_views_'+((ME&&ME.email)||'');}
 function getViews(){try{const v=JSON.parse(localStorage.getItem(viewsKey()));if(Array.isArray(v))return v;}catch(e){}return [{name:'계획 미기입',jt:{status:'pending'}}];}
 function setViews(a){try{localStorage.setItem(viewsKey(),JSON.stringify(a));}catch(e){}}
 function viewsBar(){return `<div class="jviews"><span class="flbl">뷰</span>`+getViews().map(v=>`<button class="btn sm jview" data-v="${esc(v.name)}">${esc(v.name)}<span class="vx" data-del="${esc(v.name)}" role="button" aria-label="${esc(v.name)} 삭제">×</span></button>`).join('')+`<button class="btn sm" id="jSaveView">+ 현재 필터 저장</button></div>`;}
-function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
+function applyView(jt){Object.assign(JT,{from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all'},jt||{});JT.page=1;renderJournal($("#view-journal"));}
 function saveCurrentView(){const name=(prompt('이 필터를 저장할 이름은?','내 뷰')||'').trim();if(!name)return;
   const jt={from:JT.from,to:JT.to,q:JT.q,exchange:JT.exchange,dir:JT.dir,status:JT.status};
   setViews([...getViews().filter(v=>v.name!==name),{name,jt}]);renderJournal($("#view-journal"));toast('뷰 저장됨 · '+name);}
@@ -659,7 +661,7 @@ function delView(name){setViews(getViews().filter(v=>v.name!==name));renderJourn
 function renderJournal(el){
   if(!DATA.trades.length){el.innerHTML=onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;return;}
   const exs=[...new Set(DATA.trades.map(t=>t.exchange).filter(Boolean))];
-  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all',JT.strategy!=='all',JT.emotion!=='all',JT.outcome!=='all',JT.mistake!=='all',JT.stop!=='all',JT.eff!=='all',JT.setupg!=='all',JT.execg!=='all',JT.conv!=='all',JT.exitr!=='all'].filter(Boolean).length;
+  const activeN=[JT.from||JT.to,JT.exchange!=='all',JT.dir!=='all',JT.status!=='all',JT.strategy!=='all',JT.emotion!=='all',JT.outcome!=='all',JT.mistake!=='all',JT.stop!=='all',JT.eff!=='all',JT.setupg!=='all',JT.execg!=='all',JT.conv!=='all',JT.exitr!=='all',JT.qr!=='all'].filter(Boolean).length;
   el.innerHTML=`<div class="jbar top">
       <input type="search" id="jQ" value="${esc(JT.q)}" placeholder="심볼·전략·메모 검색" aria-label="검색">
       <span class="cgrp" id="jView" role="group" aria-label="보기 방식"><button class="btn sm vbtn" data-v="cards">일지</button><button class="btn sm vbtn" data-v="table">표</button></span>
@@ -714,7 +716,7 @@ function renderJournal(el){
   $("#jTo").onchange=e=>{JT.to=e.target.value;JT.page=1;applyJournal();};
   $("#jQ").oninput=e=>{clearTimeout(jtDebounce);const v=e.target.value;jtDebounce=setTimeout(()=>{JT.q=v;JT.page=1;applyJournal();},180);};
   $("#jSize").onchange=e=>{JT.size=Number(e.target.value);JT.page=1;applyJournal();};
-  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
+  $("#jReset").onclick=()=>{JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:JT.size,view:JT.view};renderJournal(el);};
   $$(".jpreset").forEach(b=>b.onclick=()=>{const days=+b.dataset.d;JT.to=iso(new Date());JT.from=iso(new Date(Date.now()-days*86400000));JT.page=1;$("#jFrom").value=JT.from;$("#jTo").value=JT.to;applyJournal();});
   $$("#view-journal .fchip").forEach(b=>b.onclick=()=>{JT[b.dataset.field]=b.dataset.val;JT.page=1;
     $$(`#view-journal .fchip[data-field="${b.dataset.field}"]`).forEach(x=>x.setAttribute("aria-pressed","false"));b.setAttribute("aria-pressed","true");applyJournal();});
@@ -1036,10 +1038,14 @@ function behaviorPanel(ts){
       const g=(new Date(b.closed_at.replace(' ','T')+'Z')-new Date(a.closed_at.replace(' ','T')+'Z'))/60000;if(g>=0&&g<=30)revenge++;}}
   const tilt=Math.min(100,Math.round((curSign<0?cur*18:0)+revenge*15+maxL*4));
   const curTxt=curSign>0?`${cur}연승`:(curSign<0?`${cur}연패`:"—");
+  const qrIds=(DATA.summary&&DATA.summary.quick_reentry_ids)||[];
+  const revCard=qrIds.length
+    ?`<div class="mcard grow" data-jf="qr" data-jv="y" tabindex="0" role="button" aria-label="손실 후 30분 내 거래 보기"><div class="ml">복수매매 의심</div><div class="mval ${revenge>0?'neg':''}">${revenge}회</div><div class="msub">손실 직후 30분내 재손실 · 클릭 → 30분 내 거래 ${qrIds.length}건</div></div>`
+    :mcard("복수매매 의심",revenge+"회",revenge>0?"neg":"","손실 직후 30분내 재손실");
   return `<div class="mgrid">`
     +mcard("현재 연속",curTxt,curSign>0?"pos":(curSign<0?"neg":""),"최근 청산 기준")
     +mcard("최대 연승 / 연패",`${maxW} / ${maxL}`,"","전체 기간")
-    +mcard("복수매매 의심",revenge+"회",revenge>0?"neg":"","손실 직후 30분내 재손실")
+    +revCard
     +mcard("감정 과열(틸트)",tilt,tilt>=50?"neg":(tilt>=25?"":"pos"),"연패·복수매매 반영 추정치")
     +`</div>`;
 }

@@ -23,6 +23,22 @@ def test_all_break_even_win_rate_zero_not_crash():
     assert r["win_rate"] == 0.0  # decided=0 → 0, 나눗셈 에러 없음
 
 
+def test_quick_reentry_ids_collects_follower_trade():
+    # 손실(l1) 청산 25분 뒤 청산된 b1이 재진입 후보로 잡힘. 승패 무관(분할/뇌동 구분은 복기 몫)
+    rows = [_row(-50, "l1", datetime(2026, 6, 1, 1, 0)),
+            _row(30, "b1", datetime(2026, 6, 1, 1, 25)),
+            _row(40, "w2", datetime(2026, 6, 1, 3, 0))]
+    r = behaviors.analyze(rows)
+    assert r["quick_reentry"] == 1
+    assert r["quick_reentry_ids"] == ["b1"]
+
+
+def test_quick_reentry_ids_empty_when_gap_large():
+    rows = [_row(-50, "l1", datetime(2026, 6, 1, 1)), _row(30, "b1", datetime(2026, 6, 1, 2))]
+    r = behaviors.analyze(rows)
+    assert r["quick_reentry"] == 0 and r["quick_reentry_ids"] == []
+
+
 def test_losing_streak_skips_break_even():
     # 손실 → 본절 → 손실 (시간순). 본절이 연속을 끊지 않아 2연패
     rows = [_row(-50, "l1", datetime(2026, 6, 1, 1)),

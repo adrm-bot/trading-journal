@@ -57,14 +57,19 @@ def analyze(rows: list[dict], be_pct=None) -> dict:
     if mx >= 3:
         res["flags"].append({"level": "warn", "text": f"손실 청산 {mx}연속 · 과매매·복수매매 주의"})
 
-    # 손실 후 근접(≤30분) 연속 거래 — 분할청산 or 뇌동
+    # 손실 후 근접(≤30분) 연속 거래 — 분할청산 or 뇌동. 개별 trade_id도 반환(카드 뱃지·드릴다운용, 단정 아님)
     quick = 0
+    quick_ids = []
     for a, b in zip(ordered, ordered[1:]):
         if a["_oc"] == "loss" and a.get("청산시각") and b.get("청산시각"):
             gap = (b["청산시각"] - a["청산시각"]).total_seconds() / 60
             if 0 <= gap <= 30:
                 quick += 1
+                tid = b.get("거래ID") or b.get("trade_id")
+                if tid:
+                    quick_ids.append(tid)
     res["quick_reentry"] = quick
+    res["quick_reentry_ids"] = quick_ids
     if quick >= 2:
         res["flags"].append({"level": "info", "text": f"30분 내 연속 거래 {quick}회 · 분할청산인지 충동매매인지 점검"})
 
