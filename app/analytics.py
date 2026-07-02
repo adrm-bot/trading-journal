@@ -37,6 +37,18 @@ def csv_cell(v):
     return v
 
 
+def sl_direction_error(direction, entry, sl):
+    """반대편 SL 오기입 검증 — 저장 전 차단용(enrich의 sl_ok와 같은 규칙, 진입가=SL도 차단: 1R=0).
+    문제면 사용자 메시지, 정상·판정불가(방향/진입가 미상)면 None."""
+    if sl is None or not entry or direction not in ("Long", "Short"):
+        return None
+    short = direction == "Short"
+    if (short and sl <= entry) or (not short and sl >= entry):
+        base = "숏은 손절가가 진입가보다 높아야 합니다" if short else "롱은 손절가가 진입가보다 낮아야 합니다"
+        return base + " · 손절가를 다시 확인해 주세요"
+    return None
+
+
 def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
     """거래에 가격변동%·R·계획 R:R·리스크(·계좌%)·보유시간·규율 파생값 추가.
     equity: 계좌 자산(USDT) — 주면 risk_pct(계좌 대비 리스크%) 계산. be_pct: 본절 밴드."""

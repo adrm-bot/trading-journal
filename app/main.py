@@ -262,6 +262,12 @@ async def api_intent(request: Request):
         except (TypeError, ValueError):
             return None
     sl, tp, tp2, tp3 = _num(b.get("sl")), _num(b.get("tp")), _num(b.get("tp2")), _num(b.get("tp3"))
+    # 반대편 SL 오기입은 저장 자체를 거부 — sl_invalid로 통계에서 조용히 빠지는 대신 입력 시점에 교정
+    if sl is not None:
+        t = db.get_trade(uid, b.get("trade_id"))
+        err = analytics.sl_direction_error((t or {}).get("direction"), (t or {}).get("entry"), sl)
+        if err:
+            raise HTTPException(400, err)
     # 자기채점: 셋업 A/B/C · 실행 A~F · 확신 1~5 (허용값 밖이면 None — 오염 방지)
     setup_grade = b.get("setup_grade") if b.get("setup_grade") in ("A", "B", "C") else None
     exec_grade = b.get("exec_grade") if b.get("exec_grade") in ("A", "B", "C", "D", "F") else None

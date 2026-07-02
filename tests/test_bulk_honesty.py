@@ -46,6 +46,15 @@ def test_bulk_fill_only_touches_unplanned(tmp_path):
     assert rows["pend1"]["status"] == "기록완료"
 
 
+def test_get_trade_scoped_to_user(tmp_path):
+    uid = _fresh(tmp_path)
+    db.upsert_trade(uid, {"trade_id": "x1", "exchange": "bybit", "symbol": "BTCUSDT",
+                          "direction": "Long", "entry": 100, "exit": 110, "qty": 1, "pnl": 10})
+    assert db.get_trade(uid, "x1")["direction"] == "Long"
+    assert db.get_trade(uid, "nope") is None
+    assert db.get_trade(uid + 999, "x1") is None  # 다른 유저 거래는 안 보임
+
+
 def test_delete_user_cascades(tmp_path):
     uid = _fresh(tmp_path)
     db.set_connection(uid, "bybit", {"key": "k" * 10, "secret": "s" * 20})

@@ -126,6 +126,18 @@ def test_csv_cell_defangs_formula_but_keeps_numbers():
     assert analytics.csv_cell(None) == ""
 
 
+def test_sl_direction_error_blocks_wrongside():
+    # 저장 전 차단(400)용 — enrich의 sl_ok와 같은 규칙
+    assert "롱" in analytics.sl_direction_error("Long", 100, 110)      # 롱인데 SL>진입
+    assert "숏" in analytics.sl_direction_error("Short", 100, 90)      # 숏인데 SL<진입
+    assert analytics.sl_direction_error("Long", 100, 100) is not None  # SL=진입가(1R=0)도 차단
+    assert analytics.sl_direction_error("Long", 100, 90) is None
+    assert analytics.sl_direction_error("Short", 100, 110) is None
+    assert analytics.sl_direction_error("Long", 100, None) is None     # SL 없음 = 저장 허용(R만 제외)
+    assert analytics.sl_direction_error(None, 100, 110) is None        # 방향 미상 → 판정 불가
+    assert analytics.sl_direction_error("Long", None, 110) is None     # 진입가 미상 → 판정 불가
+
+
 def test_rr_uses_abs_distance():
     t = analytics.enrich({"entry": 100, "exit": 100, "sl": 95, "tp": 115, "tp2": 130,
                           "qty": 1, "direction": "Long"})

@@ -152,6 +152,12 @@ def get_trades(uid):
             "SELECT * FROM trades WHERE user_id=? ORDER BY closed_at DESC", (uid,))]
 
 
+def get_trade(uid, trade_id):
+    with conn() as c:
+        r = c.execute("SELECT * FROM trades WHERE user_id=? AND trade_id=?", (uid, trade_id)).fetchone()
+    return dict(r) if r else None
+
+
 # 일괄 기입에서 금지하는 필드: strategy를 한 번에 박으면 충동거래가 '계획 전략거래'로
 # 둔갑해 전략별 통계가 세탁됨(안티-조작 약속 위배). 전략은 거래별 개별 기입만 허용.
 _BULK_FORBIDDEN = {"status", "strategy", "setup", "sl", "tp", "tp2", "tp3", "mistake_tag", "review",

@@ -284,8 +284,11 @@ function gradeBadges(r){const b=[];
 function tradeCard(r){
   const dir=r.direction?`<span class="badge ${r.direction==='Long'?'long':'short'}">${dirKo(r.direction)}</span>`:"";
   const xr=exitBadge(r)?" "+exitBadge(r):"";
-  const rcell=r.r==null?"":` <span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
   const pending=r.status==='의도 미기입';
+  const rcell=r.r==null?"":` <span class="${r.r>=0?'pos':'neg'}">${(r.r>=0?'+':'')+r.r}R</span>`;
+  const rx=(!pending&&r.r==null)?(r.sl_invalid
+    ?` <span class="rx bad" data-tip="반대편 손절가 오기입 · R 계산 불가 — 카드를 눌러 손절가를 고쳐 주세요">SL 오기입</span>`
+    :((r.sl==null||r.sl==='')?` <span class="rx" data-tip="손절가(SL) 미입력 · R 통계에서 제외되는 거래">R 제외</span>`:'')):'';
   let body;
   if(pending){body=`<span class="btn sm jfill">${ICONS.pencil} 왜 들어갔는지 채우기</span>`;}
   else{const t=tagChips(r);
@@ -307,7 +310,7 @@ function tradeCard(r){
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
-      <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}</div></div>
+      <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}${rx}</div></div>
     <div class="jmeta">${meta}</div>${stats}${planLevels(r)}${body}</div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
@@ -929,6 +932,15 @@ function tagStatsTable(ts){
   return `<div class="table-wrap"><table><thead><tr><th>진입근거 태그</th><th class="num">거래수</th><th class="num">실현손익</th><th class="num">승률</th></tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 /* ---------- 정직성 신뢰 보드 ---------- */
+/* 데이터 신뢰도 스코어(공용) — trustBoard 상세와 '성과 요약' 옆 상시 표시가 같은 값을 쓴다 */
+function trustScore(ts){
+  const n=ts.length; if(!n)return null;
+  const planned=(n-ts.filter(t=>t.status==='의도 미기입').length)/n;
+  const slok=ts.filter(t=>t.r!=null).length/n;
+  const exok=ts.filter(t=>t.exit_reason&&t.exit_reason!=='unknown').length/n;
+  const samp=Math.min(1,n/30);
+  return {planned,slok,exok,samp,score:Math.round((planned+slok+exok+samp)/4*100)};
+}
 function trustBoard(ts){
   const n=ts.length; if(!n)return '';
   const k$=v=>'$'+Math.round(v).toLocaleString();
@@ -947,12 +959,8 @@ function trustBoard(ts){
   if(moneyLeft>0)cf.push(mcard('두고 온 이익',k$(moneyLeft),'','계획 익절 전 조기청산 누적'));
   const cfBlock=cf.length?`<div class="mgrid">${cf.join('')}</div>`
     :`<p class="muted">아직 교정 신호 없음. 예상 손절·익절가를 채우면 '습관의 가격표'가 쌓입니다.</p>`;
-  // ② 데이터 신뢰도 점수
-  const planned=(n-ts.filter(t=>t.status==='의도 미기입').length)/n;
-  const slok=ts.filter(t=>t.r!=null).length/n;
-  const exok=ts.filter(t=>t.exit_reason&&t.exit_reason!=='unknown').length/n;
-  const samp=Math.min(1,n/30);
-  const score=Math.round((planned+slok+exok+samp)/4*100);
+  // ② 데이터 신뢰도 점수 (공용 trustScore — 상단 상시 표시와 동일 값)
+  const {planned,slok,exok,samp,score}=trustScore(ts);
   const bar=(l,v)=>`<div class="trow"><span class="tl">${l}</span><span class="tbar"><span class="tfill" style="width:${Math.round(v*100)}%"></span></span><span class="tv">${Math.round(v*100)}%</span></div>`;
   const trust=`<div class="card trustcard"><div class="tscore"><span class="tnum">${score}</span><span class="tlabel">데이터 신뢰도<br><span class="muted">통계가 얼마나 믿을 만한지</span></span></div>
     ${bar('계획 기입률',planned)}${bar('SL 유효율',slok)}${bar('청산방식 판별',exok)}${bar('표본 충분도',samp)}
@@ -990,8 +998,10 @@ function renderInsights(el){
     <dt>청산 방식</dt><dd>포지션이 어떻게 닫혔나: 손절(SL)·익절(TP)·트레일링·수동·강제청산. (Bybit 자동 판별)</dd>
     <dt>복수매매 / 틸트</dt><dd>복수매매 = 손실 직후 만회하려 급히 재진입. 틸트 = 감정에 휘둘려 무너지는 상태(연패·복수매매로 추정).</dd>
     <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b>합니다. 본절이 패배로 둔갑하지 않도록.</dd></dl></details>`;
+  const tsc=trustScore(ts);
+  const trustPill=tsc?`<span class="ttl-side" data-tip="계획 기입률 ${Math.round(tsc.planned*100)}% · SL 유효율 ${Math.round(tsc.slok*100)}% · 청산방식 판별 ${Math.round(tsc.exok*100)}% · 표본 충분도 ${Math.round(tsc.samp*100)}% 의 평균 — 아래 '데이터 신뢰도' 카드와 같은 값">신뢰도 ${tsc.score} · SL 유효 ${Math.round(tsc.slok*100)}%</span>`:'';
   el.innerHTML=
-     `<div class="group-title"><span class="gti">${ICONS.ov}</span>개요 · 정직성</div><div class="section-title">성과 요약</div>`+caveat+metricsRow(m)+glossary
+     `<div class="group-title"><span class="gti">${ICONS.ov}</span>개요 · 정직성</div><div class="section-title">성과 요약${trustPill}</div>`+caveat+metricsRow(m)+glossary
     +trustBoard(ts)
     +`<div class="group-title"><span class="gti">${ICONS.shield}</span>자본 · 리스크</div><div class="section-title">자산 곡선 · 낙폭</div><div id="eqHost">`+equityPanel(ts)+`</div>`
     +(ddp?`<div class="section-title">낙폭 이력 · 회복</div>`+ddp:'')
@@ -1097,6 +1107,10 @@ function renderFacts(r){
 function updateRR(){
   if(!EDIT)return; const e=EDIT.entry,x=EDIT.exit,d=EDIT.direction,qty=EDIT.qty;
   const sl=parseFloat($("#f_sl").value), tp=parseFloat($("#f_tp").value), tp2=parseFloat($("#f_tp2").value), tp3=parseFloat($("#f_tp3").value);
+  // 반대편 SL 실시간 감지 — 저장 전에 눈앞에서 교정(sl_invalid로 조용히 새는 통계 차단)
+  const wrong=!isNaN(sl)&&e&&(d==='Long'||d==='Short')&&(d==='Short'?sl<=e:sl>=e);
+  $("#f_sl").classList.toggle('err',wrong);
+  if(wrong){$("#rrLine").innerHTML=`<span class="neg">${ICONS.warn} ${d==='Short'?'숏은 손절가가 진입가보다 높아야 합니다':'롱은 손절가가 진입가보다 낮아야 합니다'} · 이대로는 R 계산 불가</span>`;return;}
   const p=[];
   if(e&&x&&!isNaN(sl)&&e!==sl){const r=d==='Short'?(e-x)/(sl-e):(x-e)/(e-sl);p.push(`실현 <b class="${r>=0?'pos':'neg'}">${(r>=0?'+':'')+r.toFixed(2)}R</b>`);}
   if(e&&!isNaN(sl)&&qty)p.push(`리스크 <b>$${(Math.abs(e-sl)*qty).toLocaleString(undefined,{maximumFractionDigits:1})}</b>`);
@@ -1121,7 +1135,14 @@ function openModal(id){const r=tById(id);if(!r)return;EDIT=r;LAST_FOCUS=document
   $("#shell").inert=true; $("#modalBg").classList.add("show"); $("#f_plan").focus();}
 function closeModal(){$("#modalBg").classList.remove("show");$("#shell").inert=false;EDIT=null;if(LAST_FOCUS)LAST_FOCUS.focus();}
 async function saveIntent(){
-  if(!EDIT||SAVING)return; SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
+  if(!EDIT||SAVING)return;
+  const slv=parseFloat($("#f_sl").value);
+  if(!isNaN(slv)&&EDIT.entry&&(EDIT.direction==='Long'||EDIT.direction==='Short')&&(EDIT.direction==='Short'?slv<=EDIT.entry:slv>=EDIT.entry)){
+    const more=$("#moreFields");if(more)more.open=true;
+    updateRR();$("#f_sl").focus();
+    toast(EDIT.direction==='Short'?'숏은 손절가가 진입가보다 높아야 합니다. 손절가를 확인해 주세요':'롱은 손절가가 진입가보다 낮아야 합니다. 손절가를 확인해 주세요');
+    return;}
+  SAVING=true; const btn=$("#saveBtn");btn.disabled=true;
   const _setup=getChips("c_setup");const _e=$("#f_setup_etc").value.trim();if(_e)_setup.push(_e);
   const p={trade_id:EDIT.trade_id,plan:$("#f_plan").value,setup:_setup.join(","),strategy:getChips("c_strategy")[0]||"",sl:$("#f_sl").value,tp:$("#f_tp").value,tp2:$("#f_tp2").value,tp3:$("#f_tp3").value,emotion:getChips("c_emo")[0]||"",memo:$("#f_memo").value,
     review:$("#f_review").value,mistake_tag:getChips("c_mistake").join(","),chart_url:$("#f_chart").value,
@@ -1133,7 +1154,7 @@ async function saveIntent(){
       if(pend.length){openModal(pend[0].trade_id);toast(`저장됨 · 미기입 ${pend.length}건 남음 · 이어서 채우기`);}
       else{closeModal();toast("저장 완료 · 미기입 거래 모두 정리됨");}
     }else toast("저장하지 못했습니다. 해당 거래를 찾지 못했습니다");
-  }catch(err){toast("저장하지 못했습니다. 잠시 후 다시 시도해 주세요");}
+  }catch(err){const m=err&&err.message;toast(m&&m.indexOf("http ")!==0?m:"저장하지 못했습니다. 잠시 후 다시 시도해 주세요");}
   finally{SAVING=false;btn.disabled=false;}
 }
 function setBanner(html){const el=$("#pullbanner");if(el)el.innerHTML=html||'';}
