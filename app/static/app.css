@@ -404,6 +404,19 @@ input.err:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(var(--neg-rg
 .rsbar.pos{left:50%;background:var(--mint)} .rsbar.neg{right:50%;background:var(--ember)}
 .rsrow .num{text-align:right}
 
+/* ---- 실시간 청산 체결(공개 WS) ---- */
+.liqcard{padding:var(--s4) var(--s5)}
+.liqsplit{display:flex;height:9px;border-radius:var(--r-pill);overflow:hidden;background:var(--card-2);margin-bottom:6px}
+.liqseg{height:100%} .liqseg.neg{background:var(--neg)} .liqseg.pos{background:var(--pos)}
+.liqleg{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:var(--fs-xs);margin-bottom:var(--s3)}
+.liqmaphdr,.liqtapehdr{font-family:var(--f-mono);font-size:var(--fs-micro);letter-spacing:.06em;text-transform:uppercase;color:var(--fog);margin:var(--s3) 0 6px}
+.liqmap{display:flex;flex-direction:column;gap:3px}
+.liqrow{display:grid;grid-template-columns:64px 1fr 52px;gap:8px;align-items:center;font-size:var(--fs-xs)}
+.liqpx{color:var(--moonlight);text-align:right}
+.liqbar{display:flex;height:8px;background:var(--card-2);border-radius:3px;overflow:hidden}
+.liqbar .neg{background:var(--neg)} .liqbar .pos{background:var(--pos)}
+.liqrow .num.muted{text-align:right}
+
 /* ---- 자금 흐름 · 섹터 ---- */
 .flowcard{padding:var(--s4) var(--s5)}
 .flowrow{display:grid;grid-template-columns:repeat(4,1fr);gap:var(--s4);padding-bottom:var(--s3);margin-bottom:var(--s3);border-bottom:1px solid var(--line)}

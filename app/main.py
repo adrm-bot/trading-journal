@@ -28,7 +28,7 @@ load_dotenv(os.path.join(HERE, ".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
-from . import db, engine, crypto, market, analytics  # noqa: E402
+from . import db, engine, crypto, market, analytics, liquidations  # noqa: E402
 
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
               "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
@@ -221,6 +221,28 @@ def api_data(request: Request):
 def api_market(request: Request):
     _require(request)
     return JSONResponse(market.get_context())
+
+
+@app.on_event("startup")
+async def _start_streams():
+    # 실시간 청산 체결 수집(공개 WS·무키) — 실패해도 앱은 정상, 대시보드에서 available:false
+    try:
+        liquidations.start()
+    except Exception:  # noqa: BLE001
+        logger.warning("청산 스트림 시작 실패 — 비활성으로 계속")
+
+
+@app.on_event("shutdown")
+async def _stop_streams():
+    with __import__("contextlib").suppress(Exception):
+        await liquidations.stop()
+
+
+@app.get("/api/liquidations")
+def api_liquidations(request: Request):
+    """실시간 청산 체결 스냅샷(예측형 히트맵 아님). 공개 WS 롤링 버퍼 집계."""
+    _require(request)
+    return JSONResponse(liquidations.snapshot())
 
 
 @app.get("/api/positions")
