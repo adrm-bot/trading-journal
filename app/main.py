@@ -28,10 +28,10 @@ load_dotenv(os.path.join(HERE, ".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
-from . import db, engine, crypto, market, analytics, liquidations  # noqa: E402
+from . import db, engine, crypto, market, analytics, liquidations, liqmap  # noqa: E402
 
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
-              "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
+              "kingfisher": "KingFisher", "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
 
 # /api/pull 유저별 쿨다운(초) — 거래소 키 throttle/ban 방지 + 단일 워커 보호 (in-memory, 재시작 시 초기화)
 PULL_COOLDOWN = int(os.getenv("PULL_COOLDOWN_SEC", "30"))
@@ -245,6 +245,17 @@ def api_liquidations(request: Request):
     return JSONResponse(liquidations.snapshot())
 
 
+@app.get("/api/liqmap")
+def api_liqmap(request: Request):
+    """예측형 청산맵(KingFisher) — 키 연결 시 실제 호출, 미연결이면 available:false. 스캐폴드(베타)."""
+    uid = _require(request)
+    if "kingfisher" not in db.list_connections(uid):
+        return {"available": False, "connected": False, "reason": "KingFisher API 키 미연결"}
+    cred = db.get_connection(uid, "kingfisher") or {}
+    pair = (request.query_params.get("pair") or "BTCUSDT").upper()
+    return JSONResponse(liqmap.fetch_kingfisher(cred.get("key"), pair))
+
+
 @app.get("/api/positions")
 def api_positions(request: Request):
     uid = _require(request)
@@ -407,6 +418,13 @@ async def api_save_connection(request: Request):
             raise HTTPException(400, str(e)) from None
         warn = ("NinjaTrader 연결됨" + (" (demo 환경)" if data["env"] == "demo" else "")
                 + " · API 특성상 거래 권한 차단이 불가하니 계정 MFA·전용 API 키를 유지하세요")
+    elif kind == "kingfisher":
+        # 예측형 청산맵 유료 제공자 — 데이터 read API(거래 권한 없음). 키만 저장, 프로빙은 크레딧 소모라 생략.
+        key = (b.get("key") or "").strip()
+        if len(key) < 8:
+            raise HTTPException(400, "KingFisher API 키를 입력해 주세요")
+        data = {"key": key}
+        warn = "KingFisher 연결됨 · 예측형 청산맵은 베타(유료 응답 스키마 검증 후 시각화 활성)"
     elif kind == "notion":
         tok = (b.get("token") or "").strip()
         if not tok:

@@ -140,6 +140,7 @@ let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAV
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
 let PINTS=[], PEDIT=null, PINT_SAVING=false;  // 보유 포지션 사전 계획
 let LIQ=null, LIQ_LOADING=false;  // 실시간 청산 체결(공개 WS)
+let LIQMAP=null;  // 예측형 청산맵(KingFisher · 유료 스캐폴드)
 let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const EFF_BUCKETS={b0:[-1e9,.25],b1:[.25,.5],b2:[.5,.75],b3:[.75,1],b4:[1,1e9]};  // 청산효율 드릴다운 구간
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
@@ -594,6 +595,24 @@ async function ensureLiquidations(){
   try{LIQ=await(await api("/api/liquidations")).json();}catch(e){LIQ={available:false,reason:'불러오지 못함'};}
   LIQ_LOADING=false; const h2=$("#liqHost"); if(h2)h2.outerHTML=liqCard(LIQ);
 }
+/* 예측형 청산맵(KingFisher · 유료) — 키 연결 시에만 실제 호출. 미연결이면 정적 안내 카드(호출 안 함). */
+function liqmapCard(){
+  const connected=(CONN||[]).includes('kingfisher');
+  if(!connected)return `<div id="liqmapHost"><div class="section-title">예측형 청산맵 <span class="soon-tag">유료</span></div><div class="card"><p class="muted" style="margin:0;font-size:var(--fs-sm)">코인글래스/KingFisher식 '앞으로 청산이 몰릴 가격대' 예측 맵입니다. <b>설정에서 KingFisher API 키를 연결</b>하면 표시됩니다. <a href="https://thekingfisher.io" target="_blank" rel="noopener noreferrer">KingFisher ↗</a> · 무료 대안은 위 '실시간 청산'(실제 체결).</p></div></div>`;
+  const d=LIQMAP;
+  let body;
+  if(!d)body=`<p class="muted" style="margin:0;font-size:var(--fs-sm)">불러오는 중…</p>`;
+  else if(d.available)body=`<p class="muted" style="margin:0;font-size:var(--fs-sm)"><span class="pos">● 연결됨</span> · ${esc(d.pair||'BTCUSDT')} 응답 수신 · 예측맵 <b>시각화는 베타</b>(유료 응답 스키마 검증 후 활성). <a href="https://thekingfisher.io" target="_blank" rel="noopener noreferrer">KingFisher ↗</a></p>`;
+  else body=`<p class="muted" style="margin:0;font-size:var(--fs-sm)">KingFisher 연결됨 · ${esc(d.reason||'응답 없음')} · <a href="https://thekingfisher.io" target="_blank" rel="noopener noreferrer">KingFisher ↗</a></p>`;
+  return `<div id="liqmapHost"><div class="section-title">예측형 청산맵 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· KingFisher (베타)</span></div><div class="card">${body}</div></div>`;
+}
+async function ensureLiqmap(){
+  const h=$("#liqmapHost"); if(!h)return;
+  if(!(CONN||[]).includes('kingfisher')){h.outerHTML=liqmapCard();return;}  // 미연결이면 호출 안 함
+  if(LIQMAP!==null){h.outerHTML=liqmapCard();return;}
+  try{LIQMAP=await(await api("/api/liqmap")).json();}catch(e){LIQMAP={available:false,connected:true,reason:'불러오지 못함'};}
+  const h2=$("#liqmapHost"); if(h2)h2.outerHTML=liqmapCard();
+}
 /* 일일 R 집계 — 거래일별 ΣR(R 있는 거래만). 사용자 1순위 지표 R/일 */
 function dailyR(ts){
   const by={}; ts.forEach(t=>{if(t.r==null)return;const d=trDate(t);if(!d)return;by[d]=(by[d]||0)+Number(t.r);});
@@ -639,8 +658,8 @@ function bindDashResizer(){
     if(e.key==='ArrowLeft'){e.preventDefault();setX(cur-24);save();}else if(e.key==='ArrowRight'){e.preventDefault();setX(cur+24);save();}};
 }
 function renderDashboard(el){
-  const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div>`;
-  if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();ensureLiquidations();return;}
+  const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div><div id="liqmapHost"></div>`;
+  if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
   const mine=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +disciplineCard(DATA.trades)
     +`<div id="posHost"></div>`
@@ -648,7 +667,7 @@ function renderDashboard(el){
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
   // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 가운데 리사이저로 폭 조절.
   el.innerHTML=`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="컬럼 너비 조절 (드래그·좌우 화살표)" tabindex="0"></div><div class="dash-mkt">${market}</div></div>`;
-  bindCards();ensureMarket();ensurePositions();ensureLiquidations();bindDashResizer();
+  bindCards();ensureMarket();ensurePositions();ensureLiquidations();ensureLiqmap();bindDashResizer();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}
@@ -1252,6 +1271,7 @@ const CONN_DEFS=[
   {k:"ninjatrader",nm:"NinjaTrader",hint:"공식 API(Tradovate) · 선물 체결 자동 기록 · 손익 USD",
    ack:"NinjaTrader API는 read-only 제한이 불가합니다(계정 인증 방식). 계정에 MFA와 전용 API 키(CID·Secret)를 쓰고 있으며, 이 위험을 이해했습니다",
    fields:[["name","계정 이메일/유저명","text"],["password","계정 비밀번호","password"],["cid","API CID","text"],["sec","API Secret","password"]]},
+  {k:"kingfisher",nm:"KingFisher",hint:"예측형 청산맵/히트맵 (유료 API · 베타)",beta:1,fields:[["key","API Key (kf_…)","password"]]},
   {k:"notion",nm:"Notion",hint:"일지를 Notion으로 내보내기",soon:1,fields:[["token","Integration 토큰","password"],["extra","DB id","text"]]},
   {k:"telegram",nm:"Telegram",hint:"행동 요약 알림 받기",soon:1,fields:[["token","봇 토큰","password"],["extra","chat id","text"]]},
   {k:"sheets",nm:"Google Sheets",hint:"일지를 Google Sheets로 내보내기",soon:1,fields:[["token","서비스계정 JSON","password"],["extra","sheet id","text"]]},
@@ -1260,7 +1280,7 @@ function renderSettings(el){
   el.innerHTML=`<div class="grid">`+CONN_DEFS.map((d,di)=>{
     const on=CONN.includes(d.k);
     const head=`<div class="conn"><div>
-        <div class="nm"><span class="dot ${on?'on':''}"></span>${d.nm}${d.read?`<span class="read-tag">read-only</span>`:""}${d.soon?`<span class="soon-tag">곧 제공</span>`:""}</div>
+        <div class="nm"><span class="dot ${on?'on':''}"></span>${d.nm}${d.read?`<span class="read-tag">read-only</span>`:""}${d.beta?`<span class="soon-tag">베타</span>`:""}${d.soon?`<span class="soon-tag">곧 제공</span>`:""}</div>
         <div class="hint">${d.hint}</div></div>
         ${(on&&!d.soon)?`<button class="btn sm delBtn" data-k="${d.k}">연결 해제</button>`:""}</div>`;
     if(d.soon)return `<div class="card soon">${head}<div class="hint" style="margin-top:10px">내보내기 연동을 준비 중이에요. 곧 제공합니다.</div></div>`;
