@@ -80,6 +80,11 @@ def init():
         # 새 키는 'exchange:pos:...' 형태라 LIKE로 구분. 사후 의도는 거의 없던 초기 데이터.
         c.execute("DELETE FROM trades WHERE (trade_id LIKE 'bybit:%' OR trade_id LIKE 'binance:%') "
                   "AND trade_id NOT LIKE '%:pos:%'")
+    # 재구성 trade_id 불안정으로 쌓인 같은-포지션 중복 정리(멱등) — 통계 부풀림 교정
+    removed = dedupe_positions()
+    if removed:
+        import logging
+        logging.getLogger("app.db").warning("중복 포지션 %d건 정리", removed)
 
 
 # --- users ---
@@ -143,14 +148,54 @@ def delete_connection(uid, kind):
 
 
 # --- trades ---
+# 포지션 신원 = (user_id, exchange, symbol, direction, opened_at). opened_at은 첫 체결시각(createdTime
+# 기반)이라 재풀링에도 안 바뀜. trade_id는 거래소 재구성 특성상 불안정(Bybit updatedTime 갱신 시 마지막
+# 청산주문 id가 바뀌어 같은 포지션이 새 trade_id로 잡힘) → 신원 기준으로 dedupe해야 중복 적재를 막는다.
+# 갱신 시 아래 시장 파생 컬럼만 덮어쓰고 유저 의도(status·plan·setup·sl·emotion·memo)는 절대 안 건드림.
+_MARKET_COLS = ["entry", "exit", "qty", "pnl", "closed_at", "fees", "funding", "leverage",
+                "fill_count", "liquidated", "exit_reason", "exit_count", "exit_legs",
+                "mae_price", "mfe_price", "point_value"]
+
+
 def upsert_trade(uid, t: dict) -> int:
-    """신규 삽입이면 1, 이미 있으면 0 (유저 의도는 보존 — INSERT OR IGNORE)."""
+    """신규 삽입이면 1, 이미 있으면 0. 같은 포지션 신원이 이미 있으면 시장 파생값만 갱신(의도 보존).
+    opened_at이 없으면(레거시/테스트) trade_id 기준 INSERT OR IGNORE 폴백."""
     cols = ", ".join(TRADE_COLS)
     ph = ", ".join("?" for _ in TRADE_COLS)
     vals = [t.get(k) for k in TRADE_COLS]
+    oa = t.get("opened_at")
     with conn() as c:
+        if oa:
+            row = c.execute(
+                "SELECT trade_id FROM trades WHERE user_id=? AND exchange=? AND symbol=? "
+                "AND direction=? AND opened_at=? LIMIT 1",
+                (uid, t.get("exchange"), t.get("symbol"), t.get("direction"), oa)).fetchone()
+            if row:  # 같은 포지션 재등장 — 시장값만 갱신, 의도 보존, 중복 행 안 만듦
+                sets = ", ".join(f"{k}=?" for k in _MARKET_COLS)
+                c.execute(f"UPDATE trades SET {sets} WHERE user_id=? AND trade_id=?",
+                          [*[t.get(k) for k in _MARKET_COLS], uid, row["trade_id"]])
+                return 0
         cur = c.execute(f"INSERT OR IGNORE INTO trades(user_id,trade_id,{cols}) VALUES(?,?,{ph})",
                         [uid, t["trade_id"], *vals])
+        return cur.rowcount
+
+
+def dedupe_positions() -> int:
+    """재구성 trade_id 불안정으로 쌓인 '같은 포지션 신원' 중복 행 1회 정리(멱등).
+    신원=(user_id,exchange,symbol,direction,opened_at). 그룹당 주석이 가장 풍부한 행 1개만 남기고 삭제
+    (복기완료>기록완료>미기입, plan·review 있는 것 우선, 그다음 rowid). 반환=삭제 건수."""
+    with conn() as c:
+        cur = c.execute("""
+            DELETE FROM trades WHERE rowid IN (
+              SELECT rowid FROM (
+                SELECT rowid, ROW_NUMBER() OVER (
+                  PARTITION BY user_id, exchange, symbol, direction, opened_at
+                  ORDER BY CASE status WHEN '복기완료' THEN 0 WHEN '기록완료' THEN 1 ELSE 2 END,
+                           (plan IS NULL OR plan=''), (review IS NULL OR review=''), rowid
+                ) rn
+                FROM trades WHERE opened_at IS NOT NULL
+              ) WHERE rn > 1
+            )""")
         return cur.rowcount
 
 
