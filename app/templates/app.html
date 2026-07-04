@@ -319,8 +319,11 @@ function legRows(r){
 }
 function legsLine(r){
   const legs=legRows(r);if(!legs)return'';
-  const chips=legs.map((l,i)=>`<span class="lv lvleg${l.r!=null?(l.r>=0?' pos':' neg'):''}">${i+1}차 ${fmtP(l.price)} · ${fmtP(l.qty)}${l.r!=null?` · ${(l.r>=0?'+':'')+l.r}R`:''}</span>`).join('');
-  return `<div class="jlevels jlegs" data-tip="분할청산 레그별 도달 R = (레그가−진입가) ÷ (진입~손절 거리) · SL 입력 거래만 R 표시">${chips}</div>`;
+  const CAP=6;  // 스캘핑 등 레그 수십 개면 카드가 칩 벽이 됨 → 앞 몇 개만, 나머지는 요약(상세는 모달)
+  const shown=legs.slice(0,CAP);
+  const chips=shown.map((l,i)=>`<span class="lv lvleg${l.r!=null?(l.r>=0?' pos':' neg'):''}">${i+1}차 ${fmtP(l.price)} · ${fmtP(l.qty)}${l.r!=null?` · ${(l.r>=0?'+':'')+l.r}R`:''}</span>`).join('');
+  const more=legs.length>CAP?`<span class="lv lvleg muted">…외 ${legs.length-CAP}개 · 열어서 전체 보기</span>`:'';
+  return `<div class="jlevels jlegs" data-tip="분할청산 레그별 도달 R = (레그가−진입가) ÷ (진입~손절 거리) · SL 입력 거래만 R 표시">${chips}${more}</div>`;
 }
 /* 자기채점 배지 — 셋업·실행 등급은 질에 따라 색(A 좋음 ~ F 나쁨), 확신도는 중립 */
 function gq(g){return g==='A'?'g-a':g==='B'?'g-b':g==='F'?'g-f':(g==='C'||g==='D')?'g-c':'';}
@@ -1349,8 +1352,10 @@ function renderFacts(r){
   if(r.fees!=null)h+=fact("수수료",`-$${Number(r.fees).toLocaleString(undefined,{maximumFractionDigits:2})}`);
   if(r.funding)h+=fact("펀딩",`<span class="${r.funding>=0?'pos':'neg'}">${money(r.funding)}</span>`);
   const legs=legRows(r);
-  if(legs)h+=`<div class="fact" style="grid-column:1/-1"><span class="fl">분할청산 레그 · 가격 × 수량 (도달 R)</span><span class="fv">`
-    +legs.map((l,i)=>`${i+1}차 ${fmtP(l.price)} × ${fmtP(l.qty)}${l.r!=null?` <span class="${l.r>=0?'pos':'neg'}">(${(l.r>=0?'+':'')+l.r}R)</span>`:''}`).join(' · ')+`</span></div>`;
+  if(legs){const MCAP=20,ml=legs.slice(0,MCAP);  // 모달도 과다 레그 방지(앞 20개 + 요약)
+    h+=`<div class="fact" style="grid-column:1/-1"><span class="fl">분할청산 레그 · 가격 × 수량 (도달 R) · 총 ${legs.length}회</span><span class="fv">`
+    +ml.map((l,i)=>`${i+1}차 ${fmtP(l.price)} × ${fmtP(l.qty)}${l.r!=null?` <span class="${l.r>=0?'pos':'neg'}">(${(l.r>=0?'+':'')+l.r}R)</span>`:''}`).join(' · ')
+    +(legs.length>MCAP?` <span class="muted">…외 ${legs.length-MCAP}개</span>`:'')+`</span></div>`;}
   $("#modalFacts").innerHTML=h;
 }
 function updateRR(){
