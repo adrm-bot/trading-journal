@@ -199,6 +199,21 @@ def dedupe_positions() -> int:
         return cur.rowcount
 
 
+def delete_auto_trades(uid, kind, since=None, unannotated_only=False) -> int:
+    """자동 임포트 포지션(trade_id 'kind:pos:%') 삭제 — 재적재 시 겹침 누적 제거용.
+    since: closed_at >= since(문자열)인 것만(윈도 한정). unannotated_only: 손 안 댄 미기입 행만(주석 보존).
+    반환=삭제 건수. 수동 사전계획(position_intents)·설정은 건드리지 않음."""
+    q = "DELETE FROM trades WHERE user_id=? AND trade_id LIKE ?"
+    args = [uid, f"{kind}:pos:%"]
+    if since:
+        q += " AND closed_at >= ?"
+        args.append(since)
+    if unannotated_only:  # status가 미기입이면 유저가 아무 의도도 안 넣은 순수 자동행
+        q += " AND status='의도 미기입'"
+    with conn() as c:
+        return c.execute(q, args).rowcount
+
+
 def get_trades(uid):
     with conn() as c:
         return [dict(r) for r in c.execute(

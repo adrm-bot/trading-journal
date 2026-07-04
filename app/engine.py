@@ -674,21 +674,40 @@ def apply_position_intents(uid, kind, new_rows) -> int:
     return applied
 
 
-def pull_user(uid):
-    """거래소별 적재 결과를 반환: {exchange: {"added": n, "preplanned": n, "error": str|None}}."""
+def _pull_kind(uid, kind, cred, lookback, wipe_annotated):
+    """거래소 하나를 '창 교체' 방식으로 적재 — 재구성이 재풀링마다 포지션 경계를 다르게 잡아
+    겹침 중복이 누적되던 문제 차단. 신선한 재구성을 먼저 안전히 수집한 뒤(실패 시 삭제 안 함),
+    창 내 자동행을 지우고 새로 넣는다. wipe_annotated=False면 주석 있는 행은 보존(일상 pull),
+    True면 창 내 자동행 전부 교체(재적재)."""
+    fresh = list(ADAPTERS[kind](cred, lookback))  # 실패하면 예외 → 아래 삭제 안 됨(데이터 보호)
+    # 삭제 하한 = 이번에 '실제로 다시 불러온' 거래들의 최초 오픈시각(closed_at과 비교) → 재구성 스팬에
+    # 겹치는 조각(청산이 살짝 먼저 끝난 것 포함)은 걷어내되, 그보다 오래된(재조회 못 한) 기록은 절대
+    # 안 지운다. 신규 없으면 삭제 안 함(데이터 보호).
+    since = min((r.get("opened_at") for r in fresh if r.get("opened_at")), default=None)
+    if since:
+        db.delete_auto_trades(uid, kind, since=since, unannotated_only=True)  # 항상: 주석 없는 자동행
+        if wipe_annotated:  # 재적재: 창 내 자동행 전부 교체
+            db.delete_auto_trades(uid, kind, since=since, unannotated_only=False)
+    added, new_rows = 0, []
+    for r in fresh:
+        if db.upsert_trade(uid, r):
+            added += 1
+            new_rows.append(r)
+    preplanned = apply_position_intents(uid, kind, new_rows)
+    return {"added": added, "preplanned": preplanned, "error": None}
+
+
+def pull_user(uid, lookback=None, wipe_annotated=False):
+    """거래소별 적재 결과: {exchange: {"added": n, "preplanned": n, "error": str|None}}.
+    lookback 지정 시 그 창(재적재는 길게), wipe_annotated=True면 창 내 자동행 전부 교체."""
+    lb = lookback or LOOKBACK
     results = {}
     for kind in db.list_connections(uid):
         if kind not in ADAPTERS:
             continue
         cred = db.get_connection(uid, kind)
         try:
-            added, new_rows = 0, []
-            for r in ADAPTERS[kind](cred, LOOKBACK):
-                if db.upsert_trade(uid, r):
-                    added += 1
-                    new_rows.append(r)
-            preplanned = apply_position_intents(uid, kind, new_rows)
-            results[kind] = {"added": added, "preplanned": preplanned, "error": None}
+            results[kind] = _pull_kind(uid, kind, cred, lb, wipe_annotated)
         except RuntimeError as e:
             logger.warning("pull %s 실패 uid=%s: %s", kind, uid, e)
             results[kind] = {"added": 0, "preplanned": 0, "error": str(e)}
@@ -696,6 +715,15 @@ def pull_user(uid):
             logger.exception("pull %s 예외 uid=%s", kind, uid)
             results[kind] = {"added": 0, "preplanned": 0, "error": f"{kind} 적재 중 알 수 없는 오류"}
     return results
+
+
+# 재적재(hard resync): 넉넉한 창으로 창 내 자동행을 전부 교체 → 겹침 중복 제거·정확 복원.
+# 사전계획·설정은 보존, 창보다 오래된 기록은 그대로 둠(재조회 불가분 보호).
+RESYNC_LOOKBACK = int(os.getenv("RESYNC_LOOKBACK_DAYS", "120"))
+
+
+def resync_user(uid):
+    return pull_user(uid, lookback=RESYNC_LOOKBACK, wipe_annotated=True)
 
 
 # ---------- 보유 중(미청산) 포지션 — 일지엔 닫힌 거래만 들어가므로 현재 보유는 별도 조회 ----------

@@ -284,6 +284,27 @@ def api_pull(request: Request):
     return {"ok": True, "fetched": total, "results": results}
 
 
+@app.post("/api/resync")
+def api_resync(request: Request):
+    """재적재 — 자동 임포트 거래를 거래소 원장 기준으로 창 교체(겹침 중복 제거·통계 정확 복원).
+    사전계획·설정 보존, 해당 거래의 계획·복기 주석은 초기화될 수 있음."""
+    uid = _require(request)
+    _csrf(request)
+    now = time.time()
+    wait = PULL_COOLDOWN - (now - _pull_at.get(uid, 0))
+    if wait > 0:
+        raise HTTPException(429, f"너무 자주 실행했습니다. {int(wait) + 1}초 뒤에 다시 시도해 주세요")
+    _pull_at[uid] = now
+    before = len(db.get_trades(uid))
+    try:
+        results = engine.resync_user(uid)
+    except Exception:  # noqa: BLE001
+        logger.exception("resync 실패 uid=%s", uid)
+        return JSONResponse({"ok": False, "error": "재적재에 실패했습니다. 거래소 연결을 확인해 주세요"}, status_code=400)
+    after = len(db.get_trades(uid))
+    return {"ok": True, "results": results, "before": before, "after": after}
+
+
 @app.post("/api/intent")
 async def api_intent(request: Request):
     uid = _require(request)

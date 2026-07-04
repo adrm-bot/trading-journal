@@ -1306,8 +1306,10 @@ function renderSettings(el){
       <a class="btn sm" href="/logout">로그아웃</a></div>
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         <a class="btn sm" href="/api/export">데이터 내보내기 (CSV)</a>
+        <button class="btn sm" id="resyncBtn">거래 재적재 (중복 정리)</button>
         <button class="btn sm danger" id="delAcctBtn">계정·데이터 삭제</button>
-      </div></div>
+      </div>
+      <p class="muted" style="font-size:var(--fs-xs);margin:10px 0 0;line-height:1.55">재적재 = 자동으로 불러온 거래를 거래소 원장 기준으로 다시 정확히 맞춥니다(겹침·중복 제거·통계 복원). 사전계획·설정은 유지되고, 해당 거래에 적어둔 계획·복기·채점은 초기화될 수 있습니다.</p></div>
     <div class="section-title">플랜 · 문의</div><div class="card"><div class="conn">
       <div><div class="nm">현재 플랜 · ${ME.plan==='pro'?'Pro':'무료 (베타)'}</div>
         <div class="hint">${ME.billing_enabled?'유료 플랜에서 더 많은 기능을 쓸 수 있습니다.':'베타 기간 · 모든 기능을 무료로 쓸 수 있습니다.'}</div></div>
@@ -1329,6 +1331,15 @@ function renderSettings(el){
     catch(err){toast("연결을 해제하지 못했습니다. 잠시 후 다시 시도해 주세요");b.disabled=false;}});
   $$(".ackchk").forEach(c=>c.onchange=()=>{const b=c.closest("form").querySelector("button[type=submit]");if(b)b.disabled=!c.checked;});
   const da=$("#delAcctBtn");if(da)da.onclick=openDelAcct;
+  const rs=$("#resyncBtn");if(rs)rs.onclick=async()=>{
+    if(!confirm("자동으로 불러온 거래를 거래소 기준으로 다시 정확히 맞춥니다.\n겹침·중복이 제거되고 통계가 복원됩니다.\n(사전계획·설정은 유지, 거래별 계획·복기 주석은 초기화될 수 있음)\n\n계속할까요?"))return;
+    rs.disabled=true;const orig=rs.textContent;rs.textContent="재적재 중… (거래소 조회, 수십 초 걸릴 수 있음)";
+    try{const r=await(await postJSON("/api/resync",{})).json();
+      if(r.ok){LIQ=null;await loadAll();location.hash="#dashboard";route();
+        toast(`재적재 완료 · ${r.before}건 → ${r.after}건 (중복 정리됨)`);}
+      else toast(r.error||"재적재에 실패했습니다");}
+    catch(e){const m=e&&e.message;toast(m&&m.indexOf("http ")!==0?m:"재적재에 실패했습니다. 잠시 후 다시 시도해 주세요");}
+    finally{rs.disabled=false;rs.textContent=orig;}};
   const up=$("#upgradeBtn");if(up)up.onclick=async()=>{
     try{await postJSON("/api/billing/checkout",{});}
     catch(e){toast(e&&e.message&&e.message.indexOf("http ")!==0?e.message:"결제는 준비 중입니다");}};
