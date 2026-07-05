@@ -1,5 +1,11 @@
 //@version=6
-// REGIME v1.6 — 5-상태 레짐 분류기 (research/regime 파이썬 구현의 차트 포팅)
+// REGIME v1.7 — 5-상태 레짐 분류기 (research/regime 파이썬 구현의 차트 포팅)
+// v1.7: 밴드 기본 2단(위=현재 · 아래=상위 TF) — 하위 TF 밴드는 실측 기각 후 옵션 강등
+//        (30일 라이브 측정: 15m 전환 선행률 54% = 기저 일치율 55%와 동일 → 선행정보 0,
+//         플리커 2.7배, TV 하위TF security는 샘플링이라 원래 열화 데이터)
+//        · 확신선 2줄 분리(위 반=현재 TF conf, 아래 반=상위 TF 2축 근사 conf)
+//        · X(확신급락 온셋)도 밴드별: 위 X=현재 TF, 아래 X=상위 TF(동일 정의: 자기 30일
+//          하위 20% 미만 2봉 연속의 첫 봉)
 // v1.6: 테이블 리페인트 완치(전 셀 확정봉 스냅샷 — 실측: 표시 0.09 vs 정본 0.35 불일치 제거)
 //        · 표류(드리프트) 태그: 비추세 라벨 + |24h 순이동|≥2% AND ER(24h)≥0.10, 히스테리시스
 //          (4년 캘리브: 비추세 봉의 23.5% 발화 · 과거 기술일 뿐 방향 엣지 없음 — 전방지속 ~0.43)
@@ -62,7 +68,9 @@ posStr   = input.string("우상단", "테이블 위치", options = ["좌상단",
 showMain = input.bool(true, "메인 차트 리본", group = "표시 / Display", tooltip = "가격 차트 배경 색칠 on/off — 다른 지표 배경과 겹쳐 어지러우면 끄기")
 ribInt   = input.string("은은", "메인 리본 강도", options = ["은은", "보통", "진하게"], group = "표시 / Display", tooltip = "은은(기본): 최대 불투명 15% — 캔들 가독 우선. 보통 30% · 진하게 62% (구버전 v1.4는 80%였음 — 진하게도 완화됨)")
 lblDensity = input.string("성김", "전환 마커", options = ["전부", "성김", "끄기"], group = "표시 / Display", tooltip = "성김(기본): 1봉 생존한 전환만 + 최소 8봉 간격 — 빠른 TF에서 마커 홍수 방지")
-showBands = input.bool(true, "MTF 밴드(위 하위TF · 중간 현재 · 아래 상위TF)", group = "표시 / Display", tooltip = "TF 사다리: 5m→15m→1h→4h→12h→1D. 밴드는 연료축 없는 2축 근사(연구상 연료 기여 p=1.0이라 근사 정당) · 무FSM 순간 판정 · 하위TF는 TV security 특성상 참고용")
+bandMode = input.string("2단(현재 위 · 상위 아래)", "레짐 밴드", options = ["2단(현재 위 · 상위 아래)", "3단(하위 TF 포함)", "끄기"], group = "표시 / Display", tooltip = "기본 2단: 위=현재 TF(확신선+X), 아래=한 단계 위 TF(확신선+X). 하위 TF 밴드는 실측상 전환 선행률 54%=기저 55%(선행정보 0)·플리커 2.7배·TV 하위TF security 샘플링 열화라 기본 제외 — 원하면 3단. 밴드는 연료축 없는 2축 근사(연료 기여 p=1.0이라 근사 정당)·무FSM")
+bool showBands = bandMode != "끄기"
+bool band3 = bandMode == "3단(하위 TF 포함)"
 tblSize  = input.string("작게", "테이블 글자", options = ["아주작게", "작게", "보통", "크게"], group = "표시 / Display")
 
 // ── 피처 (전부 인과: 현재 봉 종가까지만) ────────────────────────────────────
@@ -410,25 +418,42 @@ f_bandT(float cf) => na(cf) ? 88 : int(86 - 52 * math.min(cf / 0.6, 1.0))
 color colLow  = showBands and hasLow and not na(stLow) ? color.new(f_stateCol(stLow), f_bandT(cfLow)) : na
 color colCur  = showBands and ready and cur >= 0 ? color.new(stCol, f_bandT(confShow)) : na
 color colHigh = showBands and not na(stHigh) ? color.new(f_stateCol(stHigh), f_bandT(cfHigh)) : na
-// 3등분이 패널 전체를 채우고, 확신선이 그 위에 겹쳐 그려짐 (위=하위TF · 중간=현재 · 아래=상위TF)
-pB0 = plot(showBands ? 1.0 : na,    "밴드경계1", color = color.new(color.gray, 100), editable = false)
-pB1 = plot(showBands ? 0.6667 : na, "밴드경계2", color = color.new(#000000, 55), editable = false, linewidth = 1)
-pB2 = plot(showBands ? 0.3333 : na, "밴드경계3", color = color.new(#000000, 55), editable = false, linewidth = 1)
-pB3 = plot(showBands ? 0.0 : na,    "밴드경계4", color = color.new(color.gray, 100), editable = false)
-fill(pB0, pB1, color = colLow,  title = "하위TF 레짐 밴드")
-fill(pB1, pB2, color = colCur,  title = "현재TF 레짐 밴드")
-fill(pB2, pB3, color = colHigh, title = "상위TF 레짐 밴드")
+// 밴드가 패널을 채우고, 확신선이 그 위에 겹쳐 그려짐
+// 2단(기본): 위 반=현재 TF · 아래 반=상위 TF / 3단(옵션): 위=하위 · 중간=현재 · 아래=상위
+float lvA = band3 ? 0.6667 : 0.5
+float lvB = band3 ? 0.3333 : 0.5
+pB0 = plot(showBands ? 1.0 : na, "밴드경계1", color = color.new(color.gray, 100), editable = false)
+pB1 = plot(showBands ? lvA : na, "밴드경계2", color = color.new(#000000, 55), editable = false, linewidth = 1)
+pB2 = plot(showBands ? lvB : na, "밴드경계3", color = color.new(#000000, 55), editable = false, linewidth = 1)
+pB3 = plot(showBands ? 0.0 : na, "밴드경계4", color = color.new(color.gray, 100), editable = false)
+fill(pB0, pB1, color = band3 ? colLow : colCur, title = "상단 밴드 (2단=현재TF · 3단=하위TF)")
+fill(pB1, pB2, color = band3 ? colCur : na,     title = "중간 밴드 (3단=현재TF)")
+fill(pB2, pB3, color = colHigh,                 title = "하단 밴드 (상위TF)")
 tfName(string tf) => tf == "5" ? "5m" : tf == "15" ? "15m" : tf == "60" ? "1h" : tf == "240" ? "4h" : tf == "720" ? "12h" : tf == "D" ? "1D" : tf
 var label lbBands = na
 if showBands and barstate.islast
     label.delete(lbBands)
     string lowTxt = hasLow ? tfName(tfLow) : "—"
-    lbBands := label.new(bar_index + 1, 0.5, "▲ " + lowTxt + "\n■ " + tfName(timeframe.period) + "\n▼ " + tfName(tfHigh), style = label.style_label_left, color = color.new(#131722, 30), textcolor = color.new(#c8c8c8, 0), size = size.small, tooltip = L("밴드: 위=하위TF · 중간=현재TF · 아래=상위TF · 진할수록 그 TF 확신 높음 (2축 근사·무FSM·참고용)", "Bands: top=lower TF · mid=current · bottom=higher TF · darker = higher confidence (2-axis approx, no FSM)"))
+    string bandTxt = band3 ? "▲ " + lowTxt + "\n■ " + tfName(timeframe.period) + "\n▼ " + tfName(tfHigh) : "■ " + tfName(timeframe.period) + "\n▼ " + tfName(tfHigh)
+    lbBands := label.new(bar_index + 1, 0.5, bandTxt, style = label.style_label_left, color = color.new(#131722, 30), textcolor = color.new(#c8c8c8, 0), size = size.small, tooltip = L("밴드: ■=현재 TF(위 반, 확신선+X) · ▼=한 단계 위 TF(아래 반, 확신선+X) · 진할수록 그 TF 확신 높음 (상위는 2축 근사·무FSM) · X=확신급락 온셋(자기 30일 하위 20% 미만 2봉 연속의 첫 봉)", "Bands: ■=current TF (top half, conf line+X) · ▼=one TF up (bottom half) · darker = higher confidence (HTF is 2-axis approx, no FSM) · X = confidence-collapse onset"))
 
-// 확신선 — 밴드 위에 겹쳐 표시 (선 색 = 현재 레짐, 실시간 봉은 직전 확정값: 리페인트 없음)
-plot(confShow, "confidence", color = ready and cur >= 0 ? stCol : color.gray, linewidth = 2)
-plot(confQ20Show, "conf rolling q20", color = color.new(color.gray, 40), style = plot.style_line)
-plotshape(collapse and not collapse[1], "confidence collapse", style = shape.xcross, location = location.bottom, color = color.new(color.red, 0), size = size.tiny)   // 온셋만 — 지속 구간 X 홍수 방지
+// 확신선 — 밴드 위에 겹쳐 표시 (선 색 = 그 TF 레짐, 확정값: 리페인트 없음)
+// 2단 모드: 두 줄 분리 — 위 반(0.5~1.0)=현재 TF conf, 아래 반(0~0.5)=상위 TF conf(2축 근사)
+bool twoLine = showBands and not band3
+float confLine = twoLine ? 0.5 + confShow * 0.5 : confShow
+float q20Line  = twoLine ? 0.5 + confQ20Show * 0.5 : confQ20Show
+float htfLine  = twoLine and not na(cfHigh) ? cfHigh * 0.5 : na
+plot(confLine, "confidence (현재 TF)", color = ready and cur >= 0 ? stCol : color.gray, linewidth = 2)
+plot(q20Line, "conf rolling q20", color = color.new(color.gray, 40), style = plot.style_line)
+plot(htfLine, "confidence (상위 TF·2축 근사)", color = f_stateCol(stHigh), linewidth = 1)
+// 상위 TF 확신 급락 — 현재 TF와 동일 정의(자기 30일 하위 20% 미만 2봉 연속)
+hQ20 = ta.percentile_nearest_rank(cfHigh[1], qWin, 20)
+bool hClps = not na(cfHigh) and not na(cfHigh[1]) and not na(hQ20) and not na(hQ20[1]) and cfHigh < hQ20 and cfHigh[1] < hQ20[1]
+// X = 확신급락 '온셋'(첫 봉만 — 지속 구간 X 홍수 방지). 위 X=현재 TF · 아래 X=상위 TF
+float clpsY  = collapse and not collapse[1] ? (twoLine ? 0.97 : 0.03) : na
+float hClpsY = twoLine and hClps and not hClps[1] ? 0.03 : na
+plotshape(clpsY, "confidence collapse (현재 TF)", style = shape.xcross, location = location.absolute, color = color.new(color.red, 0), size = size.tiny)
+plotshape(hClpsY, "confidence collapse (상위 TF)", style = shape.xcross, location = location.absolute, color = color.new(color.red, 0), size = size.tiny)
 
 // ── 상태 테이블 (메인 차트, 배경 있는 가독 버전) ────────────────────────────
 posOf(string s) =>
