@@ -39,13 +39,13 @@ def raw():
     return kraw, m, fu
 
 
-def pipeline(kraw, m, fu, leak=False):
+def pipeline(kraw, m, fu, leak=False, cp=classifier.DEFAULT_CP):
     df = bd.assemble(kraw, m, fu)
     if leak:
         df["oi"] = df["oi"].shift(-1)  # deliberate future reference (canary)
     feat = features.compute(df)
-    f = classifier.classify(feat)
-    b2 = classifier.classify(feat, use_fuel=False)
+    f = classifier.classify(feat, cp)
+    b2 = classifier.classify(feat, cp, use_fuel=False)
     b1 = baseline.classify_b1(feat)
     return f, b2, b1
 
@@ -123,6 +123,20 @@ def test_poison_invariance(raw, full_run):
         sub = pipeline(*poison(*raw, tstar))
         mm = _mismatches(full_run, sub, tstar)
         assert not mm, f"poisoned future data reached outputs at cut {tstar}: {mm}"
+
+
+@pytest.mark.parametrize("dwell,confirm", [(2, 1), (4, 0), (0, 3), (8, 3)])
+def test_hysteresis_fsm_invariance(raw, dwell, confirm):
+    """The hysteresis FSM is the only code path OFF in the default config — a naive
+    'drop short segments afterwards' implementation would rewrite past labels from the
+    future. Representative sweep cells must satisfy the same truncate-invariance."""
+    cp = classifier.ClassifierParams(min_dwell=dwell, confirm_bars=confirm)
+    full = pipeline(*raw, cp=cp)
+    for tstar in [pd.Timestamp("2023-11-07 09:15", tz="UTC"),
+                  pd.Timestamp("2024-02-16 18:00", tz="UTC")]:
+        sub = pipeline(*cut(*raw, tstar), cp=cp)
+        mm = _mismatches(full, sub, tstar)
+        assert not mm, f"FSM(dwell={dwell},confirm={confirm}) leaked at {tstar}: {mm}"
 
 
 def test_canary_planted_leak_is_caught(raw):

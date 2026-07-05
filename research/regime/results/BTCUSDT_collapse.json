@@ -1,0 +1,25 @@
+{
+ "symbol": "BTCUSDT",
+ "window_bars": 96,
+ "observed": {
+  "n_events": 5960,
+  "n_transitions": 7466,
+  "precision": 0.9822147651006712,
+  "recall": 0.9567372086793464,
+  "median_lead": 12.0
+ },
+ "null": {
+  "precision_mean": 0.9737827181208053,
+  "recall_mean": 0.9549182962764533,
+  "median_lead_mean": 15.6675
+ },
+ "p_precision": 0.004975124378109453,
+ "p_recall": 0.22388059701492538,
+ "funding_ablation": {
+  "n_events": 5953,
+  "n_transitions": 7466,
+  "precision": 0.9821938518394087,
+  "recall": 0.9567372086793464,
+  "median_lead": 12.0
+ }
+}

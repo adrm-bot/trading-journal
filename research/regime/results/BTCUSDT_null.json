@@ -1,0 +1,13 @@
+{
+ "symbol": "BTCUSDT",
+ "observed_F_median": -5.0,
+ "B2_median": -6.0,
+ "observed_OI_marginal": 1.0,
+ "null_n": 200,
+ "null_median": 1.0,
+ "null_iqr": [
+  1.0,
+  1.0
+ ],
+ "p_one_sided": 1.0
+}
