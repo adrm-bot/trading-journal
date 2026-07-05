@@ -40,14 +40,16 @@ confirmBars = input.int(0, "confirm_bars(봉)",  group = "hysteresis (기본 OFF
 // 벽시계 스케일링: 리서치 동결값(15m 기준 30일=2880봉, ΔOI 2시간=8봉)을 TF 무관 유지
 int tfSec = timeframe.in_seconds()
 int barsPerDay = math.max(1, math.round(86400.0 / tfSec))
-int qWin = math.max(200, 30 * barsPerDay)      // 30일 분위수 창 (통계 하한 200봉)
+// 30일 분위수 창. 상한 4000봉 = max_bars_back 예산(5m에선 ~14일로 캡 — 문서화된 근사)
+int qWin = math.min(4000, math.max(200, 30 * barsPerDay))
 int kOI  = math.max(1, math.round(7200.0 / tfSec))   // ΔOI lookback = 2시간
 int dipLB = math.max(8, math.round(28800.0 / tfSec)) // '최근 하락 경유' = 8시간
 
 // ── 표시 옵션 ────────────────────────────────────────────────────────────────
 posStr   = input.string("우상단", "테이블 위치", options = ["좌상단", "중앙상단", "우상단", "좌중앙", "중앙", "우중앙", "좌하단", "중앙하단", "우하단"], group = "표시 / Display")
 ribbonMode = input.string("메인 차트", "리본 표시", options = ["메인 차트", "레짐 패널", "끄기"], group = "표시 / Display", tooltip = "다른 지표 배경과 겹쳐 어지러우면 '레짐 패널'이나 '끄기'로")
-showLbl  = input.bool(true, "레짐 전환 마커(차트)", group = "표시 / Display")
+lblDensity = input.string("성김", "전환 마커", options = ["전부", "성김", "끄기"], group = "표시 / Display", tooltip = "성김(기본): 1봉 생존한 전환만 + 최소 8봉 간격 — 빠른 TF에서 마커 홍수 방지")
+showBands = input.bool(true, "MTF 밴드(위 하위TF · 중간 현재 · 아래 상위TF)", group = "표시 / Display", tooltip = "TF 사다리: 5m→15m→1h→4h→12h→1D. 밴드는 연료축 없는 2축 근사(연구상 연료 기여 p=1.0이라 근사 정당) · 무FSM 순간 판정 · 하위TF는 TV security 특성상 참고용")
 tblSize  = input.string("보통", "테이블 글자", options = ["작게", "보통", "크게"], group = "표시 / Display")
 
 // ── 피처 (전부 인과: 현재 봉 종가까지만) ────────────────────────────────────
@@ -230,9 +232,80 @@ int sinceCollapse = ta.barssince(collapse)
 bool watchOn = negRun >= 2 and not na(sinceCollapse) and sinceCollapse <= 8
 string watchTxt = watchOn ? "⚠ " + L("표 이동 중 → 2위: ", "votes shifting → #2: ") + emojiOf(watchNext) + " " + nameOf(watchNext) + " (" + str.tostring(negRun) + L("봉째", " bars") + ")" : collapse ? "⚠ " + L("확신 급락 — 전환 가능성, 사이즈 축소", "confidence collapse — possible shift, size down") : L("안정 — 현 상태 우세", "stable — incumbent leads")
 
-// 전환 마커
-if showLbl and barstate.isconfirmed and cur >= 0 and cur != cur[1]
+// 전환 마커 — '성김'(기본): 1봉 생존한 전환만 + 최소 8봉 간격 (빠른 TF 마커 홍수 방지)
+var int lastLblBar = -100000
+bool transRaw = barstate.isconfirmed and cur >= 0 and cur != cur[1]
+bool transSurvived = barstate.isconfirmed and cur >= 0 and cur == cur[1] and cur[1] != cur[2]
+if lblDensity == "전부" and transRaw
     label.new(bar_index, na, emojiOf(cur) + " " + nameOf(cur), yloc = yloc.abovebar, style = label.style_label_down, color = color.new(stCol, 25), textcolor = color.white, size = size.small, force_overlay = true)
+if lblDensity == "성김" and transSurvived and bar_index - lastLblBar >= 8
+    label.new(bar_index - 1, na, emojiOf(cur) + " " + nameOf(cur), yloc = yloc.abovebar, style = label.style_label_down, color = color.new(stCol, 25), textcolor = color.white, size = size.small, force_overlay = true)
+    lastLblBar := bar_index
+
+// ── MTF 3분할 밴드: 위=하위TF · 중간=현재TF · 아래=상위TF (사다리 5m→15m→1h→4h→12h→1D) ──
+// 밴드용 2축 근사 레짐 (연료축 제외 — request.security 중첩 금지 + 연구상 연료 기여 p=1.0)
+f_regime2(int qw) =>
+    [dp2, dm2, ax2] = ta.dmi(adxLen, adxLen)
+    float atr2 = ta.rma(ta.tr(true), adxLen)
+    float mm = (ta.ema(close, emaFLen) - ta.ema(close, emaSLen)) / atr2
+    float vp = (ta.percentrank(2 * bbK * ta.stdev(close, bbLen) / ta.sma(close, bbLen), qw) + ta.percentrank(atr2 / close, qw)) / 200.0
+    float aa = math.max(0.0, math.min(1.0, (ax2 - adxLo) / adxScale))
+    float t0 = aa * tanhPos(math.abs(mm))
+    float tt = math.sign(dp2 - dm2) == math.sign(mm) ? t0 : t0 * 0.5
+    float up2 = mm > 0 ? tt : 0.0
+    float dn2 = mm < 0 ? tt : 0.0
+    float rs = (1.0 - up2 - dn2) / 3.0
+    float mL2 = math.max(0.0, math.min(1.0, (0.25 - vp) / 0.10))
+    float mH2 = math.max(0.0, math.min(1.0, (vp - 0.75) / 0.10))
+    float mM2 = math.max(0.0, 1.0 - mL2 - mH2)
+    float c0 = wDir * up2 / 0.8
+    float c1 = wDir * dn2 / 0.8
+    float c2 = (wDir * rs + wVol * mL2) / 0.8
+    float c3 = (wDir * rs + wVol * mM2) / 0.8
+    float c4 = (wDir * rs + wVol * mH2) / 0.8
+    int b = 0
+    float bv = c0
+    if c1 > bv
+        b := 1
+        bv := c1
+    if c2 > bv
+        b := 2
+        bv := c2
+    if c3 > bv
+        b := 3
+        bv := c3
+    if c4 > bv
+        b := 4
+        bv := c4
+    int bOut = na(vp) or na(mm) or na(ax2) ? -1 : b
+    bOut[1]  // 확정 봉만 (비리페인트)
+
+string tfLow  = tfSec <= 300 ? "5" : tfSec <= 900 ? "5" : tfSec <= 3600 ? "15" : tfSec <= 14400 ? "60" : tfSec <= 43200 ? "240" : tfSec <= 86400 ? "720" : "D"
+string tfHigh = tfSec < 900 ? "15" : tfSec < 3600 ? "60" : tfSec < 14400 ? "240" : tfSec < 43200 ? "720" : tfSec < 86400 ? "D" : "W"
+bool hasLow = tfSec > 300  // 5m가 사다리 최하단
+qwFor(string tf) =>
+    tf == "5" ? 4000 : tf == "15" ? 2880 : tf == "60" ? 720 : 200
+int stLow  = request.security(syminfo.tickerid, tfLow,  f_regime2(qwFor(tfLow)))
+int stHigh = request.security(syminfo.tickerid, tfHigh, f_regime2(qwFor(tfHigh)))
+f_stateCol(int i) => na(i) ? color.new(color.gray, 80) : i == 0 ? color.green : i == 1 ? color.red : i == 2 ? color.blue : i == 3 ? color.gray : i == 4 ? color.orange : color.new(color.gray, 80)
+color colLow  = showBands and hasLow and not na(stLow) ? color.new(f_stateCol(stLow), 45) : na
+color colCur  = showBands and ready and cur >= 0 ? color.new(stCol, 40) : na
+color colHigh = showBands and not na(stHigh) ? color.new(f_stateCol(stHigh), 45) : na
+pB1t = plot(showBands ? 1.30 : na, "밴드경계1", color = color.new(color.gray, 100), editable = false)
+pB1b = plot(showBands ? 1.14 : na, "밴드경계2", color = color.new(color.gray, 100), editable = false)
+pB2t = plot(showBands ? 1.12 : na, "밴드경계3", color = color.new(color.gray, 100), editable = false)
+pB2b = plot(showBands ? 0.96 : na, "밴드경계4", color = color.new(color.gray, 100), editable = false)
+pB3t = plot(showBands ? 0.94 : na, "밴드경계5", color = color.new(color.gray, 100), editable = false)
+pB3b = plot(showBands ? 0.78 : na, "밴드경계6", color = color.new(color.gray, 100), editable = false)
+fill(pB1t, pB1b, color = colLow,  title = "하위TF 레짐 밴드")
+fill(pB2t, pB2b, color = colCur,  title = "현재TF 레짐 밴드")
+fill(pB3t, pB3b, color = colHigh, title = "상위TF 레짐 밴드")
+tfName(string tf) => tf == "5" ? "5m" : tf == "15" ? "15m" : tf == "60" ? "1h" : tf == "240" ? "4h" : tf == "720" ? "12h" : tf == "D" ? "1D" : tf
+var label lbBands = na
+if showBands and barstate.islast
+    label.delete(lbBands)
+    string lowTxt = hasLow ? tfName(tfLow) : "—"
+    lbBands := label.new(bar_index + 1, 1.04, "▲ " + lowTxt + "\n■ " + tfName(timeframe.period) + "\n▼ " + tfName(tfHigh), style = label.style_label_left, color = color.new(#131722, 30), textcolor = color.new(#c8c8c8, 0), size = size.small, tooltip = L("밴드: 위=하위TF · 중간=현재TF · 아래=상위TF (2축 근사·무FSM·참고용)", "Bands: top=lower TF · mid=current · bottom=higher TF (2-axis approx, no FSM)"))
 
 // 확신도 서브패널 — 선 색 = 현재 레짐 색 (실시간 봉은 직전 확정값: 리페인트 없음)
 plot(confShow, "confidence", color = ready and cur >= 0 ? stCol : color.gray, linewidth = 2)
