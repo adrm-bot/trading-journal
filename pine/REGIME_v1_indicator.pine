@@ -1,20 +1,27 @@
 //@version=6
-// REGIME v1.1 — 5-상태 레짐 분류기 (research/regime 파이썬 구현의 차트 포팅)
+// REGIME v1.3 — 5-상태 레짐 분류기 (research/regime 파이썬 구현의 차트 포팅)
 //
-// 산출물 계약: 캔들마다 {레짐, confidence} 만. 예측·목표가·시그널 없음.
+// 산출물 계약: 캔들마다 {레짐, confidence} 만. 셋업/전환감시 행은 표시 레이어(분류기 불변).
 // 5상태(색): 🟢상승추세 / 🔴하락추세 / 🔵수렴(돌파대기) / ⚪박스권 / 🟠난장판(관망)
 //
-// 파라미터는 파이썬 리서치에서 동결된 값 그대로 (재튜닝 금지 — 포킹패스 규율).
-// 검증된 사실(BTCUSDT 15m, 2022→2026 + ETH/SOL/XRP 무튜닝 복제):
-//   - 원시 ADX(25) 대비 진입이 중앙값 4~6캔들 늦은 대신 churn −33%·오경보 ~0.07/100봉
-//     — "늦지만 깨끗한" 레짐 게이트.
-//   - 정직성 고지: OI 융합의 +1캔들 조기화는 시간이동 널과 구별 불가(p=1.0) — OI 정렬의
-//     타이밍 알파는 미검출. ΔOI 하강(숏커버·청산)은 라벨 불변·확신만 삭감.
-//   - confirm_bars=1 로 올리면 리드 희생 0에 churn 추가 −26%.
-// 알림은 반드시 "Once Per Bar Close"로 설정 (FSM이 확정 봉에서만 갱신 — 리페인트 방지).
+// v1.3 기본기 강화:
+//   - 창 길이 벽시계 자동 스케일링(30일) — 어떤 TF 차트에서도 동일 의미 (기존: 15m 고정 봉수)
+//   - 상위 방향 1H·4H·1D 통합 행 / 눌림목 셋업 행(ADX_Gunner 규칙) / 전환 감시 행(엄격)
+//   - 테이블 배경(다크 차트 가독성) / 확신선 레짐 색 / 한·영 토글
+//
+// 검증된 사실(BTC 15m 2022→2026 + ETH/SOL/XRP 복제, 외부감사 Codex 반영):
+//   - 라벨 = 시장 '성격'(변동성 구조) 기술. 방향 예측력 없음 — 방향·레버리지는 상위 TF.
+//   - 눌림목 서식지(H1 추세+15m 수렴/박스) 자체는 통계 엣지 없음(사전등록 검증, 중앙값 약음)
+//     → 셋업 행은 '후보+트리거' 감지일 뿐, 엣지는 트리거·손절 구조가 만들어야 함.
+//   - OI 융합의 조기화는 널 대비 우월 증거 없음(p=1.0). confirm_bars=1 = 리드 희생 0에 churn −26%.
+// 알림은 반드시 "Once Per Bar Close"로 (확정 봉에서만 갱신 — 리페인트 방지).
 indicator("REGIME v1 — 5-state regime [Gunner]", overlay = false, max_bars_back = 5000, max_labels_count = 100)
 
-// ── 동결 파라미터 ────────────────────────────────────────────────────────────
+// ── 언어 ─────────────────────────────────────────────────────────────────────
+lang = input.string("한국어", "언어 / Language", options = ["한국어", "English"], group = "표시 / Display")
+L(string k, string e) => lang == "한국어" ? k : e
+
+// ── 동결 파라미터 (봉수는 벽시계 자동 스케일) ────────────────────────────────
 adxLen   = input.int(14,  "ADX/DI 기간",       group = "동결 파라미터(리서치)")
 adxLo    = input.float(20, "ADX 하한",          group = "동결 파라미터(리서치)")
 adxScale = input.float(15, "ADX 스케일",        group = "동결 파라미터(리서치)")
@@ -22,8 +29,6 @@ emaFLen  = input.int(20,  "EMA fast",           group = "동결 파라미터(리
 emaSLen  = input.int(50,  "EMA slow",           group = "동결 파라미터(리서치)")
 bbLen    = input.int(20,  "BB 기간",            group = "동결 파라미터(리서치)")
 bbK      = input.float(2.0, "BB 표준편차",      group = "동결 파라미터(리서치)")
-qWin     = input.int(2880, "분위수 창(봉)",     group = "동결 파라미터(리서치)", tooltip = "15m에서 30일")
-kOI      = input.int(8,   "ΔOI lookback(봉)",   group = "동결 파라미터(리서치)")
 deadQ    = input.int(25,  "데드존 분위(%)",     group = "동결 파라미터(리서치)")
 wDir     = 0.5
 wVol     = 0.3
@@ -31,11 +36,19 @@ wFuel    = 0.2
 nearTie  = 0.02
 minDwell    = input.int(0, "min_dwell(봉)",     group = "hysteresis (기본 OFF)")
 confirmBars = input.int(0, "confirm_bars(봉)",  group = "hysteresis (기본 OFF)", tooltip = "1로 올리면 리드 희생 없이 잦은 전환 −26% (리서치 스윕)")
+
+// 벽시계 스케일링: 리서치 동결값(15m 기준 30일=2880봉, ΔOI 2시간=8봉)을 TF 무관 유지
+int tfSec = timeframe.in_seconds()
+int barsPerDay = math.max(1, math.round(86400.0 / tfSec))
+int qWin = math.max(200, 30 * barsPerDay)      // 30일 분위수 창 (통계 하한 200봉)
+int kOI  = math.max(1, math.round(7200.0 / tfSec))   // ΔOI lookback = 2시간
+int dipLB = math.max(8, math.round(28800.0 / tfSec)) // '최근 하락 경유' = 8시간
+
 // ── 표시 옵션 ────────────────────────────────────────────────────────────────
-posStr   = input.string("우상단", "테이블 위치", options = ["좌상단", "중앙상단", "우상단", "좌중앙", "중앙", "우중앙", "좌하단", "중앙하단", "우하단"], group = "표시")
-ribbonMode = input.string("메인 차트", "리본 표시", options = ["메인 차트", "레짐 패널", "끄기"], group = "표시", tooltip = "다른 지표 배경과 겹쳐 어지러우면 '레짐 패널'이나 '끄기'로")
-showLbl  = input.bool(true, "레짐 전환 마커(차트)", group = "표시")
-tblSize  = input.string("보통", "테이블 글자", options = ["작게", "보통", "크게"], group = "표시")
+posStr   = input.string("우상단", "테이블 위치", options = ["좌상단", "중앙상단", "우상단", "좌중앙", "중앙", "우중앙", "좌하단", "중앙하단", "우하단"], group = "표시 / Display")
+ribbonMode = input.string("메인 차트", "리본 표시", options = ["메인 차트", "레짐 패널", "끄기"], group = "표시 / Display", tooltip = "다른 지표 배경과 겹쳐 어지러우면 '레짐 패널'이나 '끄기'로")
+showLbl  = input.bool(true, "레짐 전환 마커(차트)", group = "표시 / Display")
+tblSize  = input.string("보통", "테이블 글자", options = ["작게", "보통", "크게"], group = "표시 / Display")
 
 // ── 피처 (전부 인과: 현재 봉 종가까지만) ────────────────────────────────────
 [diP, diM, adx] = ta.dmi(adxLen, adxLen)
@@ -45,7 +58,7 @@ bbw  = 2 * bbK * ta.stdev(close, bbLen) / ta.sma(close, bbLen)
 atrp = atr / close
 volPct = (ta.percentrank(bbw, qWin) + ta.percentrank(atrp, qWin)) / 200.0  // 과거 전용
 
-// OI 피드: 현재 심볼 → 없으면 무기한(.P) 폴백 (현물 차트에서 OI OFF 되는 문제 해결)
+// OI 피드: 현재 심볼 → 없으면 무기한(.P) 폴백 (현물 차트 대응)
 string oiSym  = syminfo.prefix + ":" + syminfo.ticker + "_OI"
 string oiSymP = syminfo.prefix + ":" + syminfo.ticker + ".P_OI"
 oi1 = request.security(oiSym, timeframe.period, close, ignore_invalid_symbol = true)
@@ -132,77 +145,136 @@ else if not ready and barstate.isconfirmed
 // confidence = 합의 × 마진 × 수정자, [0,1] 클램프
 float agreement = ready and cur >= 0 ? score(cur) : na
 float runnerUp = 0.0
+int runnerIdx = -1
 if ready and cur >= 0
     for i = 0 to 4
         if i != cur and score(i) > runnerUp
             runnerUp := score(i)
+            runnerIdx := i
 bool dzDefined = oiOk and not na(dzDoi) and not na(dzDpr)
 float fuelMod = quad == 3 or quad == 4 ? 0.85 : dzDefined and quad == 0 ? 0.95 : 1.0
 float conf = na(agreement) ? na : math.max(0.0, math.min(1.0, agreement * (1.0 - 0.5 * (agreement > 1e-12 ? runnerUp / agreement : 2.0)) * fuelMod * (dzDefined ? 1.0 : 0.8)))
 
-// ── 상태 이름·색 (범례와 리본이 같은 색을 씀 — "무슨 색=무슨 시장") ─────────
+// ── 상태 이름·색 ─────────────────────────────────────────────────────────────
 color stCol = cur == 0 ? color.green : cur == 1 ? color.red : cur == 2 ? color.blue : cur == 3 ? color.gray : color.orange
-nameOf(i) => i == 0 ? "상승추세" : i == 1 ? "하락추세" : i == 2 ? "수렴(돌파대기)" : i == 3 ? "박스권" : i == 4 ? "난장판(관망)" : "준비 중"
+nameOf(i) => i == 0 ? L("상승추세", "Uptrend") : i == 1 ? L("하락추세", "Downtrend") : i == 2 ? L("수렴(돌파대기)", "Squeeze") : i == 3 ? L("박스권", "Range") : i == 4 ? L("난장판(관망)", "Chop") : L("준비 중", "Warming up")
 emojiOf(i) => i == 0 ? "🟢" : i == 1 ? "🔴" : i == 2 ? "🔵" : i == 3 ? "⚪" : i == 4 ? "🟠" : "…"
 
-// 리본 (진할수록 확신 높음): 메인 차트 / 레짐 패널 / 끄기
+// 리본 (진할수록 확신 높음)
 int transp = na(conf) ? 90 : int(90 - 70 * math.min(conf / 0.6, 1.0))
 bgcolor(ready and ribbonMode == "메인 차트" ? color.new(stCol, transp) : na, title = "regime ribbon (main)", force_overlay = true)
 bgcolor(ready and ribbonMode == "레짐 패널" ? color.new(stCol, transp) : na, title = "regime ribbon (pane)")
 
-// 상위 4H 방향 힌트 (단순 ADX/DI, 확정 봉만 — 리페인트 방지). 정밀 MTF는 current.py
+// ── 상위 방향 1H·4H·1D (단순 ADX/DI, 확정 봉만 — 리페인트 방지) ─────────────
 f_htfDir() =>
     [dp, dm, ax] = ta.dmi(adxLen, adxLen)
     [dp[1], dm[1], ax[1]]
-[dp4, dm4, adx4] = request.security(syminfo.tickerid, "240", f_htfDir())
-string htfTxt = na(adx4) ? "…" : adx4 >= 25 and dp4 > dm4 ? "🟢 추세 위" : adx4 >= 25 and dm4 > dp4 ? "🔴 추세 아래" : "⚪ 비추세"
+[dp60, dm60, ax60]  = request.security(syminfo.tickerid, "60",  f_htfDir())
+[dp240, dm240, ax240] = request.security(syminfo.tickerid, "240", f_htfDir())
+[dpD, dmD, axD]     = request.security(syminfo.tickerid, "D",   f_htfDir())
+dirIcon(dp, dm, ax) => na(ax) ? "…" : ax >= 25 and dp > dm ? "🟢" : ax >= 25 and dm > dp ? "🔴" : "⚪"
+string htfRow = "1H " + dirIcon(dp60, dm60, ax60) + "  4H " + dirIcon(dp240, dm240, ax240) + "  1D " + dirIcon(dpD, dmD, axD)
 
-// 전환 마커: 과거로 스크롤하며 "언제 무슨 시장으로 바뀌었나" 확인용
-if showLbl and barstate.isconfirmed and cur >= 0 and cur != cur[1]
-    label.new(bar_index, na, emojiOf(cur) + " " + nameOf(cur), yloc = yloc.abovebar, style = label.style_label_down, color = color.new(stCol, 25), textcolor = color.white, size = size.small, force_overlay = true)
+// ── 눌림목 셋업 감지 (ADX_Gunner 규칙 이식 — 표시 레이어, 분류기 불변) ──────
+// HTF 스윗스팟: 셋업 기준 상위TF = 한 단계 위 (15m→1H, 1H→4H, 4H이상→1D)
+float hAx = tfSec < 3600 ? ax60 : tfSec < 14400 ? ax240 : axD
+float hDp = tfSec < 3600 ? dp60 : tfSec < 14400 ? dp240 : dpD
+float hDm = tfSec < 3600 ? dm60 : tfSec < 14400 ? dm240 : dmD
+string hTfName = tfSec < 3600 ? "1H" : tfSec < 14400 ? "4H" : "1D"
+bool hSweetUp = not na(hAx) and hAx >= 20 and hAx <= 40 and hDp > hDm
+bool hSweetDn = not na(hAx) and hAx >= 20 and hAx <= 40 and hDm > hDp
+bool hMature  = not na(hAx) and hAx > 40
+// EMA 정배열(보조 확인)
+e100 = ta.ema(close, 100)
+e200 = ta.ema(close, 200)
+e20  = ta.ema(close, emaFLen)
+e50  = ta.ema(close, emaSLen)
+bool stackUp = e20 > e50 and e50 > e100 and e100 > e200
+bool stackDn = e20 < e50 and e50 < e100 and e100 < e200
+// DI 재가속 트리거 (2봉 확정, ADX_Gunner식 단순판)
+float spread = diP - diM
+float sprAbs = math.abs(spread)
+bool reUp = spread > 0 and sprAbs > sprAbs[1] and sprAbs - sprAbs[2] > 0
+bool reDn = spread < 0 and sprAbs > sprAbs[1] and sprAbs - sprAbs[2] > 0
+// 최근 반대 레그 경유(8h) — "하락 후 수렴" 요소 (barssince는 최초 발생 전 na → 가드)
+int bsDn = ta.barssince(cur == 1)
+int bsUp = ta.barssince(cur == 0)
+bool dippedDn = not na(bsDn) and bsDn <= dipLB
+bool dippedUp = not na(bsUp) and bsUp <= dipLB
+bool inPB = cur == 2 or cur == 3   // 수렴/박스권
+string setupTxt = na
+if hMature
+    setupTxt := "⚠ " + hTfName + " " + L("과열(ADX>40) — 신규 진입 리스크↑", "mature (ADX>40) — new entries risky")
+else if hSweetUp and inPB
+    string ext = (stackUp ? " · " + L("EMA정배열", "EMA stacked") : "") + (dippedDn ? " · " + L("하락경유", "post-dip") : "")
+    setupTxt := (reUp ? "⚡ " + L("눌림목 롱 — DI 재가속", "Pullback LONG — DI re-accel") : "🟡 " + L("눌림목 롱 후보 (트리거 대기)", "Pullback long candidate (await trigger)")) + ext
+else if hSweetDn and inPB
+    string ext2 = (stackDn ? " · " + L("EMA역배열", "EMA stacked dn") : "") + (dippedUp ? " · " + L("반등경유", "post-pop") : "")
+    setupTxt := (reDn ? "⚡ " + L("되돌림 숏 — DI 재가속", "Pullback SHORT — DI re-accel") : "🟡 " + L("되돌림 숏 후보 (트리거 대기)", "Pullback short candidate (await trigger)")) + ext2
+else
+    setupTxt := L("없음", "none")
+bool setupTrig = (hSweetUp and inPB and reUp) or (hSweetDn and inPB and reDn)
 
-// 확신도 서브패널 — 실시간 봉에서는 직전 확정 봉 값 표시(인트라바 리페인트 제거)
+// ── 전환 감시 (엄격: 2조건 동시 — 현직 열세 지속 + 최근 확신 급락) ──────────
 float confShow = barstate.isrealtime ? conf[1] : conf
 confQ20 = ta.percentile_nearest_rank(conf[1], qWin, 20)
 float confQ20Show = barstate.isrealtime ? confQ20[1] : confQ20
-plot(confShow, "confidence", color = color.new(color.blue, 0), linewidth = 1)
-plot(confQ20Show, "conf rolling q20", color = color.new(color.gray, 40), style = plot.style_line)
 collapse = not na(confShow) and not na(confShow[1]) and not na(confQ20Show) and not na(confQ20Show[1]) and confShow < confQ20Show and confShow[1] < confQ20Show[1]
+var int negRun = 0
+var int watchNext = -1
+if barstate.isconfirmed
+    bool losing = ready and cur >= 0 and runnerUp > score(cur)
+    negRun := losing ? negRun + 1 : 0
+    watchNext := losing ? runnerIdx : -1
+int sinceCollapse = ta.barssince(collapse)
+bool watchOn = negRun >= 2 and not na(sinceCollapse) and sinceCollapse <= 8
+string watchTxt = watchOn ? "⚠ " + L("표 이동 중 → 2위: ", "votes shifting → #2: ") + emojiOf(watchNext) + " " + nameOf(watchNext) + " (" + str.tostring(negRun) + L("봉째", " bars") + ")" : collapse ? "⚠ " + L("확신 급락 — 전환 가능성, 사이즈 축소", "confidence collapse — possible shift, size down") : L("안정 — 현 상태 우세", "stable — incumbent leads")
+
+// 전환 마커
+if showLbl and barstate.isconfirmed and cur >= 0 and cur != cur[1]
+    label.new(bar_index, na, emojiOf(cur) + " " + nameOf(cur), yloc = yloc.abovebar, style = label.style_label_down, color = color.new(stCol, 25), textcolor = color.white, size = size.small, force_overlay = true)
+
+// 확신도 서브패널 — 선 색 = 현재 레짐 색 (실시간 봉은 직전 확정값: 리페인트 없음)
+plot(confShow, "confidence", color = ready and cur >= 0 ? stCol : color.gray, linewidth = 2)
+plot(confQ20Show, "conf rolling q20", color = color.new(color.gray, 40), style = plot.style_line)
 plotshape(collapse, "confidence collapse", style = shape.xcross, location = location.bottom, color = color.new(color.red, 0), size = size.tiny)
 
-// ── 상태 테이블 (메인 차트 위, 위치 선택 가능) ──────────────────────────────
+// ── 상태 테이블 (메인 차트, 배경 있는 가독 버전) ────────────────────────────
 posOf(string s) =>
     s == "좌상단" ? position.top_left : s == "중앙상단" ? position.top_center : s == "우상단" ? position.top_right : s == "좌중앙" ? position.middle_left : s == "중앙" ? position.middle_center : s == "우중앙" ? position.middle_right : s == "좌하단" ? position.bottom_left : s == "중앙하단" ? position.bottom_center : position.bottom_right
 txtSz = tblSize == "작게" ? size.small : tblSize == "크게" ? size.large : size.normal
+color BG  = color.new(#131722, 10)
+color BG2 = color.new(#1e222d, 10)
+color TXT = color.new(#e8e8e8, 0)
 
-// 확신 등급: 절대값(상한 ~0.6)이 아니라 "최근 30일 나 자신 대비" 분위로 번역
 confPct = ta.percentrank(conf, qWin)
+doTxt(i) => i == 0 ? L("눌림목 롱 (상위 방향 확인)", "Pullback long (check HTF)") : i == 1 ? L("되돌림 숏 (상위 방향 확인)", "Pullback short (check HTF)") : i == 2 ? L("돌파 '확인 후' 진입 · 레벨 알림", "Enter AFTER confirmed break") : i == 3 ? L("박스 상/하단 역매매 (거래량 확인)", "Fade range edges (volume)") : L("관망 · 사이즈 축소", "Stand aside · size down")
+dontTxt(i) => i == 0 ? L("역추세 숏 · 물타기", "No counter-shorts · no averaging") : i == 1 ? L("역추세 롱 · 나이프 캐칭", "No counter-longs · no knife-catch") : i == 2 ? L("첫 돌파 추격 · 미리 방향 베팅", "No chasing 1st break · no pre-bet") : i == 3 ? L("추세추종 · 돌파 추격", "No trend-following · no breakouts") : L("방향 베팅 전부 · 복수 매매", "No directional bets · no revenge")
 
-// 플레이북 문구에 143k 백테스트 인사이트 반영: 돌파는 최약체 생존군(휩소) → 수렴에서
-// '첫 돌파 추격' 금지·확인 후 진입, 박스권 역매매는 거래량 동반 이탈/회귀만
-doTxt(i) => i == 0 ? "눌림목 롱 (4H 방향 확인)" : i == 1 ? "되돌림 숏 (4H 방향 확인)" : i == 2 ? "돌파 '확인 후' 진입 · 레벨 알림" : i == 3 ? "박스 상/하단 역매매 (거래량 확인)" : "관망 · 사이즈 축소"
-dontTxt(i) => i == 0 ? "역추세 숏 · 물타기" : i == 1 ? "역추세 롱 · 나이프 캐칭" : i == 2 ? "첫 돌파 추격 · 미리 방향 베팅" : i == 3 ? "추세추종 · 돌파 추격" : "방향 베팅 전부 · 복수 매매"
-
-var table tb = table.new(posOf(posStr), 2, 8, border_width = 1, force_overlay = true)
+var table tb = table.new(posOf(posStr), 2, 9, border_width = 1, border_color = color.new(#000000, 60), force_overlay = true)
 if barstate.islast
-    string gradeTxt = na(confPct) ? "계산 중…" : (confPct >= 70 ? "높음 ●●●" : confPct >= 30 ? "보통 ●●○" : "낮음 ●○○") + "  (" + str.tostring(conf, "0.00") + ")"
-    string dataTxt = dzDefined ? (oiFromPerp ? "정상 (무기한 OI 폴백)" : "정상 (OI 포함)") : "OI 준비/끊김 → 보수 모드(확신 하향)"
-    table.cell(tb, 0, 0, "지금 시장", text_size = txtSz)
-    table.cell(tb, 1, 0, emojiOf(cur) + " " + nameOf(cur), text_color = color.white, bgcolor = stCol, text_size = txtSz)
-    table.cell(tb, 0, 1, "판단 확신", text_size = txtSz)
-    table.cell(tb, 1, 1, gradeTxt, text_size = txtSz, tooltip = "최근 30일의 나 자신과 비교한 상대 등급")
-    table.cell(tb, 0, 2, "4H 방향(참고)", text_size = txtSz)
-    table.cell(tb, 1, 2, htfTxt, text_size = txtSz, tooltip = "상위TF 단순 ADX/DI 힌트. 방향·레버리지 결정은 4H가 우선 (정밀 MTF: python current.py)")
-    table.cell(tb, 0, 3, "지금 할 것", text_size = txtSz)
-    table.cell(tb, 1, 3, cur >= 0 ? doTxt(cur) : "…", text_size = txtSz)
-    table.cell(tb, 0, 4, "하지 말 것", text_size = txtSz)
-    table.cell(tb, 1, 4, cur >= 0 ? dontTxt(cur) : "…", text_size = txtSz, text_color = color.new(color.red, 20))
-    table.cell(tb, 0, 5, "데이터", text_size = txtSz)
-    table.cell(tb, 1, 5, dataTxt, text_size = txtSz)
-    table.cell(tb, 0, 6, collapse ? "⚠ 전환 경고" : "", text_size = txtSz, bgcolor = collapse ? color.new(color.red, 70) : na)
-    table.cell(tb, 1, 6, collapse ? "확신 급락 — 시장 성격이 바뀌는 중일 수 있음. 사이즈 축소" : "", text_size = txtSz, bgcolor = collapse ? color.new(color.red, 70) : na)
-    table.cell(tb, 0, 7, "색 안내", text_size = size.small)
-    table.cell(tb, 1, 7, "🟢상승 🔴하락 🔵수렴 ⚪박스 🟠난장", text_size = size.small, text_color = color.new(color.gray, 20))
+    string gradeTxt = na(confPct) ? L("계산 중…", "computing…") : (confPct >= 70 ? L("높음 ●●●", "High ●●●") : confPct >= 30 ? L("보통 ●●○", "Mid ●●○") : L("낮음 ●○○", "Low ●○○")) + "  (" + str.tostring(conf, "0.00") + ")"
+    string dataTxt = dzDefined ? (oiFromPerp ? L("정상 (무기한 OI 폴백)", "OK (perp OI fallback)") : L("정상 (OI 포함)", "OK (with OI)")) : L("OI 준비/끊김 → 보수 모드", "OI warming/missing → conservative")
+    string dwellTxt = cur >= 0 ? "  ·  " + str.tostring(sinceSwitch) + L("봉째", " bars") : ""
+    table.cell(tb, 0, 0, L("지금 시장", "Market now"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 0, emojiOf(cur) + " " + nameOf(cur) + dwellTxt, text_color = color.white, bgcolor = cur >= 0 ? color.new(stCol, 20) : BG2, text_size = txtSz)
+    table.cell(tb, 0, 1, L("판단 확신", "Confidence"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 1, gradeTxt, text_size = txtSz, bgcolor = BG2, text_color = TXT, tooltip = L("최근 30일의 나 자신과 비교한 상대 등급", "Percentile vs its own last 30 days"))
+    table.cell(tb, 0, 2, L("상위 방향", "HTF direction"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 2, htfRow, text_size = txtSz, bgcolor = BG2, text_color = TXT, tooltip = L("단순 ADX25/DI 기준. 방향·레버리지 결정은 상위 TF 우선", "Simple ADX25/DI. Direction/leverage from HTF first"))
+    table.cell(tb, 0, 3, L("셋업", "Setup"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 3, setupTxt, text_size = txtSz, bgcolor = setupTrig ? color.new(color.teal, 40) : BG2, text_color = TXT, tooltip = L("서식지 자체는 통계 엣지 없음(연구 검증) — 트리거·손절 구조 필수. HTF 스윗스팟=ADX 20~40", "Habitat alone has NO edge (validated) — trigger & stop structure required. HTF sweet spot = ADX 20-40"))
+    table.cell(tb, 0, 4, L("전환 감시", "Shift watch"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 4, watchTxt, text_size = txtSz, bgcolor = watchOn or collapse ? color.new(color.red, 60) : BG2, text_color = TXT, tooltip = L("엄격 기준: 현직 점수 열세 2봉+ AND 최근 8봉 내 확신 급락 — 2위 상태는 예측이 아니라 현재 점수 순위", "Strict: incumbent losing 2+ bars AND recent collapse. #2 is current score rank, not a forecast"))
+    table.cell(tb, 0, 5, L("지금 할 것", "Do now"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 5, cur >= 0 ? doTxt(cur) : "…", text_size = txtSz, bgcolor = BG2, text_color = TXT)
+    table.cell(tb, 0, 6, L("하지 말 것", "Avoid"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 6, cur >= 0 ? dontTxt(cur) : "…", text_size = txtSz, bgcolor = BG2, text_color = color.new(color.red, 15))
+    table.cell(tb, 0, 7, L("데이터", "Data"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 7, dataTxt, text_size = txtSz, bgcolor = BG2, text_color = TXT)
+    table.cell(tb, 0, 8, L("색 안내", "Legend"), text_size = size.small, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 8, "🟢" + nameOf(0) + " 🔴" + nameOf(1) + " 🔵" + nameOf(2) + " ⚪" + nameOf(3) + " 🟠" + nameOf(4), text_size = size.small, bgcolor = BG2, text_color = color.new(#c8c8c8, 0))
 
-alertcondition(ta.change(cur) != 0, "Regime change", "REGIME v1: 레짐 전환")
-alertcondition(collapse, "Confidence collapse", "REGIME v1: 확신 급락 — 전환 가능성")
+alertcondition(ta.change(cur) != 0, "Regime change", "REGIME v1: 레짐 전환 / regime changed")
+alertcondition(collapse, "Confidence collapse", "REGIME v1: 확신 급락 — 전환 가능성 / confidence collapse")
+alertcondition(setupTrig, "Pullback trigger", "REGIME v1: 눌림목 셋업 + DI 재가속 / pullback setup + DI re-accel")
