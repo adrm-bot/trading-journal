@@ -128,7 +128,7 @@ def build_live_frame(symbol: str, interval: str = "15m", days: int = 60,
 
 
 NAME = {"TREND_UP": "상승추세", "TREND_DOWN": "하락추세", "SQUEEZE": "수렴(돌파대기)",
-        "RANGE": "박스권", "CHOP": "난장판(관망)"}
+        "RANGE": "박스권", "CHOP": "스퀴즈(관망)"}
 EMOJI = {"TREND_UP": "🟢", "TREND_DOWN": "🔴", "SQUEEZE": "🔵", "RANGE": "⚪", "CHOP": "🟠"}
 SUPER = {"TREND_UP": "UP", "TREND_DOWN": "DOWN"}
 
@@ -260,16 +260,17 @@ def main():
               f"{tag_for(interval, r['regime'])}")
     if len(supers) == 3:
         if len(set(supers)) == 1 and supers[0] != "NT":
-            verdict = f"세 TF 모두 {'상승' if supers[0] == 'UP' else '하락'} 방향 — 강한 합의"
+            d = "상승" if supers[0] == "UP" else "하락"
+            verdict = f"세 타임프레임이 모두 {d} 방향입니다 — 합의가 강한 상태입니다"
         elif len(set(supers)) == 1:
-            verdict = "세 TF 모두 비추세 — 방향 베팅 근거 없음"
+            verdict = "세 타임프레임 모두 뚜렷한 추세가 없습니다 — 방향 베팅의 근거가 없는 구간입니다"
         elif supers[1] == supers[2] and supers[1] != "NT":
             d = "상승" if supers[1] == "UP" else "하락"
-            verdict = f"상위(1h·4h) {d} 일치 — 방향 우세, 15m은 진입 타이밍 대기"
+            verdict = f"상위 타임프레임(1h·4h)이 {d}으로 일치합니다 — 방향은 우세하니 15m은 진입 타이밍용으로 쓰세요"
         elif supers[0] == supers[1] and supers[0] != "NT":
-            verdict = "단기(15m·1h) 일치, 4h 불일치 — 부분 합의, 사이즈 보수"
+            verdict = "단기(15m·1h)는 일치하지만 4h가 다릅니다 — 부분 합의이니 사이즈를 보수적으로 가져가세요"
         else:
-            verdict = "혼조 — TF 간 성격 불일치, 보수적으로"
+            verdict = "혼조입니다 — 타임프레임 간 성격이 엇갈리니 보수적으로 접근하세요"
         print(f"  판정: {verdict}")
     print()
     # 플레이북 — 충돌/표류 시 레인지 페이드 문구 대체 (표시층, Pine v1.6 동일 규칙)
@@ -280,19 +281,22 @@ def main():
                     for i in ("1h", "4h"))
     conflict = regime in ("RANGE", "SQUEEZE") and (drift15 or htf_trend)
     pb = REGIME_PLAYBOOK[regime]
-    print(f"플레이북 [{NAME[regime]}]{' — ⚠ 충돌/표류 구간' if conflict else ''}")
+    print(f"권고 [{NAME[regime]}]{' — ⚠ 충돌/표류 구간' if conflict else ''}")
     if conflict:
-        print("  지금 할 것 : 박스 레벨 신뢰 낮음 — 페이드 보류 · 트리거 확정 후 · 사이즈 축소")
-        print("  하지 말 것 : 이동 중인 박스 경계 역매매, 물타기")
-        print("  근거       : 상위TF 추세 또는 24h 표류 — 어느 방향도 엣지 없음(전방 0.49~0.53),")
-        print("               박스 페이드의 전제(레벨 정상성)만 깨진 상태. 방향 신호 아님.")
+        print("  지금 할 것 : 박스 상·하단 레벨을 믿기 어려운 구간입니다 — 역매매는 보류하고,")
+        print("               진입 신호가 확정된 뒤 평소보다 작은 사이즈로 접근하세요")
+        print("  하지 말 것 : 움직이고 있는 박스 경계에서의 역매매, 물타기")
+        print("  근거       : 상위 타임프레임이 추세이거나 가격이 24시간째 한쪽으로 밀리는 중입니다.")
+        print("               다만 어느 방향으로 갈지에 대한 통계적 우위는 없었습니다 — 방향 신호가")
+        print("               아니라 '레벨을 믿지 말라'는 경고로 읽어주세요.")
     else:
         print(f"  지금 할 것 : {pb['primary']}")
         print(f"  보조       : {', '.join(pb['secondary'])}")
         print(f"  하지 말 것 : {', '.join(pb['avoid'])}")
     hist = base["confidence"].to_numpy()[-2880:]
     if conf < np.nanquantile(hist, 0.2):
-        print("\n⚠ 전환 경고: 확신이 최근 30일 하위 20% — 시장 성격이 바뀌는 중일 수 있음. 사이즈 축소.")
+        print("\n⚠ 전환 경고: 확신이 최근 30일 중 하위 20% 수준까지 떨어졌습니다 — 시장 성격이"
+              " 바뀔 가능성이 있으니 사이즈를 줄이는 편이 안전합니다.")
 
 
 if __name__ == "__main__":

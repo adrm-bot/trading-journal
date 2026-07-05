@@ -411,7 +411,7 @@ def posthoc(symbol: str, horizons=(4, 16, 96)):
     (RESULTS / f"{symbol}_posthoc.json").write_text(json.dumps(out, indent=1))
 
     names = {"TREND_UP": "상승추세", "TREND_DOWN": "하락추세", "SQUEEZE": "수렴",
-             "RANGE": "박스권", "CHOP": "난장판"}
+             "RANGE": "박스권", "CHOP": "스퀴즈"}
     hours = {4: "1시간", 16: "4시간", 96: "24시간"}
     print(f"\n[{symbol}] 상태별 사후 성과 — '라벨이 붙은 뒤 실제로 어떻게 갔나'")
     print(f"{'상태':12s}" + "".join(f"{hours.get(h, str(h)+'봉'):>26s}" for h in horizons))

@@ -23,7 +23,7 @@ log = logging.getLogger("regime")
 FAPI = "https://fapi.binance.com"
 REGIMES = ("TREND_UP", "TREND_DOWN", "SQUEEZE", "RANGE", "CHOP")
 NAME = {"TREND_UP": "상승추세", "TREND_DOWN": "하락추세", "SQUEEZE": "수렴(돌파대기)",
-        "RANGE": "박스권", "CHOP": "난장판(관망)"}
+        "RANGE": "박스권", "CHOP": "스퀴즈(관망)"}
 EMOJI = {"TREND_UP": "🟢", "TREND_DOWN": "🔴", "SQUEEZE": "🔵", "RANGE": "⚪", "CHOP": "🟠"}
 SUPER = {"TREND_UP": "UP", "TREND_DOWN": "DOWN"}
 
@@ -33,11 +33,11 @@ ADX_LO, ADX_SCALE = 20.0, 15.0
 W_DIR, W_VOL, W_FUEL, NEAR_TIE = 0.5, 0.3, 0.2, 0.02
 RAMP_LO, RAMP_HI = (0.15, 0.25), (0.75, 0.85)
 DEAD_Q = 0.25
-QUAD_TEXT = {1: "🟩 신규 롱 유입 — 추세 연료(라벨 투표)",
-             2: "🟥 신규 숏 유입 — 추세 연료(라벨 투표)",
-             3: "↩ 숏 커버 — 라벨 불변·확신 −15%",
-             4: "↩ 롱 청산 — 라벨 불변·확신 −15%",
-             0: "— 데드존(유의미한 ΔOI 없음)"}
+QUAD_TEXT = {1: "🟩 신규 롱 자금이 들어오고 있습니다 — 추세 연료로 판정에 반영 중",
+             2: "🟥 신규 숏 자금이 들어오고 있습니다 — 추세 연료로 판정에 반영 중",
+             3: "↩ 숏 커버(기존 숏 정리) 중 — 판정은 그대로, 확신만 15% 낮춰 반영",
+             4: "↩ 롱 청산(기존 롱 정리) 중 — 판정은 그대로, 확신만 15% 낮춰 반영",
+             0: "— 특별한 OI 변화가 없습니다"}
 
 _TTL = 300
 _live_cache: dict = {}  # {symbol: {"at": ts, "data": payload}}
@@ -358,32 +358,35 @@ def live(symbol: str = "BTCUSDT") -> dict:
                     "drift_pct": None if pd.isna(d_val) else round(d_val * 100, 1),
                     "ts": reg[okm].index[-1].strftime("%m-%d %H:%M")})
         if interval == "15m" and d_on and not pd.isna(d_val):
-            warn = f"지난 24h {d_val * 100:+.1f}% 표류 — 박스 레벨 신뢰 낮음, 페이드 보류 (과거 기술일 뿐 방향 엣지 없음)"
+            warn = (f"지난 24시간 동안 가격이 {d_val * 100:+.1f}% 표류했습니다 — 박스 레벨을 믿기 어려운 "
+                    "구간이니 역매매는 보류하세요 (과거 사실 표시일 뿐, 그 방향으로 계속 간다는 뜻은 아닙니다)")
         if interval == "15m" and len(hist) > 500 and cf < float(np.quantile(hist[-2880:], 0.2)):
-            clps = "확신이 최근 30일 하위 20% — 성격 전환 가능성, 사이즈 축소"
+            clps = "확신이 최근 30일 중 하위 20% 수준까지 떨어졌습니다 — 시장 성격이 바뀔 가능성이 있으니 사이즈를 줄이는 편이 안전합니다"
             warn = f"{warn} · {clps}" if warn else clps
     if not tfs:
         return {"available": False, "error": "레짐 데이터 조회 실패 (Binance 공개 API)"}
     if len(supers) == 3:
         if len(set(supers)) == 1 and supers[0] != "NT":
-            verdict = f"세 TF 모두 {'상승' if supers[0] == 'UP' else '하락'} 방향 — 강한 합의"
+            d = "상승" if supers[0] == "UP" else "하락"
+            verdict = f"세 타임프레임이 모두 {d} 방향입니다 — 합의가 강한 상태입니다"
         elif len(set(supers)) == 1:
-            verdict = "세 TF 모두 비추세 — 방향 베팅 근거 없음"
+            verdict = "세 타임프레임 모두 뚜렷한 추세가 없습니다 — 방향 베팅의 근거가 없는 구간입니다"
         elif supers[1] == supers[2] and supers[1] != "NT":
-            verdict = f"상위(1h·4h) {'상승' if supers[1] == 'UP' else '하락'} 일치 — 방향 우세, 15m은 진입 타이밍 대기"
+            d = "상승" if supers[1] == "UP" else "하락"
+            verdict = f"상위 타임프레임(1h·4h)이 {d}으로 일치합니다 — 방향은 우세하니 15m은 진입 타이밍용으로 쓰세요"
         elif supers[0] == supers[1] and supers[0] != "NT":
-            verdict = "단기(15m·1h) 일치, 4h 불일치 — 부분 합의, 사이즈 보수"
+            verdict = "단기(15m·1h)는 일치하지만 4h가 다릅니다 — 부분 합의이니 사이즈를 보수적으로 가져가세요"
         else:
-            verdict = "혼조 — TF 간 성격 불일치, 보수적으로"
+            verdict = "혼조입니다 — 타임프레임 간 성격이 엇갈리니 보수적으로 접근하세요"
     else:
-        verdict = "일부 TF 데이터 부족"
+        verdict = "일부 타임프레임의 데이터가 부족합니다"
     if quad_info is None:
         quad_info = {"code": None, "text": "OI 미제공 심볼 — 가격 2축으로 판정", "oi": False}
     data = {"available": True, "symbol": symbol, "tfs": tfs, "verdict": verdict, "warn": warn,
             "quad": quad_info, "ribbons": ribbons, "ribbon": ribbons.get("15m"),
-            "basis": ("라이브 3축(방향·변동성·OI 사분면)" if quad_info["oi"] else
-                      "가격 기반 2축(방향·변동성)")
-                     + " — 사분면은 ΔOI↑만 라벨 투표, ΔOI↓는 확신 삭감(연구 반영)"}
+            "basis": ("라이브 3축(방향·변동성·OI 사분면) 판정" if quad_info["oi"] else
+                      "가격 기반 2축(방향·변동성) 판정")
+                     + " — OI가 늘어나는 경우만 판정에 반영하고, 줄어드는 경우는 확신만 낮춥니다"}
     _live_cache[symbol] = {"at": now, "data": data}
     return data
 

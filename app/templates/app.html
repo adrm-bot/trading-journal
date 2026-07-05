@@ -447,7 +447,7 @@ function rgRibbonSvg(rbs){
   const ticks=[1,2,3].map(k=>`<line x1="${(k*25)}%" y1="0" x2="${(k*25)}%" y2="100%" stroke="#0e1116" stroke-opacity="0.7" stroke-width="1"/>`).join("");
   const xl=[H,H*0.75,H*0.5,H*0.25].map(v=>`<span>${rgSpan(v)} 전</span>`).join("")+`<span>지금→</span>`;
   const sel=avail.map(k=>`<button class="rgtf${k===t?' on':''}" onclick="rgSetTf('${k}')">${k.toUpperCase()}</button>`).join("");
-  return `<div class="rgrib" data-tip="${t} 레짐 타임라인(왼쪽=과거, 오른쪽=지금) — 색=상태(색 안내 참조), 진할수록 그 시점 확신 높음">
+  return `<div class="rgrib" data-tip="${t} 레짐 타임라인입니다 (왼쪽이 과거, 오른쪽이 지금). 색은 그 시점의 시장 상태이고, 진할수록 판정 확신이 높았다는 뜻입니다.">
     <div class="rgrib-head">레짐 흐름 <span>· 최근 ${rgSpan(H)}</span><span class="rgtfs">${sel}</span></div>
     <svg width="100%" height="20" preserveAspectRatio="none" style="display:block;border-radius:4px">${rects}${ticks}</svg>
     <div class="rgrib-x">${xl}</div></div>`;
@@ -492,7 +492,7 @@ function rgQuadSvg(qp,code){
     } else { moveGlyph="·"; }
   }
   const lbl=(t,x,y,anc,col)=>`<text x="${x}" y="${y}" font-size="8.5" fill="${col||'#8b949e'}" text-anchor="${anc}" font-family="monospace">${t}</text>`;
-  return `<div class="rgquad" data-tip="OI 4사분면 실좌표 — x=Δ가격(2h,%), y=ΔOI(2h,%) · 어두운 십자 밴드=데드존(유의미하지 않은 변화) · 회색 궤적=최근 6시간, 큰 점=지금 · ΔOI↑ 반쪽(위)만 라벨 투표, ΔOI↓(아래)는 확신 삭감">
+  return `<div class="rgquad" data-tip="OI 4사분면을 실제 좌표로 보여줍니다. 가로축은 최근 2시간의 가격 변화(%), 세로축은 미결제약정(OI) 변화(%)입니다. 가운데 어두운 십자 밴드는 의미 있는 변화로 치지 않는 데드존이고, 회색 궤적은 최근 6시간의 이동 경로, 큰 점이 지금 위치입니다. 위쪽 반(OI 증가)만 판정에 반영하고, 아래쪽 반(OI 감소)은 확신만 낮춥니다.">
     <svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
       ${tint}${dz}
       <line x1="${PAD-6}" y1="${C}" x2="${S-PAD+6}" y2="${C}" stroke="#3a4048" stroke-width="1"/>
@@ -512,7 +512,7 @@ function regimePanel(rg){
     const drift=t.drift_on&&t.drift_pct!=null?` · <span style="color:#d29922">표류${t.drift_pct>0?'+':''}${t.drift_pct}%</span>`:'';
     return mchip(esc(t.tf),`<span style="color:${c}">${t.emoji} ${esc(t.name)}</span>`,
       `확신 ${esc(t.grade||"—")}${t.top_pct!=null?` · 상위 ${t.top_pct}%`:` (${t.conf})`}${drift}`,"",
-      `${t.tf} 마지막 완결봉 ${t.ts} UTC · 확신 절대값 ${t.conf} — 최근 30일 자기 분위 등급${t.drift_on?` · 표류=지난 24h 순이동(과거 기술 — 방향 지속 엣지 없음, 박스 레벨 신뢰 낮음 경고)`:''} · 라벨은 시장 '성격'(변동성 구조) — 방향 예측 아님`);}).join("");
+      `${t.tf} 기준, 마지막 완결봉 ${t.ts} UTC의 판정입니다. 확신 점수는 ${t.conf}이고, 등급은 최근 30일 동안의 자기 자신과 비교한 상대 수준입니다.${t.drift_on?` '표류'는 지난 24시간 동안 가격이 한쪽으로 밀렸다는 과거 사실 표시로, 박스 레벨을 믿기 어렵다는 경고일 뿐 그 방향으로 계속 간다는 뜻은 아닙니다.`:''} 이 라벨은 시장의 성격(변동성 구조)을 설명하는 것이지 방향 예측이 아닙니다.`);}).join("");
   const warn=lv.warn?`<p class="empty-inline" style="color:var(--red,#f85149)">⚠ ${esc(lv.warn)}</p>`:"";
   const rows=(rg.perf&&rg.perf.rows)||[];
   const perf=rows.length?`<div class="table-wrap rgperf" style="margin-top:8px"><table><thead><tr><th data-tip="진입 시각 기준으로 그 시점 레짐에 매칭">레짐</th><th class="num">거래</th><th class="num">승률</th><th class="num">합손익</th><th class="num">평균R</th></tr></thead><tbody>${
