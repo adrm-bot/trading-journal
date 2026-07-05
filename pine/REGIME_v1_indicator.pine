@@ -341,13 +341,16 @@ confPct = ta.percentrank(conf, qWin)
 doTxt(i) => i == 0 ? L("눌림목 롱 (상위 방향 확인)", "Pullback long (check HTF)") : i == 1 ? L("되돌림 숏 (상위 방향 확인)", "Pullback short (check HTF)") : i == 2 ? L("돌파 '확인 후' 진입 · 레벨 알림", "Enter AFTER confirmed break") : i == 3 ? L("박스 상/하단 역매매 (거래량 확인)", "Fade range edges (volume)") : L("관망 · 사이즈 축소", "Stand aside · size down")
 dontTxt(i) => i == 0 ? L("역추세 숏 · 물타기", "No counter-shorts · no averaging") : i == 1 ? L("역추세 롱 · 나이프 캐칭", "No counter-longs · no knife-catch") : i == 2 ? L("첫 돌파 추격 · 미리 방향 베팅", "No chasing 1st break · no pre-bet") : i == 3 ? L("추세추종 · 돌파 추격", "No trend-following · no breakouts") : L("방향 베팅 전부 · 복수 매매", "No directional bets · no revenge")
 
-var table tb = table.new(posOf(posStr), 2, 9, border_width = 1, border_color = color.new(#000000, 60), force_overlay = true)
+var table tb = table.new(posOf(posStr), 2, 10, border_width = 1, border_color = color.new(#000000, 60), force_overlay = true)
 if barstate.islast
     string gradeTxt = na(confPct) ? L("계산 중…", "computing…") : (confPct >= 70 ? L("높음 ●●●", "High ●●●") : confPct >= 30 ? L("보통 ●●○", "Mid ●●○") : L("낮음 ●○○", "Low ●○○")) + "  (" + str.tostring(conf, "0.00") + ")"
     string dataTxt = dzDefined ? (oiFromPerp ? L("정상 (무기한 OI 폴백)", "OK (perp OI fallback)") : L("정상 (OI 포함)", "OK (with OI)")) : L("OI 준비/끊김 → 보수 모드", "OI warming/missing → conservative")
     string dwellTxt = cur >= 0 ? "  ·  " + str.tostring(sinceSwitch) + L("봉째", " bars") : ""
+    // 지금 시장: 현재 TF + 상위 TF 레짐(밴드용 2축 근사) 두 줄
+    int stH = na(stHigh) ? -1 : stHigh
+    string htfRegTxt = L("상위 ", "HTF ") + tfName(tfHigh) + ": " + emojiOf(stH) + " " + nameOf(stH)
     table.cell(tb, 0, 0, L("지금 시장", "Market now"), text_size = txtSz, bgcolor = BG, text_color = TXT)
-    table.cell(tb, 1, 0, emojiOf(cur) + " " + nameOf(cur) + dwellTxt, text_color = color.white, bgcolor = cur >= 0 ? color.new(stCol, 20) : BG2, text_size = txtSz)
+    table.cell(tb, 1, 0, emojiOf(cur) + " " + nameOf(cur) + dwellTxt + "\n" + htfRegTxt, text_color = color.white, bgcolor = cur >= 0 ? color.new(stCol, 20) : BG2, text_size = txtSz, tooltip = L("첫 줄=현재 TF(3축·FSM), 둘째 줄=한 단계 위 TF(2축 근사) — 방향·레버리지는 상위가 우선", "Line1 = current TF (3-axis, FSM), Line2 = one TF up (2-axis approx) — direction/leverage from HTF first"))
     table.cell(tb, 0, 1, L("판단 확신", "Confidence"), text_size = txtSz, bgcolor = BG, text_color = TXT)
     table.cell(tb, 1, 1, gradeTxt, text_size = txtSz, bgcolor = BG2, text_color = TXT, tooltip = L("최근 30일의 나 자신과 비교한 상대 등급", "Percentile vs its own last 30 days"))
     table.cell(tb, 0, 2, L("상위 방향", "HTF direction"), text_size = txtSz, bgcolor = BG, text_color = TXT)
@@ -364,6 +367,9 @@ if barstate.islast
     table.cell(tb, 1, 7, dataTxt, text_size = txtSz, bgcolor = BG2, text_color = TXT)
     table.cell(tb, 0, 8, L("색 안내", "Legend"), text_size = size.tiny, bgcolor = BG, text_color = TXT)
     table.cell(tb, 1, 8, "🟢" + nameOf(0) + " 🔴" + nameOf(1) + " 🔵" + nameOf(2) + " ⚪" + nameOf(3) + " 🟠" + nameOf(4), text_size = size.tiny, bgcolor = BG2, text_color = color.new(#c8c8c8, 0))
+    string quadTxt = not oiOk ? L("OI 없음/준비", "no OI") : not dzDefined ? L("데드존 계산 중…", "deadzone warming…") : quad == 1 ? "🟩 " + L("신규 롱 유입 — 연료(라벨 투표)", "new longs — fuel (votes)") : quad == 2 ? "🟥 " + L("신규 숏 유입 — 연료(라벨 투표)", "new shorts — fuel (votes)") : quad == 3 ? "↩ " + L("숏 커버 — 라벨 불변·확신 −15%", "short covering — conf −15%") : quad == 4 ? "↩ " + L("롱 청산 — 라벨 불변·확신 −15%", "long liquidation — conf −15%") : "— " + L("데드존(유의미한 ΔOI 없음)", "deadzone (no meaningful ΔOI)")
+    table.cell(tb, 0, 9, L("OI 사분면", "OI quadrant"), text_size = txtSz, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 9, quadTxt, text_size = txtSz, bgcolor = BG2, text_color = quad == 1 ? color.new(color.green, 10) : quad == 2 ? color.new(color.red, 10) : TXT, tooltip = L("ΔOI(2h)×Δ가격(2h): ↑↑신규롱 ↑↓신규숏(연료) · ↓↑숏커버 ↓↓롱청산(라벨 불변, 확신만 삭감 — 무기한에선 강한 연속 레그) · ≈0 데드존", "ΔOI(2h)×Δprice(2h): up-up new longs, up-down new shorts (fuel) · down legs trim confidence only · ~0 deadzone"))
 
 alertcondition(ta.change(cur) != 0, "Regime change", "REGIME v1: 레짐 전환 / regime changed")
 alertcondition(collapse, "Confidence collapse", "REGIME v1: 확신 급락 — 전환 가능성 / confidence collapse")
