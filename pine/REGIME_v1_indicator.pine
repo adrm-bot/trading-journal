@@ -512,7 +512,7 @@ if barstate.islast
     table.cell(tb, 0, 5, L("권장", "Do"), text_size = txtSz, bgcolor = BG, text_color = TXT)
     table.cell(tb, 1, 5, pbDo, text_size = txtSz, bgcolor = conflictPB ? color.new(color.orange, 72) : BG2, text_color = TXT, tooltip = pbTip)
     table.cell(tb, 0, 6, L("금지", "Avoid"), text_size = txtSz, bgcolor = BG, text_color = TXT)
-    table.cell(tb, 1, 6, pbDont, text_size = txtSz, bgcolor = conflictPB ? color.new(color.orange, 72) : BG2, text_color = color.new(color.red, 15), tooltip = pbTip)
+    table.cell(tb, 1, 6, pbDont, text_size = txtSz, bgcolor = conflictPB ? color.new(color.orange, 72) : BG2, text_color = TXT, tooltip = pbTip)
     // r7 OI 사분면 (확정 스냅샷 — 항상 최하단)
     string quadTxt = not oiOkShow ? L("OI 데이터가 없거나 준비 중입니다", "no OI") : not fuelDefShow ? L("기준선 계산 중 (OI 이력 20일 미만)", "deadzone warming (<20d)") : quadShow == 1 ? "🟩 " + L("신규 롱 자금이 들어오는 중 — 추세 연료로 반영", "new longs — fuel (votes)") : quadShow == 2 ? "🟥 " + L("신규 숏 자금이 들어오는 중 — 추세 연료로 반영", "new shorts — fuel (votes)") : quadShow == 3 ? "↩ " + L("숏 커버(기존 숏 정리) 중\n판정은 그대로 두고 확신만 15% 낮춰 반영", "short covering — conf −15%") : quadShow == 4 ? "↩ " + L("롱 청산(기존 롱 정리) 중\n판정은 그대로 두고 확신만 15% 낮춰 반영", "long liquidation — conf −15%") : "— " + L("특별한 OI 변화가 없습니다", "deadzone (no meaningful ΔOI)")
     table.cell(tb, 0, 7, L("OI 사분면", "OI quadrant"), text_size = txtSz, bgcolor = BG, text_color = TXT)
