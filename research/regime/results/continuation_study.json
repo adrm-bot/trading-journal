@@ -1,0 +1,126 @@
+{
+ "BTCUSDT": {
+  "uncond": {
+   "16": {
+    "n": 154504,
+    "med_pct": 0.01,
+    "share_up": 0.508
+   },
+   "96": {
+    "n": 154424,
+    "med_pct": 0.034,
+    "share_up": 0.51
+   }
+  },
+  "L_A (H1up+sq/rg, no-collapse ref)": {
+   "16": {
+    "n": 9881,
+    "med_pct": -0.02,
+    "share_up": 0.485
+   },
+   "96": {
+    "n": 9873,
+    "med_pct": -0.034,
+    "share_up": 0.49
+   }
+  },
+  "CT_L (H1up+sq/rg+COLLAPSE)": {
+   "16": {
+    "n": 331,
+    "med_pct": -0.057,
+    "share_up": 0.438
+   },
+   "96": {
+    "n": 331,
+    "med_pct": -0.051,
+    "share_up": 0.483
+   }
+  },
+  "S_A (H1dn+sq/rg, no-collapse ref)": {
+   "16": {
+    "n": 9782,
+    "med_pct": 0.034,
+    "share_up": 0.525
+   },
+   "96": {
+    "n": 9782,
+    "med_pct": 0.082,
+    "share_up": 0.527
+   }
+  },
+  "CT_S (H1dn+sq/rg+COLLAPSE)": {
+   "16": {
+    "n": 321,
+    "med_pct": 0.016,
+    "share_up": 0.517
+   },
+   "96": {
+    "n": 321,
+    "med_pct": 0.194,
+    "share_up": 0.558
+   }
+  }
+ },
+ "ETHUSDT": {
+  "uncond": {
+   "16": {
+    "n": 154504,
+    "med_pct": 0.011,
+    "share_up": 0.506
+   },
+   "96": {
+    "n": 154424,
+    "med_pct": 0.02,
+    "share_up": 0.504
+   }
+  },
+  "L_A (H1up+sq/rg, no-collapse ref)": {
+   "16": {
+    "n": 9612,
+    "med_pct": -0.025,
+    "share_up": 0.486
+   },
+   "96": {
+    "n": 9573,
+    "med_pct": -0.138,
+    "share_up": 0.473
+   }
+  },
+  "CT_L (H1up+sq/rg+COLLAPSE)": {
+   "16": {
+    "n": 327,
+    "med_pct": -0.129,
+    "share_up": 0.437
+   },
+   "96": {
+    "n": 325,
+    "med_pct": -0.377,
+    "share_up": 0.428
+   }
+  },
+  "S_A (H1dn+sq/rg, no-collapse ref)": {
+   "16": {
+    "n": 10256,
+    "med_pct": 0.036,
+    "share_up": 0.52
+   },
+   "96": {
+    "n": 10256,
+    "med_pct": 0.054,
+    "share_up": 0.509
+   }
+  },
+  "CT_S (H1dn+sq/rg+COLLAPSE)": {
+   "16": {
+    "n": 321,
+    "med_pct": 0.003,
+    "share_up": 0.502
+   },
+   "96": {
+    "n": 321,
+    "med_pct": 0.229,
+    "share_up": 0.548
+   }
+  }
+ }
+}

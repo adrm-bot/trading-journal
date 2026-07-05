@@ -159,6 +159,14 @@ bool dzDefined = oiOk and not na(dzDoi) and not na(dzDpr)
 float fuelMod = quad == 3 or quad == 4 ? 0.85 : dzDefined and quad == 0 ? 0.95 : 1.0
 float conf = na(agreement) ? na : math.max(0.0, math.min(1.0, agreement * (1.0 - 0.5 * (agreement > 1e-12 ? runnerUp / agreement : 2.0)) * fuelMod * (dzDefined ? 1.0 : 0.8)))
 
+// 확신 급락(collapse) — 실시간 봉은 직전 확정값 사용(리페인트 없음). 셋업/전환감시가 공용
+float confShow = barstate.isrealtime ? conf[1] : conf
+confQ20 = ta.percentile_nearest_rank(conf[1], qWin, 20)
+float confQ20Show = barstate.isrealtime ? confQ20[1] : confQ20
+collapse = not na(confShow) and not na(confShow[1]) and not na(confQ20Show) and not na(confQ20Show[1]) and confShow < confQ20Show and confShow[1] < confQ20Show[1]
+int sinceCollapse = ta.barssince(collapse)
+bool recentClps = not na(sinceCollapse) and sinceCollapse <= 4
+
 // ── 상태 이름·색 ─────────────────────────────────────────────────────────────
 color stCol = cur == 0 ? color.green : cur == 1 ? color.red : cur == 2 ? color.blue : cur == 3 ? color.gray : color.orange
 nameOf(i) => i == 0 ? L("상승추세", "Uptrend") : i == 1 ? L("하락추세", "Downtrend") : i == 2 ? L("수렴(돌파대기)", "Squeeze") : i == 3 ? L("박스권", "Range") : i == 4 ? L("난장판(관망)", "Chop") : L("준비 중", "Warming up")
@@ -210,27 +218,25 @@ string setupTxt = na
 if hMature
     setupTxt := "⚠ " + hTfName + " " + L("과열(ADX>40) — 신규 진입 리스크↑", "mature (ADX>40) — new entries risky")
 else if hSweetUp and inPB
-    string ext = (stackUp ? " · " + L("EMA정배열", "EMA stacked") : "") + (dippedDn ? " · " + L("하락경유", "post-dip") : "")
+    // 검증(continuation_study): 횡보 중 확신급락은 재점화가 아니라 추세 '반대' 기울어짐(BTC/ETH 4h ↑44%)
+    string warnL = recentClps ? " · ⚠" + L("확신급락(역압력)", "collapse(counter-pressure)") : ""
+    string ext = (stackUp ? " · " + L("EMA정배열", "EMA stacked") : "") + (dippedDn ? " · " + L("하락경유", "post-dip") : "") + warnL
     setupTxt := (reUp ? "⚡ " + L("눌림목 롱 — DI 재가속", "Pullback LONG — DI re-accel") : "🟡 " + L("눌림목 롱 후보 (트리거 대기)", "Pullback long candidate (await trigger)")) + ext
 else if hSweetDn and inPB
-    string ext2 = (stackDn ? " · " + L("EMA역배열", "EMA stacked dn") : "") + (dippedUp ? " · " + L("반등경유", "post-pop") : "")
+    string warnS = recentClps ? " · ⚠" + L("확신급락(역압력)", "collapse(counter-pressure)") : ""
+    string ext2 = (stackDn ? " · " + L("EMA역배열", "EMA stacked dn") : "") + (dippedUp ? " · " + L("반등경유", "post-pop") : "") + warnS
     setupTxt := (reDn ? "⚡ " + L("되돌림 숏 — DI 재가속", "Pullback SHORT — DI re-accel") : "🟡 " + L("되돌림 숏 후보 (트리거 대기)", "Pullback short candidate (await trigger)")) + ext2
 else
     setupTxt := L("없음", "none")
 bool setupTrig = (hSweetUp and inPB and reUp) or (hSweetDn and inPB and reDn)
 
 // ── 전환 감시 (엄격: 2조건 동시 — 현직 열세 지속 + 최근 확신 급락) ──────────
-float confShow = barstate.isrealtime ? conf[1] : conf
-confQ20 = ta.percentile_nearest_rank(conf[1], qWin, 20)
-float confQ20Show = barstate.isrealtime ? confQ20[1] : confQ20
-collapse = not na(confShow) and not na(confShow[1]) and not na(confQ20Show) and not na(confQ20Show[1]) and confShow < confQ20Show and confShow[1] < confQ20Show[1]
 var int negRun = 0
 var int watchNext = -1
 if barstate.isconfirmed
     bool losing = ready and cur >= 0 and runnerUp > score(cur)
     negRun := losing ? negRun + 1 : 0
     watchNext := losing ? runnerIdx : -1
-int sinceCollapse = ta.barssince(collapse)
 bool watchOn = negRun >= 2 and not na(sinceCollapse) and sinceCollapse <= 8
 string watchTxt = watchOn ? "⚠ " + L("표 이동 중 → 2위: ", "votes shifting → #2: ") + emojiOf(watchNext) + " " + nameOf(watchNext) + " (" + str.tostring(negRun) + L("봉째", " bars") + ")" : collapse ? "⚠ " + L("확신 급락 — 전환 가능성, 사이즈 축소", "confidence collapse — possible shift, size down") : L("안정 — 현 상태 우세", "stable — incumbent leads")
 
