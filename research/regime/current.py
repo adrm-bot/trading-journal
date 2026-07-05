@@ -197,8 +197,11 @@ def main():
             verdict = f"세 TF 모두 {'상승' if supers[0] == 'UP' else '하락'} 방향 — 강한 합의"
         elif len(set(supers)) == 1:
             verdict = "세 TF 모두 비추세 — 방향 베팅 근거 없음"
-        elif supers[0] == supers[1]:
-            verdict = "단기(15m·1h) 일치, 4h 불일치 — 부분 합의"
+        elif supers[1] == supers[2] and supers[1] != "NT":
+            d = "상승" if supers[1] == "UP" else "하락"
+            verdict = f"상위(1h·4h) {d} 일치 — 방향 우세, 15m은 진입 타이밍 대기"
+        elif supers[0] == supers[1] and supers[0] != "NT":
+            verdict = "단기(15m·1h) 일치, 4h 불일치 — 부분 합의, 사이즈 보수"
         else:
             verdict = "혼조 — TF 간 성격 불일치, 보수적으로"
         print(f"  판정: {verdict}")
