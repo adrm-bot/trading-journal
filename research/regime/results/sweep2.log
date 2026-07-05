@@ -1,0 +1,135 @@
+=== BTCUSDT :: sweep ===
+{
+ "symbol": "BTCUSDT",
+ "grid": {
+  "dwell0_confirm0": {
+   "median_lead": -5.0,
+   "n": 1447,
+   "lead_sacrificed": 0.0,
+   "churn3_F": 3.254,
+   "flap_F": 0.231,
+   "false_per_100c": 0.131
+  },
+  "dwell0_confirm1": {
+   "median_lead": -5.0,
+   "n": 1454,
+   "lead_sacrificed": 0.0,
+   "churn3_F": 2.413,
+   "flap_F": 0.057,
+   "false_per_100c": 0.102
+  },
+  "dwell0_confirm2": {
+   "median_lead": -6.0,
+   "n": 1431,
+   "lead_sacrificed": 1.0,
+   "churn3_F": 2.072,
+   "flap_F": 0.0,
+   "false_per_100c": 0.075
+  },
+  "dwell0_confirm3": {
+   "median_lead": -7.0,
+   "n": 1375,
+   "lead_sacrificed": 2.0,
+   "churn3_F": 1.877,
+   "flap_F": 0.0,
+   "false_per_100c": 0.05
+  },
+  "dwell2_confirm0": {
+   "median_lead": -5.0,
+   "n": 1450,
+   "lead_sacrificed": 0.0,
+   "churn3_F": 3.029,
+   "flap_F": 0.172,
+   "false_per_100c": 0.131
+  },
+  "dwell2_confirm1": {
+   "median_lead": -5.0,
+   "n": 1454,
+   "lead_sacrificed": 0.0,
+   "churn3_F": 2.413,
+   "flap_F": 0.057,
+   "false_per_100c": 0.102
+  },
+  "dwell2_confirm2": {
+   "median_lead": -6.0,
+   "n": 1431,
+   "lead_sacrificed": 1.0,
+   "churn3_F": 2.072,
+   "flap_F": 0.0,
+   "false_per_100c": 0.075
+  },
+  "dwell2_confirm3": {
+   "median_lead": -7.0,
+   "n": 1375,
+   "lead_sacrificed": 2.0,
+   "churn3_F": 1.877,
+   "flap_F": 0.0,
+   "false_per_100c": 0.05
+  },
+  "dwell4_confirm0": {
+   "median_lead": -5.0,
+   "n": 1737,
+   "lead_sacrificed": 0.0,
+   "churn3_F": 2.729,
+   "flap_F": 0.0,
+   "false_per_100c": 0.241
+  },
+  "dwell4_confirm1": {
+   "median_lead": -6.0,
+   "n": 1593,
+   "lead_sacrificed": 1.0,
+   "churn3_F": 2.349,
+   "flap_F": 0.0,
+   "false_per_100c": 0.144
+  },
+  "dwell4_confirm2": {
+   "median_lead": -6.0,
+   "n": 1468,
+   "lead_sacrificed": 1.0,
+   "churn3_F": 2.064,
+   "flap_F": 0.0,
+   "false_per_100c": 0.083
+  },
+  "dwell4_confirm3": {
+   "median_lead": -7.0,
+   "n": 1375,
+   "lead_sacrificed": 2.0,
+   "churn3_F": 1.877,
+   "flap_F": 0.0,
+   "false_per_100c": 0.05
+  },
+  "dwell8_confirm0": {
+   "median_lead": -7.0,
+   "n": 1628,
+   "lead_sacrificed": 2.0,
+   "churn3_F": 2.381,
+   "flap_F": 0.0,
+   "false_per_100c": 0.138
+  },
+  "dwell8_confirm1": {
+   "median_lead": -7.0,
+   "n": 1515,
+   "lead_sacrificed": 2.0,
+   "churn3_F": 2.156,
+   "flap_F": 0.0,
+   "false_per_100c": 0.099
+  },
+  "dwell8_confirm2": {
+   "median_lead": -8.0,
+   "n": 1414,
+   "lead_sacrificed": 3.0,
+   "churn3_F": 1.958,
+   "flap_F": 0.0,
+   "false_per_100c": 0.065
+  },
+  "dwell8_confirm3": {
+   "median_lead": -8.0,
+   "n": 1346,
+   "lead_sacrificed": 3.0,
+   "churn3_F": 1.822,
+   "flap_F": 0.0,
+   "false_per_100c": 0.041
+  }
+ },
+ "churn3_B1": 4.83
+}

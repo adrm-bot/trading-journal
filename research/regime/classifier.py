@@ -106,18 +106,15 @@ def axis_scores(feat: pd.DataFrame, p: ClassifierParams, use_fuel: bool):
 
 def classify(feat: pd.DataFrame, p: ClassifierParams = DEFAULT_CP, *,
              use_fuel: bool = True, use_funding: bool = True,
-             degrade_penalty: bool = False, debug: bool = False) -> pd.DataFrame:
+             debug: bool = False) -> pd.DataFrame:
     """feat: features.compute() output. Returns DataFrame(regime, confidence) on feat.index.
 
     Rows where core features are NaN (burn-in) get regime=None, confidence=NaN.
+    Degrade path is PER-ROW and causal: any row without usable fuel (missing OI column,
+    stale OI, deadzone-window warmup) gets the flat degrade penalty on confidence — no
+    whole-series look-ahead decides the mode. The B2 ablation (use_fuel=False) stays
+    unpenalized by definition.
     """
-    fuel_usable = use_fuel and "quadrant" in feat.columns \
-        and bool(feat["fuel_defined"].any()) if "fuel_defined" in feat.columns else False
-    if use_fuel and not fuel_usable:
-        # production degrade: OI absent entirely -> 2-axis + flat penalty
-        use_fuel = False
-        degrade_penalty = True
-
     scores, valid, fuel_mod, fuel_votes, fuel_available = axis_scores(feat, p, use_fuel)
     n = len(feat)
     fund = feat["funding_pct"].to_numpy(float) if "funding_pct" in feat.columns \
@@ -128,12 +125,12 @@ def classify(feat: pd.DataFrame, p: ClassifierParams = DEFAULT_CP, *,
 
     cur = -1
     pending, pend_count, since_switch = -1, 0, 10**9
-    order = np.argsort(scores, axis=1)  # ascending; last = argmax, second-last = runner-up
+    best_arr = np.argmax(scores, axis=1)  # first-max on ties (matches the Pine port)
     for t in range(n):
         if not valid[t]:
             cur, pending, pend_count, since_switch = -1, -1, 0, 10**9
             continue
-        best = order[t, -1]
+        best = best_arr[t]
         # near-tie: prefer the incumbent
         cand = cur if (cur >= 0 and scores[t, cur] >= scores[t, best] - p.near_tie) else best
         if cur < 0:
@@ -158,8 +155,8 @@ def classify(feat: pd.DataFrame, p: ClassifierParams = DEFAULT_CP, *,
         if use_funding and not np.isnan(fund[t]) and cur in (0, 1):
             if fund[t] >= p.funding_extreme or fund[t] <= 1.0 - p.funding_extreme:
                 c *= p.conf_funding
-        if degrade_penalty:
-            c *= p.degrade_penalty
+        if use_fuel and not fuel_available[t]:
+            c *= p.degrade_penalty  # per-row causal degrade (fuel wanted but unusable here)
         conf[t] = min(max(c, 0.0), 1.0)
 
     regime = pd.array([REGIMES[i] if i >= 0 else None for i in labels])

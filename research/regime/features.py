@@ -47,8 +47,11 @@ def wilder(s: pd.Series, n: int) -> pd.Series:
 def adx_di(h: pd.Series, l: pd.Series, c: pd.Series, n: int):
     up = h.diff()
     dn = -l.diff()
-    pdm = up.where((up > dn) & (up > 0), 0.0)
-    ndm = dn.where((dn > up) & (dn > 0), 0.0)
+    # NaN inputs (missing bars) must stay NaN — NaN>NaN is False, which would otherwise
+    # inject fake zero-directional-movement observations into the Wilder recursion
+    ok = up.notna() & dn.notna()
+    pdm = up.where((up > dn) & (up > 0), 0.0).where(ok)
+    ndm = dn.where((dn > up) & (dn > 0), 0.0).where(ok)
     tr = pd.concat([h - l, (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
     atr = wilder(tr, n)
     pdi = 100 * wilder(pdm, n) / atr
@@ -77,20 +80,28 @@ def compute(df: pd.DataFrame, fp: FeatureParams = DEFAULT_FP, oi_col: str = "oi"
     out["di_diff"] = pdi - ndi
     out["m"] = (ema_f - ema_s) / atr.replace(0, np.nan)
 
-    # volatility percentile blend (strictly-past distributions)
+    # volatility percentile blend (strictly-past distributions). min_periods gets 5% slack:
+    # with min_periods == window, ONE missing bar blanks vol_pct for a full window length
+    # (30 days) — the classifier then cold-resets for that whole stretch
+    mp_vol = max(2, int(fp.q_window * 0.95))
     mid = c.rolling(fp.bb_n, min_periods=fp.bb_n).mean()
     sd = c.rolling(fp.bb_n, min_periods=fp.bb_n).std()
     bbw = (2 * fp.bb_k * sd) / mid.replace(0, np.nan)
     atrp = atr / c
-    out["vol_pct"] = 0.5 * past_pct_rank(bbw, fp.q_window, fp.q_window) \
-        + 0.5 * past_pct_rank(atrp, fp.q_window, fp.q_window)
+    out["vol_pct"] = 0.5 * past_pct_rank(bbw, fp.q_window, mp_vol) \
+        + 0.5 * past_pct_rank(atrp, fp.q_window, mp_vol)
 
     # fuel: relative dOI over k candles, both endpoints fresh
     k = fp.oi_lookback
     out["dprice"] = c / c.shift(k) - 1
     if oi_col in df.columns:
         oi = df[oi_col]
-        fresh = df["oi_fresh"] if (oi_col == "oi" and "oi_fresh" in df.columns) else oi.notna()
+        if oi_col == "oi" and "oi_fresh" in df.columns:
+            fresh = df["oi_fresh"]
+        elif "bar_missing" in df.columns:
+            fresh = oi.notna() & ~df["bar_missing"]  # same staleness rule as the main run
+        else:
+            fresh = oi.notna()
         doi = (oi - oi.shift(k)) / oi.shift(k)
         doi_ok = fresh & fresh.shift(k, fill_value=False)
         out["doi"] = doi.where(doi_ok)
@@ -99,7 +110,7 @@ def compute(df: pd.DataFrame, fp: FeatureParams = DEFAULT_FP, oi_col: str = "oi"
 
     dz_doi = out["doi"].abs().rolling(fp.q_window, min_periods=fp.q_min_periods_fuel) \
         .quantile(fp.dead_q).shift(1)
-    dz_dp = out["dprice"].abs().rolling(fp.q_window, min_periods=fp.q_window) \
+    dz_dp = out["dprice"].abs().rolling(fp.q_window, min_periods=mp_vol) \
         .quantile(fp.dead_q).shift(1)
 
     # quadrant codes: 0 no-fuel/deadzone/missing, 1 new-longs, 2 new-shorts,

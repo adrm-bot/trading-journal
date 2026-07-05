@@ -156,8 +156,11 @@ def read_funding(symbol: str, start: str | None = None, end: str | None = None) 
         parts.append(df[["calc_time", "last_funding_rate"]])
     if not parts:
         return pd.DataFrame(columns=["event_ts", "funding"])
+    # unit detection must be per-file like klines: a mid-archive ms->us switch would poison
+    # a single concat-level median
+    for p_ in parts:
+        p_["raw_ts"] = _epoch_to_utc(p_["calc_time"])
     fu = pd.concat(parts, ignore_index=True)
-    fu["raw_ts"] = _epoch_to_utc(fu["calc_time"])
     # funding boundaries land on the hour, but the INTERVAL is not always 8h (Binance switches
     # some symbols to 4h in volatile periods — hence the funding_interval_hours column).
     # Snap to the 1h grid; the backward merge is causal regardless of cadence.

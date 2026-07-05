@@ -58,6 +58,14 @@ def trim(x, burn=BURN):
     return x.iloc[burn:]
 
 
+def full_excluded(excluded: np.ndarray, f_trimmed: pd.DataFrame) -> np.ndarray:
+    """Data gaps PLUS the fused track's post-gap blackout (rows it could not classify):
+    the FSM cold-restarts after a gap, and B1 keeps labeling straight through — episodes
+    born inside that blackout would contaminate miss counts and lead outliers. Applied
+    symmetrically to every track pairing."""
+    return excluded[BURN:] | pd.isna(f_trimmed["regime"].to_numpy(object))
+
+
 def pair_stats(base_lab, fused_lab, index, excluded, mp=MatchParams()):
     """Per-class episode stats + month keys for bootstrap."""
     bs = leadlag.to_super(base_lab)
@@ -94,7 +102,7 @@ def headline(symbol: str, write=True):
     df, excluded, _ = load(symbol)
     feat, f, b2, b1 = tracks(df)
     idx = trim(f).index
-    exc = excluded[BURN:]
+    exc = full_excluded(excluded, trim(f))
     F, B2, B1 = trim(f)["regime"], trim(b2)["regime"], trim(b1)
 
     fvb = pair_stats(B1, F, idx, exc)
@@ -103,19 +111,27 @@ def headline(symbol: str, write=True):
     out = {"symbol": symbol, "n_candles": len(idx),
            "span": [str(idx[0]), str(idx[-1])],
            "F_vs_B1": {}, "B2_vs_B1": {}, "OI_marginal": {}}
+    # point estimate = OBSERVED raw median difference (the same estimand the null stage
+    # tests); the paired month bootstrap contributes the CI only (its own median is kept as
+    # a diagnostic — mixing the two up would report a smoothed number against a raw null)
     for cls in CLASSES:
         out["F_vs_B1"][cls] = _cls_row(fvb[cls])
         out["B2_vs_B1"][cls] = _cls_row(avb[cls])
-        med_diff, lo, hi = leadlag.paired_month_bootstrap_diff(
+        obs_diff = float(np.median(fvb[cls]["leads"]) - np.median(avb[cls]["leads"])) \
+            if len(fvb[cls]["leads"]) and len(avb[cls]["leads"]) else np.nan
+        boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(
             fvb[cls]["leads"], fvb[cls]["months"], avb[cls]["leads"], avb[cls]["months"])
-        out["OI_marginal"][cls] = {"median_diff": med_diff, "ci95": [lo, hi]}
+        out["OI_marginal"][cls] = {"median_diff": obs_diff, "ci95": [lo, hi],
+                                   "boot_median_diff": boot_med}
     # pooled enter-TREND (both directions) — the pre-registered primary endpoint uses this
     lf = np.concatenate([fvb[c]["leads"] for c in CLASSES])
     mf = np.concatenate([fvb[c]["months"] for c in CLASSES])
     lb = np.concatenate([avb[c]["leads"] for c in CLASSES])
     mb = np.concatenate([avb[c]["months"] for c in CLASSES])
-    med_diff, lo, hi = leadlag.paired_month_bootstrap_diff(lf, mf, lb, mb)
-    out["OI_marginal"]["enter_pooled"] = {"median_diff": med_diff, "ci95": [lo, hi],
+    boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(lf, mf, lb, mb)
+    obs_pooled = float(np.median(lf) - np.median(lb)) if len(lf) and len(lb) else np.nan
+    out["OI_marginal"]["enter_pooled"] = {"median_diff": obs_pooled, "ci95": [lo, hi],
+                                          "boot_median_diff": boot_med,
                                           "F_median": float(np.median(lf)) if len(lf) else np.nan,
                                           "B2_median": float(np.median(lb)) if len(lb) else np.nan}
     out["churn"] = {"B1": round(fvb["churn_base"], 3), "F": round(fvb["churn_fused"], 3),
@@ -203,7 +219,7 @@ def null_run(symbol: str, n_shifts=200, seed=42):
     df, excluded, _ = load(symbol)
     feat, f, b2, b1 = tracks(df)
     idx = trim(f).index
-    exc = excluded[BURN:]
+    exc = full_excluded(excluded, trim(f))
     B1 = trim(b1)
     obs = pair_stats(B1, trim(f)["regime"], idx, exc)
     obs_med = float(np.median(np.concatenate([obs[c]["leads"] for c in CLASSES])))
@@ -221,14 +237,22 @@ def null_run(symbol: str, n_shifts=200, seed=42):
     null_cls = {c: [] for c in CLASSES}
     oi = df["oi"].to_numpy()
     fresh = df["oi_fresh"].to_numpy()
+    bar_missing = df["bar_missing"].to_numpy(bool)
+    k_lb = features.DEFAULT_FP.oi_lookback
     for i in range(n_shifts):
         s = int(g.integers(lo, hi)) * (1 if g.random() < 0.5 else -1)
         df2 = df.copy()
         df2["oi"] = np.roll(oi, s)
-        df2["oi_fresh"] = np.roll(fresh, s)
+        fresh2 = np.roll(fresh, s).copy()
+        # mask the wrap seam: dOI across it is a fake discontinuity, not misalignment
+        seam = s % n
+        fresh2[max(0, seam - k_lb):min(n, seam + k_lb + 1)] = False
+        df2["oi_fresh"] = fresh2
         feat2 = features.compute(df2)
         f2 = classifier.classify(feat2)
-        p2 = pair_stats(B1, trim(f2)["regime"], idx, exc)
+        # exclusion mask must follow the ROLLED freshness (same filtering rule as observed)
+        exc2 = (bar_missing | ~fresh2)[BURN:] | pd.isna(trim(f2)["regime"].to_numpy(object))
+        p2 = pair_stats(B1, trim(f2)["regime"], idx, exc2)
         leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
         if len(leads2):
             null_marginals.append(float(np.median(leads2)) - b2_med)
@@ -243,7 +267,11 @@ def null_run(symbol: str, n_shifts=200, seed=42):
     per_class = {}
     for c in CLASSES:
         arr = np.array(null_cls[c])
-        per_class[c] = {"observed": obs_cls[c],
+        if len(arr) == 0:
+            per_class[c] = {"observed": obs_cls[c], "n_null": 0, "p_one_sided": None,
+                            "note": "degenerate null — no replicates produced leads"}
+            continue
+        per_class[c] = {"observed": obs_cls[c], "n_null": int(len(arr)),
                         "null_median": float(np.median(arr)),
                         "null_iqr": [float(np.percentile(arr, 25)), float(np.percentile(arr, 75))],
                         "p_one_sided": (1 + int((arr >= obs_cls[c]).sum())) / (len(arr) + 1)}
@@ -281,6 +309,9 @@ def collapse_events(conf: pd.Series, fuel_avail: pd.Series, excluded: np.ndarray
 
 
 def collapse_metrics(ev_idx: np.ndarray, trans_idx: np.ndarray, n: int, W=96):
+    """Convention: a collapse stamped exactly ON a transition bar counts as a lead-0 hit,
+    on BOTH sides (precision via side='left' on transitions, recall via side='right' on
+    events — asymmetric sides would silently deflate recall for coincident events)."""
     if len(ev_idx) == 0 or len(trans_idx) == 0:
         return {"n_events": int(len(ev_idx)), "n_transitions": int(len(trans_idx)),
                 "precision": np.nan, "recall": np.nan, "median_lead": np.nan}
@@ -289,7 +320,7 @@ def collapse_metrics(ev_idx: np.ndarray, trans_idx: np.ndarray, n: int, W=96):
     dist = np.where(pos < len(t), t[np.minimum(pos, len(t) - 1)] - ev_idx, n)
     hits = dist <= W
     e = np.sort(ev_idx)
-    pos_e = np.searchsorted(e, t, side="left")
+    pos_e = np.searchsorted(e, t, side="right")
     prev_ev = np.where(pos_e > 0, t - e[np.maximum(pos_e - 1, 0)], n)
     covered = prev_ev <= W
     return {"n_events": int(len(ev_idx)), "n_transitions": int(len(t)),
@@ -303,7 +334,7 @@ def collapse_stage(symbol: str, n_shifts=200, seed=43, W=96):
     feat, f, b2, b1 = tracks(df)
     conf = trim(f)["confidence"]
     fuel_avail = trim(f)["fuel_available"]
-    exc = excluded[BURN:]
+    exc = full_excluded(excluded, trim(f))
     B1 = trim(b1)
     lab = B1.to_numpy(object)
     valid = ~pd.isna(lab)
@@ -312,6 +343,12 @@ def collapse_stage(symbol: str, n_shifts=200, seed=43, W=96):
 
     ev = collapse_events(conf, fuel_avail, exc)
     obs = collapse_metrics(ev, trans, n, W)
+    if len(ev) == 0 or np.isnan(obs["precision"]):
+        out = {"symbol": symbol, "observed": obs, "p_precision": None, "p_recall": None,
+               "note": "no collapse events — p undefined"}
+        RESULTS.mkdir(exist_ok=True)
+        (RESULTS / f"{symbol}_collapse.json").write_text(json.dumps(out, indent=1))
+        return out
 
     g = np.random.default_rng(seed)
     null_prec, null_lead, null_rec = [], [], []
@@ -346,7 +383,7 @@ def sweep(symbol: str):
     df, excluded, _ = load(symbol)
     feat, f, b2, b1 = tracks(df)
     idx = trim(f).index
-    exc = excluded[BURN:]
+    exc = full_excluded(excluded, trim(f))
     B1 = trim(b1)
     base_pooled = None
     rows = {}

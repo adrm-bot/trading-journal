@@ -52,10 +52,17 @@ def fetch_klines(symbol: str, days: int = 60) -> pd.DataFrame:
     for c in ["open", "high", "low", "close", "volume"]:
         k[c] = k[c].astype("float64")
     k["ts"] = pd.to_datetime(k["open_time"], unit="ms", utc=True) + pd.Timedelta(minutes=15)
-    # drop the in-progress candle: its close time is in the future
-    now = pd.Timestamp.now(tz="UTC")
-    k = k[k["ts"] <= now]
-    return k.set_index("ts")[["open", "high", "low", "close", "volume"]]
+    # drop the in-progress candle against Binance SERVER time (a fast local clock near a
+    # boundary would otherwise admit an unfinished candle — labels are close-stamped)
+    server_now = pd.to_datetime(_get("/fapi/v1/time")["serverTime"], unit="ms", utc=True)
+    k = k[k["ts"] <= server_now]
+    k = k.set_index("ts")[["open", "high", "low", "close", "volume"]]
+    # complete 15m grid, exactly like build_dataset.grid_klines — otherwise every
+    # shift/rolling downstream becomes row-based instead of time-based across REST gaps
+    grid = pd.date_range(k.index[0], k.index[-1], freq="15min", tz="UTC")
+    k = k.reindex(grid)
+    k.index.name = "ts"
+    return k
 
 
 def fetch_oi(symbol: str) -> pd.DataFrame:
@@ -103,7 +110,7 @@ def build_live_frame(symbol: str) -> pd.DataFrame:
                        direction="backward")
     df = df.set_index("ts")
     df["bar_missing"] = df["close"].isna()
-    df["oi_fresh"] = df["oi"].notna()
+    df["oi_fresh"] = df["oi"].notna() & ~df["bar_missing"]  # same rule as build_dataset
     return df
 
 
