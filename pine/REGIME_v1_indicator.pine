@@ -49,7 +49,7 @@ int dipLB = math.max(8, math.round(28800.0 / tfSec)) // '최근 하락 경유' =
 
 // ── 표시 옵션 ────────────────────────────────────────────────────────────────
 posStr   = input.string("우상단", "테이블 위치", options = ["좌상단", "중앙상단", "우상단", "좌중앙", "중앙", "우중앙", "좌하단", "중앙하단", "우하단"], group = "표시 / Display")
-ribbonMode = input.string("메인 차트", "리본 표시", options = ["메인 차트", "레짐 패널", "끄기"], group = "표시 / Display", tooltip = "다른 지표 배경과 겹쳐 어지러우면 '레짐 패널'이나 '끄기'로")
+showMain = input.bool(true, "메인 차트 리본", group = "표시 / Display", tooltip = "가격 차트 배경 색칠 on/off — 다른 지표 배경과 겹쳐 어지러우면 끄기")
 lblDensity = input.string("성김", "전환 마커", options = ["전부", "성김", "끄기"], group = "표시 / Display", tooltip = "성김(기본): 1봉 생존한 전환만 + 최소 8봉 간격 — 빠른 TF에서 마커 홍수 방지")
 showBands = input.bool(true, "MTF 밴드(위 하위TF · 중간 현재 · 아래 상위TF)", group = "표시 / Display", tooltip = "TF 사다리: 5m→15m→1h→4h→12h→1D. 밴드는 연료축 없는 2축 근사(연구상 연료 기여 p=1.0이라 근사 정당) · 무FSM 순간 판정 · 하위TF는 TV security 특성상 참고용")
 tblSize  = input.string("작게", "테이블 글자", options = ["아주작게", "작게", "보통", "크게"], group = "표시 / Display")
@@ -172,10 +172,9 @@ color stCol = cur == 0 ? color.green : cur == 1 ? color.red : cur == 2 ? color.b
 nameOf(i) => i == 0 ? L("상승추세", "Uptrend") : i == 1 ? L("하락추세", "Downtrend") : i == 2 ? L("수렴(돌파대기)", "Squeeze") : i == 3 ? L("박스권", "Range") : i == 4 ? L("난장판(관망)", "Chop") : L("준비 중", "Warming up")
 emojiOf(i) => i == 0 ? "🟢" : i == 1 ? "🔴" : i == 2 ? "🔵" : i == 3 ? "⚪" : i == 4 ? "🟠" : "…"
 
-// 리본 (진할수록 확신 높음)
+// 메인 차트 리본 (진할수록 확신 높음). 레짐 패널 색은 showBands(MTF 3등분 밴드)가 담당
 int transp = na(conf) ? 90 : int(90 - 70 * math.min(conf / 0.6, 1.0))
-bgcolor(ready and ribbonMode == "메인 차트" ? color.new(stCol, transp) : na, title = "regime ribbon (main)", force_overlay = true)
-bgcolor(ready and ribbonMode == "레짐 패널" ? color.new(stCol, transp) : na, title = "regime ribbon (pane)")
+bgcolor(ready and showMain ? color.new(stCol, transp) : na, title = "regime ribbon (main)", force_overlay = true)
 
 // ── 상위 방향 1H·4H·1D (단순 ADX/DI, 확정 봉만 — 리페인트 방지) ─────────────
 f_htfDir() =>
