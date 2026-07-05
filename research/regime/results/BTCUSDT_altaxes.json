@@ -1,0 +1,63 @@
+{
+ "symbol": "BTCUSDT",
+ "variants": {
+  "taker": {
+   "reference": "B2",
+   "n_pairs": 1343,
+   "lead_median_vs_B1": -6.0,
+   "reference_median": -6.0,
+   "marginal_obs": 0.0,
+   "marginal_ci95_month": [
+    0.0,
+    1.0
+   ],
+   "null_median": 0.0,
+   "null_iqr": [
+    0.0,
+    0.0
+   ],
+   "p_one_sided": 1.0,
+   "churn": 4.365
+  },
+  "lsr": {
+   "reference": "B2",
+   "n_pairs": 1455,
+   "lead_median_vs_B1": -6.0,
+   "reference_median": -6.0,
+   "marginal_obs": 0.0,
+   "marginal_ci95_month": [
+    0.0,
+    1.0
+   ],
+   "null_median": 1.0,
+   "null_iqr": [
+    1.0,
+    1.0
+   ],
+   "p_one_sided": 1.0,
+   "churn": 2.994
+  },
+  "dvol": {
+   "reference": "F",
+   "n_pairs": 1438,
+   "lead_median_vs_B1": -5.0,
+   "reference_median": -5.0,
+   "marginal_obs": 0.0,
+   "marginal_ci95_month": [
+    -1.0,
+    1.0
+   ],
+   "null_median": 0.0,
+   "null_iqr": [
+    0.0,
+    0.0
+   ],
+   "p_one_sided": 1.0,
+   "churn": 3.23
+  }
+ },
+ "baseline_churn": {
+  "F": 3.254,
+  "B2": 2.187
+ }
+}
