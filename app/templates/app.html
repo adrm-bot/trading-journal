@@ -464,6 +464,25 @@ function rgQuadSvg(qp,code){
     const r=last?4.5:1.8, op=last?1:(0.15+0.5*i/qp.points.length);
     const col=last?(QCOL[code]||"#e6edf3"):"#a9b1ba";
     return `<circle cx="${X(p.x).toFixed(1)}" cy="${Y(p.y).toFixed(1)}" r="${r}" fill="${col}" fill-opacity="${op.toFixed(2)}"${last?` stroke="#fff" stroke-width="1"`:''}/>`;}).join("");
+  // 직전점→현재점 이동을 16방위로 양자화한 화살표
+  let arrow="", moveGlyph="";
+  if(qp.points.length>=2){
+    const a=qp.points[qp.points.length-2], b=qp.points[qp.points.length-1];
+    const dx=X(b.x)-X(a.x), dy=Y(b.y)-Y(a.y);
+    if(Math.hypot(dx,dy)>=2){
+      const SEC=Math.PI/8, qa=Math.round(Math.atan2(dy,dx)/SEC)*SEC;
+      const cx=X(b.x), cy=Y(b.y), L=17;
+      const tx=cx+Math.cos(qa)*L, ty=cy+Math.sin(qa)*L;
+      const h1x=tx-Math.cos(qa-0.45)*6, h1y=ty-Math.sin(qa-0.45)*6;
+      const h2x=tx-Math.cos(qa+0.45)*6, h2y=ty-Math.sin(qa+0.45)*6;
+      const ac=QCOL[code]||"#e6edf3";
+      arrow=`<line x1="${cx.toFixed(1)}" y1="${cy.toFixed(1)}" x2="${tx.toFixed(1)}" y2="${ty.toFixed(1)}" stroke="${ac}" stroke-width="2"/>
+        <polygon points="${tx.toFixed(1)},${ty.toFixed(1)} ${h1x.toFixed(1)},${h1y.toFixed(1)} ${h2x.toFixed(1)},${h2y.toFixed(1)}" fill="${ac}"/>`;
+      const G=["→","→↘","↘","↘↓","↓","↓↙","↙","↙←","←","←↖","↖","↖↑","↑","↑↗","↗","↗→"];
+      let k=Math.round(Math.atan2(dy,dx)/SEC); k=((k%16)+16)%16;
+      moveGlyph=G[k];
+    } else { moveGlyph="·"; }
+  }
   const lbl=(t,x,y,anc,col)=>`<text x="${x}" y="${y}" font-size="8.5" fill="${col||'#8b949e'}" text-anchor="${anc}" font-family="monospace">${t}</text>`;
   return `<div class="rgquad" data-tip="OI 4사분면 실좌표 — x=Δ가격(2h,%), y=ΔOI(2h,%) · 어두운 십자 밴드=데드존(유의미하지 않은 변화) · 회색 궤적=최근 6시간, 큰 점=지금 · ΔOI↑ 반쪽(위)만 라벨 투표, ΔOI↓(아래)는 확신 삭감">
     <svg width="${S}" height="${S}" viewBox="0 0 ${S} ${S}">
@@ -473,8 +492,8 @@ function rgQuadSvg(qp,code){
       ${lbl("신규 롱",S-PAD+4,PAD+2,"end","#3fb950")}${lbl("신규 숏",PAD-8,PAD+2,"start","#f85149")}
       ${lbl("숏 커버",S-PAD+4,S-PAD+8,"end","#58a6ff")}${lbl("롱 청산",PAD-8,S-PAD+8,"start","#d29922")}
       ${lbl("가격→",S-PAD+4,C-4,"end")}${lbl("OI↑",C+4,PAD-6,"start")}
-      ${line}${dots}
-    </svg><div class="rgquad-cap">x=Δ가격 · y=ΔOI (2h, %)</div></div>`;
+      ${line}${dots}${arrow}
+    </svg><div class="rgquad-cap">x=Δ가격 · y=ΔOI (2h, %)${moveGlyph?` · 이동 <b>${moveGlyph}</b>`:''}</div></div>`;
 }
 function regimePanel(rg){
   const head=`<div class="section-title">시장 레짐 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 5상태 · 방향은 상위TF 우선</span></div>`;
