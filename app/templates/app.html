@@ -445,7 +445,7 @@ function regimePanel(rg){
   }</tbody></table></div>`:`<p class="empty-inline">레짐 매칭된 거래 없음</p>`;
   const note=`<p class="empty-inline" style="font-size:11.5px">${esc((rg.perf&&rg.perf.note)||"")}${rg.perf&&rg.perf.unmatched?` · 미매칭 ${rg.perf.unmatched}건`:''} · ${esc(lv.basis||"")}</p>`;
   const quad=lv.quad?`<p class="empty-inline" data-tip="OI 4사분면: ΔOI↑+가격↑=신규 롱 / ΔOI↑+가격↓=신규 숏(추세 연료, 라벨 투표) · ΔOI↓+가격↑=숏 커버 / ΔOI↓+가격↓=롱 청산(라벨 불변·확신 −15% — 무기한에선 강한 연속 레그라 강등 금지, 연구 반영) · ΔOI≈0=데드존">OI 사분면(15m): ${esc(lv.quad.text)}</p>`:"";
-  return head+`<div class="market">${chips}</div><p class="empty-inline" style="color:var(--ice,#e6edf3)">판정: ${esc(lv.verdict||"—")}</p>`+quad+warn+perf+note;
+  return head+`<div class="rgc"><div class="market">${chips}</div><p class="empty-inline" style="color:var(--ice,#e6edf3)">판정: ${esc(lv.verdict||"—")}</p>`+quad+warn+perf+note+`</div>`;
 }
 function ensureRegime(){
   const h=$("#regimeHost"); if(!h)return;

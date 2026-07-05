@@ -575,3 +575,12 @@ kbd,.kbd{font-family:var(--f-mono);font-size:var(--fs-micro);background:var(--ca
 .cmdk-empty{padding:18px;text-align:center;font-size:var(--fs-sm)}
 .cmdk-foot{display:flex;gap:14px;padding:8px 14px;border-top:1px solid var(--line);font-size:var(--fs-cap);color:var(--muted)}
 @media(max-width:560px){.cmdk-trigger .kbd{display:none} .cmdk-bg{padding:8vh 10px}}
+
+/* 시장 레짐 카드 — 컴팩트 모드 (우측 컬럼 높이 절약) */
+.rgc .market{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:8px}
+.rgc .mchip{padding:7px 10px;min-height:0;gap:2px}
+.rgc .mchip .mv{font-size:var(--fs-sm)}
+.rgc .mchip .ms{font-size:var(--fs-micro)}
+.rgc .empty-inline{padding:6px 10px;font-size:var(--fs-xs);margin:0 0 6px}
+.rgc .table-wrap{margin-top:6px}
+.rgc table th,.rgc table td{padding:5px 8px;font-size:var(--fs-xs)}
