@@ -592,3 +592,9 @@ kbd,.kbd{font-family:var(--f-mono);font-size:var(--fs-micro);background:var(--ca
 .rgc .rgquad-now{text-align:center;font-size:var(--fs-xs);margin:2px 0 4px;font-weight:600}
 .rgc .rgrow-perf{flex:1;min-width:200px}
 .rgc .rgrow-perf .table-wrap{margin-top:0}
+.rgc .rgrib-head{font-size:var(--fs-xs);color:var(--ice);font-weight:600;margin-bottom:3px}
+.rgc .rgrib-head span{color:var(--fog);font-weight:400;font-family:var(--f-mono);font-size:var(--fs-micro)}
+.rgc .rgperf{overflow-x:hidden}
+.rgc .rgperf table{width:100%;table-layout:auto}
+.rgc .rgperf th,.rgc .rgperf td{white-space:normal;padding:4px 6px;font-size:var(--fs-xs)}
+.rgc .rgperf td:first-child{word-break:keep-all}
