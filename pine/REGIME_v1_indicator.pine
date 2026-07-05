@@ -58,8 +58,14 @@ quadOn = oiOk and not na(dzDoi) and not na(dzDpr) and math.abs(doi) >= dzDoi and
 quad   = not quadOn ? 0 : doi > 0 and dpr > 0 ? 1 : doi > 0 and dpr < 0 ? 2 : doi < 0 and dpr > 0 ? 3 : doi < 0 and dpr < 0 ? 4 : 0
 
 // ── 축 점수 → 5상태 ─────────────────────────────────────────────────────────
+// Pine엔 tanh 내장이 없음 — tanh(x) = (e^2x − 1)/(e^2x + 1), x≥0에서 사용·클램프로 오버플로 방지
+tanhPos(float x) =>
+    float xc = math.min(x, 20.0)
+    float e2 = math.exp(2.0 * xc)
+    (e2 - 1.0) / (e2 + 1.0)
+
 a      = math.max(0.0, math.min(1.0, (adx - adxLo) / adxScale))
-tRaw   = a * math.tanh(math.abs(m))
+tRaw   = a * tanhPos(math.abs(m))
 agreeD = math.sign(diP - diM) == math.sign(m)
 T      = agreeD ? tRaw : tRaw * 0.5
 dirUp   = m > 0 ? T : 0.0
