@@ -150,7 +150,10 @@ def main():
         nulls = []
         for i in range(args.nulls):
             s = int(g.integers(192, 96 * 90)) * (1 if g.random() < 0.5 else -1)
-            src_roll = pd.Series(np.roll(src.to_numpy(), s), index=src.index)
+            arr = np.roll(src.to_numpy(), s)
+            seam = s % n  # wrap seam: derived k-bar diffs across it are artifacts, not signal
+            arr[max(0, seam - K):min(n, seam + K + 1)] = np.nan
+            src_roll = pd.Series(arr, index=src.index)
             f_n = classifier.classify(variant_feat(feat_std, src_roll, kind))
             ln, _, _ = leads_of(B1, trim(f_n)["regime"], idx, exc)
             if len(ln):

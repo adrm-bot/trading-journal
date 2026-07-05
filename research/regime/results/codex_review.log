@@ -1,0 +1,3355 @@
+Reading additional input from stdin...
+OpenAI Codex v0.142.5
+--------
+workdir: C:\Users\user\Desktop\Auto-trade-system
+model: gpt-5.5
+provider: openai
+approval: never
+sandbox: read-only
+reasoning effort: xhigh
+reasoning summaries: none
+session id: 019f3139-16fb-7931-bcb8-d711d3fd9405
+--------
+user
+You are an EXTERNAL AUDITOR (independent of the authors). Audit the crypto regime classifier research in research/regime/ (key files: features.py, classifier.py, leadlag.py, run_all.py, alt_axes.py, build_dataset.py, tests/test_no_lookahead.py) and the TradingView port pine/REGIME_v1_indicator.pine.
+
+Authors' claims to verify:
+1) All rolling quantile/threshold features are strictly causal; verified by raw-table truncation/poisoning tests with a planted-leak canary (tests/test_no_lookahead.py).
+2) Episode-overlap lead-lag measurement: the fused 5-state classifier enters trend episodes median 4-6 candles LATER than raw ADX(25) baseline but with ~33% less churn and near-zero false alarms.
+3) The +1 candle OI marginal contribution is INDISTINGUISHABLE from a circular time-shift null (p=1.0) => no OI timing alpha. Same negative verdict for taker flow, top-trader long/short ratio, Deribit DVOL (pre-registered encodings, alt_axes.py).
+4) Labels describe volatility character (post-hoc realized |move| ordering SQUEEZE<RANGE<TREND<CHOP) but have NO directional persistence (slight mean-reversion after trend labels).
+
+Audit tasks: (a) statistical soundness of the episode matching, month-cluster bootstrap, and circular-shift nulls; (b) any remaining look-ahead you can find; (c) Pine v6 script: compile risks, repaint risks, divergence from the Python reference; (d) could the negative conclusions be artifacts of bugs? Be adversarial and specific (file:line). Keep it under 800 words. End with 'VERDICT:' one line.
+codex
+I’ll perform a read-only audit, trace the implementation and tests end-to-end, and cite exact file/line locations. I’ll also run the relevant tests or scripts where the environment permits.
+2026-07-05T07:41:01.399848Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg --files research/regime pine | Sort-Object; git status --short'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg --files research/regime pine | Sort-Object; git status --short' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg --files research/regime pine | Sort-Object; git status --short'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'git status --short' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg --files research/regime pine' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 247ms:
+ M README.md
+ M pine/HT1_v2_strategy.pine
+ M pine/REGIME_v1_indicator.pine
+ M research/regime/README.md
+ M research/regime/playbook.py
+?? .claude/
+?? docs/RC1_v1_SPEC.md
+?? docs/RC1_v1_VALIDATION.md
+?? docs/rc1_alert_schema.json
+?? pine/ADV_ADX_Gunner.pine
+?? pine/RC1_v1_indicator.pine
+?? pine/RC1_v1_strategy.pine
+?? pine/RMX_Spread_Gunner_V1.pine
+?? pine/RMX_v1_indicator.pine
+?? research/rc1/
+?? research/rc2/
+?? research/regime/results/codex_review.log
+
+ succeeded in 636ms:
+pine\RMX_v1_indicator.pine
+pine\RMX_Spread_Gunner_V1.pine
+pine\REGIME_v1_indicator.pine
+pine\RC1_v1_strategy.pine
+pine\RC1_v1_indicator.pine
+pine\HT1_v2_strategy.pine
+pine\HT1_v2_indicator.pine
+pine\HT1_v1_backup.pine
+pine\HT1_v15_indicator.pine
+pine\ADV_ADX_Gunner.pine
+research/regime\viz.py
+research/regime\tests\test_states.py
+research/regime\tests\test_quadrant.py
+research/regime\tests\test_playbook.py
+research/regime\tests\test_no_lookahead.py
+research/regime\tests\test_leadlag.py
+research/regime\tests\test_degrade.py
+research/regime\tests\test_axes_synthetic.py
+research/regime\tests\scenarios.py
+research/regime\tests\conftest.py
+research/regime\run_all.py
+research/regime\results\XRPUSDT_headline.json
+research/regime\results\xrp2.log
+research/regime\results\sweep2.log
+research/regime\results\SOLUSDT_headline.json
+research/regime\results\sol2.log
+research/regime\results\rebuild2.log
+research/regime\results\null3.log
+research/regime\results\ETHUSDT_headline.json
+research/regime\results\eth2.log
+research/regime\results\collapse2.log
+research/regime\results\codex_review.log
+research/regime\results\BTCUSDT_posthoc.json
+research/regime\results\BTCUSDT_null.json
+research/regime\results\BTCUSDT_hysteresis.json
+research/regime\results\BTCUSDT_headline.json
+research/regime\results\BTCUSDT_collapse.json
+research/regime\results\BTCUSDT_altaxes.json
+research/regime\results\btc2.log
+research/regime\README.md
+research/regime\playbook.py
+research/regime\NOTES.md
+research/regime\leadlag.py
+research/regime\fetch_data.py
+research/regime\features.py
+research/regime\build_dataset.py
+research/regime\baseline.py
+research/regime\alt_axes.py
+research/regime\classifier.py
+research/regime\current.py
+research/regime\data\.gitignore
+
+2026-07-05T07:41:10.395325Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "" research/regime/tests/test_no_lookahead.py'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "" research/regime/features.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "" research/regime/tests/test_no_lookahead.py' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "" research/regime/tests/test_no_lookahead.py'` rejected: blocked by policy
+2026-07-05T07:41:10.397967Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "" research/regime/features.py'` rejected: blocked by policy
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n "" research/regime/features.py'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/classifier.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/tests/test_no_lookahead.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/features.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/leadlag.py' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 266ms:
+1:#!/usr/bin/env python3
+2:"""5-state regime classifier: per-axis score vectors -> weighted argmax + agreement confidence.
+3:
+4:Output contract: one row per candle (after burn-in), {regime, confidence in [0,1], timestamp}.
+5:No forecasts, no price targets, no trade signals. This module NEVER imports the playbook.
+6:
+7:Design notes (adversarially reviewed, see NOTES.md):
+8:- direction axis is agnostic among SQUEEZE/RANGE/CHOP; volatility axis is agnostic on trend —
+9:  explicit templates keep all 5 states reachable
+10:- fuel: only dOI-rising quadrants (new longs/new shorts) vote on the label; dOI-falling
+11:  quadrants (short covering / long liquidation) are LABEL-INERT confidence trims, because in
+12:  perp markets those are often the most violent trend-continuation legs
+13:- funding is label-inert by construction (confidence-only)
+14:- near-tie argmax prefers the incumbent state (zero-parameter anti-flap, distinct from
+15:  min_dwell/confirm_bars which default OFF)
+16:- hysteresis is an online FSM: a switch is stamped at the candle where it is confirmed,
+17:  never back-dated
+18:- degrade path: no usable OI -> fuel axis skipped, weights renormalized, flat confidence
+19:  penalty, fuel_available flag emitted. The B2 ablation (use_fuel=False) is a legitimate
+20:  UNPENALIZED 2-axis classifier — the penalty belongs to the production degrade path only.
+21:"""
+22:from dataclasses import dataclass
+23:
+24:import numpy as np
+25:import pandas as pd
+26:
+27:REGIMES = ("TREND_UP", "TREND_DOWN", "SQUEEZE", "RANGE", "CHOP")
+28:IDX = {r: i for i, r in enumerate(REGIMES)}
+29:
+30:
+31:@dataclass(frozen=True)
+32:class ClassifierParams:
+33:    adx_lo: float = 20.0
+34:    adx_scale: float = 15.0
+35:    w_dir: float = 0.5
+36:    w_vol: float = 0.3
+37:    w_fuel: float = 0.2
+38:    ramp_lo: tuple = (0.15, 0.25)    # vol_pct ramp: SQUEEZE membership
+39:    ramp_hi: tuple = (0.75, 0.85)    # vol_pct ramp: CHOP membership
+40:    near_tie: float = 0.02
+41:    conf_doi_down: float = 0.85      # short-covering / long-liquidation trim (label-inert)
+42:    conf_deadzone: float = 0.95      # no-fuel deadzone trim (spec sign table)
+43:    funding_extreme: float = 0.95    # funding percentile beyond this = crowded
+44:    conf_funding: float = 0.90       # trim on TREND confidence when crowded
+45:    degrade_penalty: float = 0.80    # production degrade path only
+46:    min_dwell: int = 0
+47:    confirm_bars: int = 0
+48:
+49:
+50:DEFAULT_CP = ClassifierParams()
+51:
+52:
+53:def axis_scores(feat: pd.DataFrame, p: ClassifierParams, use_fuel: bool):
+54:    """Return (scores n x 5 normalized, valid mask, fuel_mod, fuel_votes, fuel_available)."""
+55:    n = len(feat)
+56:    adx = feat["adx"].to_numpy(float)
+57:    m = feat["m"].to_numpy(float)
+58:    di = feat["di_diff"].to_numpy(float)
+59:    v = feat["vol_pct"].to_numpy(float)
+60:
+61:    valid = ~(np.isnan(adx) | np.isnan(m) | np.isnan(v))
+62:
+63:    # --- direction axis ---
+64:    a = np.clip((adx - p.adx_lo) / p.adx_scale, 0.0, 1.0)
+65:    T = a * np.tanh(np.abs(m))
+66:    agree = np.sign(di) == np.sign(m)
+67:    T = np.where(agree, T, T * 0.5)
+68:    dir_s = np.zeros((n, 5))
+69:    dir_s[:, IDX["TREND_UP"]] = np.where(m > 0, T, 0.0)
+70:    dir_s[:, IDX["TREND_DOWN"]] = np.where(m < 0, T, 0.0)
+71:    rest = (1.0 - dir_s[:, 0] - dir_s[:, 1]) / 3.0
+72:    for s in ("SQUEEZE", "RANGE", "CHOP"):
+73:        dir_s[:, IDX[s]] = rest
+74:
+75:    # --- volatility axis ---
+76:    lo0, lo1 = p.ramp_lo
+77:    hi0, hi1 = p.ramp_hi
+78:    muL = np.clip((lo1 - v) / (lo1 - lo0), 0.0, 1.0)
+79:    muH = np.clip((v - hi0) / (hi1 - hi0), 0.0, 1.0)
+80:    muM = np.clip(1.0 - muL - muH, 0.0, 1.0)
+81:    vol_s = np.zeros((n, 5))
+82:    vol_s[:, IDX["SQUEEZE"]] = muL
+83:    vol_s[:, IDX["RANGE"]] = muM
+84:    vol_s[:, IDX["CHOP"]] = muH
+85:
+86:    # --- fuel axis ---
+87:    fuel_votes = np.zeros(n, dtype=bool)
+88:    fuel_mod = np.ones(n)
+89:    fuel_available = np.zeros(n, dtype=bool)
+90:    fuel_s = np.zeros((n, 5))
+91:    if use_fuel and "quadrant" in feat.columns:
+92:        quad = feat["quadrant"].to_numpy()
+93:        fuel_available = feat["fuel_defined"].to_numpy(bool)
+94:        fuel_votes = fuel_available & ((quad == 1) | (quad == 2))
+95:        fuel_s[quad == 1, IDX["TREND_UP"]] = 1.0
+96:        fuel_s[quad == 2, IDX["TREND_DOWN"]] = 1.0
+97:        fuel_mod = np.where(fuel_available & ((quad == 3) | (quad == 4)),
+98:                            p.conf_doi_down, fuel_mod)
+99:        fuel_mod = np.where(fuel_available & (quad == 0), p.conf_deadzone, fuel_mod)
+100:
+101:    w_present = p.w_dir + p.w_vol + np.where(fuel_votes, p.w_fuel, 0.0)
+102:    scores = (p.w_dir * dir_s + p.w_vol * vol_s
+103:              + p.w_fuel * fuel_s * fuel_votes[:, None]) / w_present[:, None]
+104:    return scores, valid, fuel_mod, fuel_votes, fuel_available
+105:
+106:
+107:def classify(feat: pd.DataFrame, p: ClassifierParams = DEFAULT_CP, *,
+108:             use_fuel: bool = True, use_funding: bool = True,
+109:             debug: bool = False) -> pd.DataFrame:
+110:    """feat: features.compute() output. Returns DataFrame(regime, confidence) on feat.index.
+111:
+112:    Rows where core features are NaN (burn-in) get regime=None, confidence=NaN.
+113:    Degrade path is PER-ROW and causal: any row without usable fuel (missing OI column,
+114:    stale OI, deadzone-window warmup) gets the flat degrade penalty on confidence — no
+115:    whole-series look-ahead decides the mode. The B2 ablation (use_fuel=False) stays
+116:    unpenalized by definition.
+117:    """
+118:    scores, valid, fuel_mod, fuel_votes, fuel_available = axis_scores(feat, p, use_fuel)
+119:    n = len(feat)
+120:    fund = feat["funding_pct"].to_numpy(float) if "funding_pct" in feat.columns \
+121:        else np.full(n, np.nan)
+122:
+123:    labels = np.full(n, -1, dtype=np.int8)
+124:    conf = np.full(n, np.nan)
+125:
+126:    cur = -1
+127:    pending, pend_count, since_switch = -1, 0, 10**9
+128:    best_arr = np.argmax(scores, axis=1)  # first-max on ties (matches the Pine port)
+129:    for t in range(n):
+130:        if not valid[t]:
+131:            cur, pending, pend_count, since_switch = -1, -1, 0, 10**9
+132:            continue
+133:        best = best_arr[t]
+134:        # near-tie: prefer the incumbent
+135:        cand = cur if (cur >= 0 and scores[t, cur] >= scores[t, best] - p.near_tie) else best
+136:        if cur < 0:
+137:            cur, since_switch = cand, 0
+138:        elif cand != cur:
+139:            if cand == pending:
+140:                pend_count += 1
+141:            else:
+142:                pending, pend_count = cand, 1
+143:            if pend_count >= p.confirm_bars + 1 and since_switch >= p.min_dwell:
+144:                cur, since_switch = cand, 0
+145:                pending, pend_count = -1, 0
+146:        else:
+147:            pending, pend_count = -1, 0
+148:        since_switch += 1
+149:        labels[t] = cur
+150:
+151:        agreement = scores[t, cur]
+152:        runner = max(scores[t, s] for s in range(5) if s != cur)
+153:        margin = 1.0 - 0.5 * (runner / agreement if agreement > 1e-12 else 2.0)
+154:        c = agreement * margin * fuel_mod[t]
+155:        if use_funding and not np.isnan(fund[t]) and cur in (0, 1):
+156:            if fund[t] >= p.funding_extreme or fund[t] <= 1.0 - p.funding_extreme:
+157:                c *= p.conf_funding
+158:        if use_fuel and not fuel_available[t]:
+159:            c *= p.degrade_penalty  # per-row causal degrade (fuel wanted but unusable here)
+160:        conf[t] = min(max(c, 0.0), 1.0)
+161:
+162:    regime = pd.array([REGIMES[i] if i >= 0 else None for i in labels])
+163:    out = pd.DataFrame({"regime": regime, "confidence": conf}, index=feat.index)
+164:    out["fuel_available"] = fuel_available if use_fuel else False
+165:    if debug:
+166:        for i, r in enumerate(REGIMES):
+167:            out[f"score_{r}"] = scores[:, i]
+168:        out["fuel_mod"] = fuel_mod
+169:        out["fuel_votes"] = fuel_votes
+170:    return out
+171:
+172:
+173:def to_records(res: pd.DataFrame) -> list:
+174:    """Output contract: [{regime, confidence, timestamp}] for classified candles only."""
+175:    ok = res["regime"].notna()
+176:    return [{"regime": r, "confidence": float(c), "timestamp": ts.isoformat()}
+177:            for ts, r, c in zip(res.index[ok], res.loc[ok, "regime"], res.loc[ok, "confidence"])]
+
+ succeeded in 270ms:
+1:"""THE look-ahead test. Any future reference anywhere in the pipeline must fail it.
+2:
+3:Operates on the RAW three tables (klines / metrics / funding) from the real archive, sliced to
+4:2023-07 .. 2024-04 (contains month-file boundaries, funding times, label transitions, and the
+5:2024-02-16 OI outage):
+6:
+7:- truncate mode: cut ALL three raw tables at wall-clock t*, rerun the full pipeline
+8:  (assemble -> features -> classify F + B2 + B1); every output at ts <= t* must EXACTLY match
+9:  the full run (labels/events: no tolerance; floats: atol 1e-12)
+10:- poison mode: keep full length but replace every row after t* in all three tables with
+11:  garbage; same assertion
+12:- canary: a deliberately leaky pipeline (oi shifted -1 candle after the join) MUST be caught
+13:  by the same machinery — proves the test can fail
+14:
+15:Cut points are adversarial, not uniform-random: month zip boundaries, a funding boundary,
+16:inside the OI gap, and immediately after real label transitions.
+17:"""
+18:import numpy as np
+19:import pandas as pd
+20:import pytest
+21:
+22:import build_dataset as bd
+23:import baseline
+24:import classifier
+25:import features
+26:
+27:SYMBOL = "BTCUSDT"
+28:SLICE = ("2023-07-01", "2024-04-30")
+29:BAR = pd.Timedelta(minutes=15)
+30:
+31:
+32:@pytest.fixture(scope="module")
+33:def raw():
+34:    if not (bd.RAW / SYMBOL / "metrics").exists():
+35:        pytest.skip("raw archive not downloaded")
+36:    kraw = bd.read_klines_raw(SYMBOL, *SLICE)
+37:    m, _, _ = bd.read_metrics(SYMBOL, *SLICE)
+38:    fu = bd.read_funding(SYMBOL, *SLICE)
+39:    return kraw, m, fu
+40:
+41:
+42:def pipeline(kraw, m, fu, leak=False, cp=classifier.DEFAULT_CP):
+43:    df = bd.assemble(kraw, m, fu)
+44:    if leak:
+45:        df["oi"] = df["oi"].shift(-1)  # deliberate future reference (canary)
+46:    feat = features.compute(df)
+47:    f = classifier.classify(feat, cp)
+48:    b2 = classifier.classify(feat, cp, use_fuel=False)
+49:    b1 = baseline.classify_b1(feat)
+50:    return f, b2, b1
+51:
+52:
+53:def cut(kraw, m, fu, tstar):
+54:    return (kraw[kraw["open_ts"] + BAR <= tstar],
+55:            m[m["snap_ts"] <= tstar],
+56:            fu[fu["event_ts"] <= tstar])
+57:
+58:
+59:def poison(kraw, m, fu, tstar):
+60:    k2, m2, f2 = kraw.copy(), m.copy(), fu.copy()
+61:    kf = k2["open_ts"] + BAR > tstar
+62:    for col, fac in [("open", 7.0), ("high", 9.0), ("low", 0.5), ("close", 7.0), ("volume", 100.0)]:
+63:        k2.loc[kf, col] *= fac
+64:    m2.loc[m2["snap_ts"] > tstar, "oi"] *= 13.0
+65:    f2.loc[f2["event_ts"] > tstar, "funding"] = 0.05
+66:    return k2, m2, f2
+67:
+68:
+69:def _labels(arr) -> np.ndarray:
+70:    a = arr.to_numpy(object)
+71:    return np.array(["__NA__" if pd.isna(x) else str(x) for x in a], dtype=object)
+72:
+73:
+74:def _mismatches(full, sub, upto):
+75:    """Compare (f, b2, b1) tuples on rows <= upto; return list of mismatch descriptions."""
+76:    out = []
+77:    for name, a, b in [("F", full[0], sub[0]), ("B2", full[1], sub[1])]:
+78:        ai, bi = a.loc[a.index <= upto], b.loc[b.index <= upto]
+79:        if not ai.index.equals(bi.index):
+80:            out.append(f"{name}: index mismatch")
+81:            continue
+82:        neq = _labels(ai["regime"]) != _labels(bi["regime"])
+83:        if neq.any():
+84:            out.append(f"{name}: {neq.sum()} label mismatches, first at {ai.index[neq][0]}")
+85:        ca = ai["confidence"].to_numpy(float)
+86:        cb = bi["confidence"].to_numpy(float)
+87:        cneq = ~(np.isclose(ca, cb, atol=1e-12) | (np.isnan(ca) & np.isnan(cb)))
+88:        if cneq.any():
+89:            out.append(f"{name}: {cneq.sum()} confidence mismatches, first at {ai.index[cneq][0]}")
+90:    neq = _labels(full[2].loc[full[2].index <= upto]) != _labels(sub[2].loc[sub[2].index <= upto])
+91:    if neq.any():
+92:        out.append(f"B1: {neq.sum()} label mismatches")
+93:    return out
+94:
+95:
+96:def cut_points(full_f):
+97:    pts = [pd.Timestamp("2023-08-01 00:00", tz="UTC"),   # month zip boundary
+98:           pd.Timestamp("2024-01-01 00:00", tz="UTC"),   # year/month boundary
+99:           pd.Timestamp("2023-09-10 16:00", tz="UTC"),   # funding boundary
+100:           pd.Timestamp("2024-02-16 18:00", tz="UTC")]   # inside the OI outage
+101:    lab = full_f["regime"]
+102:    trans = lab.notna() & lab.shift().notna() & (lab != lab.shift())
+103:    t_idx = lab.index[trans]
+104:    t_idx = t_idx[t_idx > pd.Timestamp("2023-09-01", tz="UTC")]
+105:    pts += [t_idx[i] + BAR for i in (0, len(t_idx) // 2, len(t_idx) - 1)]
+106:    return pts
+107:
+108:
+109:@pytest.fixture(scope="module")
+110:def full_run(raw):
+111:    return pipeline(*raw)
+112:
+113:
+114:def test_truncate_invariance(raw, full_run):
+115:    for tstar in cut_points(full_run[0]):
+116:        sub = pipeline(*cut(*raw, tstar))
+117:        mm = _mismatches(full_run, sub, tstar)
+118:        assert not mm, f"future data reached outputs at cut {tstar}: {mm}"
+119:
+120:
+121:def test_poison_invariance(raw, full_run):
+122:    for tstar in cut_points(full_run[0]):
+123:        sub = pipeline(*poison(*raw, tstar))
+124:        mm = _mismatches(full_run, sub, tstar)
+125:        assert not mm, f"poisoned future data reached outputs at cut {tstar}: {mm}"
+126:
+127:
+128:@pytest.mark.parametrize("dwell,confirm", [(2, 1), (4, 0), (0, 3), (8, 3)])
+129:def test_hysteresis_fsm_invariance(raw, dwell, confirm):
+130:    """The hysteresis FSM is the only code path OFF in the default config — a naive
+131:    'drop short segments afterwards' implementation would rewrite past labels from the
+132:    future. Representative sweep cells must satisfy the same truncate-invariance."""
+133:    cp = classifier.ClassifierParams(min_dwell=dwell, confirm_bars=confirm)
+134:    full = pipeline(*raw, cp=cp)
+135:    for tstar in [pd.Timestamp("2023-11-07 09:15", tz="UTC"),
+136:                  pd.Timestamp("2024-02-16 18:00", tz="UTC")]:
+137:        sub = pipeline(*cut(*raw, tstar), cp=cp)
+138:        mm = _mismatches(full, sub, tstar)
+139:        assert not mm, f"FSM(dwell={dwell},confirm={confirm}) leaked at {tstar}: {mm}"
+140:
+141:
+142:def test_canary_planted_leak_is_caught(raw):
+143:    """The machinery itself must be able to fail: a -1 candle OI shift is a real leak and at
+144:    least one cut point must expose it. If this passes trivially the suite is worthless."""
+145:    full_leaky = pipeline(*raw, leak=True)
+146:    caught = 0
+147:    for tstar in cut_points(full_leaky[0]):
+148:        sub_leaky = pipeline(*cut(*raw, tstar), leak=True)
+149:        if _mismatches(full_leaky, sub_leaky, tstar):
+150:            caught += 1
+151:    assert caught > 0, "planted future-reference was NOT caught — look-ahead test is blind"
+
+ succeeded in 274ms:
+1:#!/usr/bin/env python3
+2:"""Causal feature layer.
+3:
+4:Every value at row t uses data from candle closes <= t (the current candle's own close is
+5:included by convention — labels are stamped at close time). This is the only module that
+6:computes indicators; classifier/baseline consume the returned frame and never touch raw data.
+7:
+8:Causality rules enforced here:
+9:- rolling windows end at the current row (pandas default); никогда center=True
+10:- percentile ranks are computed against the STRICTLY-PAST window: from the inclusive rolling
+11:  rank r over w obs, past-only pct = (r*w - 1)/(w - 1)  (removes the current value's self-count)
+12:- threshold-style quantiles use .shift(1)
+13:- recursive filters (EMA/Wilder) run forward from the first row only
+14:- dOI is defined only when BOTH endpoints have fresh OI
+15:"""
+16:from dataclasses import dataclass, field
+17:
+18:import numpy as np
+19:import pandas as pd
+20:
+21:BARS_PER_DAY = 96
+22:
+23:
+24:@dataclass(frozen=True)
+25:class FeatureParams:
+26:    adx_n: int = 14
+27:    ema_fast: int = 20
+28:    ema_slow: int = 50
+29:    atr_n: int = 14
+30:    bb_n: int = 20
+31:    bb_k: float = 2.0
+32:    q_window: int = 30 * BARS_PER_DAY          # 30d rolling window for percentiles
+33:    q_min_periods_fuel: int = 20 * BARS_PER_DAY  # fuel deadzone tolerates shorter history (live mode)
+34:    oi_lookback: int = 8                        # dOI / dprice lookback, candles
+35:    dead_q: float = 0.25                        # deadzone quantile for |dOI%| and |dprice|
+36:    burn_in: int = 35 * BARS_PER_DAY
+37:
+38:
+39:DEFAULT_FP = FeatureParams()
+40:
+41:
+42:def wilder(s: pd.Series, n: int) -> pd.Series:
+43:    """Wilder smoothing (RMA) = EMA with alpha=1/n, forward-recursive (causal)."""
+44:    return s.ewm(alpha=1.0 / n, adjust=False, min_periods=n).mean()
+45:
+46:
+47:def adx_di(h: pd.Series, l: pd.Series, c: pd.Series, n: int):
+48:    up = h.diff()
+49:    dn = -l.diff()
+50:    # NaN inputs (missing bars) must stay NaN — NaN>NaN is False, which would otherwise
+51:    # inject fake zero-directional-movement observations into the Wilder recursion
+52:    ok = up.notna() & dn.notna()
+53:    pdm = up.where((up > dn) & (up > 0), 0.0).where(ok)
+54:    ndm = dn.where((dn > up) & (dn > 0), 0.0).where(ok)
+55:    tr = pd.concat([h - l, (h - c.shift(1)).abs(), (l - c.shift(1)).abs()], axis=1).max(axis=1)
+56:    atr = wilder(tr, n)
+57:    pdi = 100 * wilder(pdm, n) / atr
+58:    ndi = 100 * wilder(ndm, n) / atr
+59:    dx = 100 * (pdi - ndi).abs() / (pdi + ndi).replace(0, np.nan)
+60:    adx = wilder(dx, n)
+61:    return adx, pdi, ndi, atr
+62:
+63:
+64:def past_pct_rank(s: pd.Series, window: int, min_periods: int) -> pd.Series:
+65:    """Percentile of the current value against the strictly-past part of the rolling window."""
+66:    r = s.rolling(window, min_periods=min_periods).rank(pct=True)
+67:    cnt = s.rolling(window, min_periods=min_periods).count()
+68:    return ((r * cnt - 1) / (cnt - 1)).where(cnt > 1)
+69:
+70:
+71:def compute(df: pd.DataFrame, fp: FeatureParams = DEFAULT_FP, oi_col: str = "oi") -> pd.DataFrame:
+72:    """df: build_dataset output (index=close ts). Returns feature frame on the same index."""
+73:    out = pd.DataFrame(index=df.index)
+74:    c, h, l = df["close"], df["high"], df["low"]
+75:
+76:    adx, pdi, ndi, atr = adx_di(h, l, c, fp.adx_n)
+77:    ema_f = c.ewm(span=fp.ema_fast, adjust=False, min_periods=fp.ema_fast).mean()
+78:    ema_s = c.ewm(span=fp.ema_slow, adjust=False, min_periods=fp.ema_slow).mean()
+79:    out["adx"] = adx
+80:    out["di_diff"] = pdi - ndi
+81:    out["m"] = (ema_f - ema_s) / atr.replace(0, np.nan)
+82:
+83:    # volatility percentile blend (strictly-past distributions). min_periods gets 5% slack:
+84:    # with min_periods == window, ONE missing bar blanks vol_pct for a full window length
+85:    # (30 days) — the classifier then cold-resets for that whole stretch
+86:    mp_vol = max(2, int(fp.q_window * 0.95))
+87:    mid = c.rolling(fp.bb_n, min_periods=fp.bb_n).mean()
+88:    sd = c.rolling(fp.bb_n, min_periods=fp.bb_n).std()
+89:    bbw = (2 * fp.bb_k * sd) / mid.replace(0, np.nan)
+90:    atrp = atr / c
+91:    out["bbw_pct"] = past_pct_rank(bbw, fp.q_window, mp_vol)
+92:    out["atrp_pct"] = past_pct_rank(atrp, fp.q_window, mp_vol)
+93:    out["vol_pct"] = 0.5 * out["bbw_pct"] + 0.5 * out["atrp_pct"]
+94:
+95:    # fuel: relative dOI over k candles, both endpoints fresh
+96:    k = fp.oi_lookback
+97:    out["dprice"] = c / c.shift(k) - 1
+98:    if oi_col in df.columns:
+99:        oi = df[oi_col]
+100:        if oi_col == "oi" and "oi_fresh" in df.columns:
+101:            fresh = df["oi_fresh"]
+102:        elif "bar_missing" in df.columns:
+103:            fresh = oi.notna() & ~df["bar_missing"]  # same staleness rule as the main run
+104:        else:
+105:            fresh = oi.notna()
+106:        doi = (oi - oi.shift(k)) / oi.shift(k)
+107:        doi_ok = fresh & fresh.shift(k, fill_value=False)
+108:        out["doi"] = doi.where(doi_ok)
+109:    else:
+110:        out["doi"] = np.nan  # degrade path: no OI at all
+111:
+112:    dz_doi = out["doi"].abs().rolling(fp.q_window, min_periods=fp.q_min_periods_fuel) \
+113:        .quantile(fp.dead_q).shift(1)
+114:    dz_dp = out["dprice"].abs().rolling(fp.q_window, min_periods=mp_vol) \
+115:        .quantile(fp.dead_q).shift(1)
+116:
+117:    # quadrant codes: 0 no-fuel/deadzone/missing, 1 new-longs, 2 new-shorts,
+118:    #                 3 short-covering, 4 long-liquidation
+119:    d, p = out["doi"], out["dprice"]
+120:    valid = d.notna() & dz_doi.notna() & dz_dp.notna() & (d.abs() >= dz_doi) & (p.abs() >= dz_dp)
+121:    quad = np.select(
+122:        [valid & (d > 0) & (p > 0), valid & (d > 0) & (p < 0),
+123:         valid & (d < 0) & (p > 0), valid & (d < 0) & (p < 0)],
+124:        [1, 2, 3, 4], default=0)
+125:    out["quadrant"] = quad
+126:    out["fuel_defined"] = d.notna() & dz_doi.notna()  # OI usable at all (deadzone still counts)
+127:
+128:    # funding percentile (strictly-past); label-inert by design, confidence-only
+129:    if "funding" in df.columns and df["funding"].notna().any():
+130:        out["funding_pct"] = past_pct_rank(df["funding"], fp.q_window, fp.q_min_periods_fuel)
+131:    else:
+132:        out["funding_pct"] = np.nan
+133:
+134:    out["close"] = c
+135:    out["bar_missing"] = df["bar_missing"] if "bar_missing" in df.columns else False
+136:    return out
+
+ succeeded in 262ms:
+1:#!/usr/bin/env python3
+2:"""Lead-lag harness: EPISODE (interval) matching between label tracks.
+3:
+4:Point-event nearest matching is gameable — a twitchy track buys "lead" with churn (multiple
+5:flips before every slow baseline confirmation; the just-before flip gets matched). Episodes
+6:are the honest unit: regimes are intervals, and the question is "when did the fused track's
+7:episode corresponding to this baseline trend episode BEGIN?"
+8:
+9:- tracks are mapped to the common 3-superstate alphabet {UP, DOWN, NT}
+10:- trend episodes = maximal runs of UP or DOWN, length >= min_len (blips are not episodes;
+11:  unmatched fused episodes are counted as FALSE ALARMS, a first-class metric)
+12:- 1:1 matching per class by largest temporal overlap, overlap >= min_overlap of the shorter
+13:  episode; no horizon parameter exists
+14:- lead = baseline_start - fused_start (positive = fused earlier); episode ends are compared
+15:  separately (exit timing)
+16:- uncertainty: month-level cluster bootstrap (events are era-correlated; event-level blocks
+17:  undercover); OI attribution uses PAIRED month resampling of (F leads, B2 leads)
+18:- null for OI: circular time-shift of the OI series (preserves autocorrelation, breaks only
+19:  alignment) rerun through the full fused pipeline
+20:"""
+21:from dataclasses import dataclass
+22:
+23:import numpy as np
+24:import pandas as pd
+25:
+26:SUPER = {"TREND_UP": "UP", "TREND_DOWN": "DOWN"}
+27:
+28:
+29:@dataclass(frozen=True)
+30:class MatchParams:
+31:    min_len: int = 4          # candles; sub-hour blips are noise, not episodes
+32:    min_overlap: float = 0.25  # fraction of the shorter episode
+33:    gap_pad: int = 8          # exclude episodes starting within +-pad of a data gap
+34:
+35:
+36:DEFAULT_MP = MatchParams()
+37:
+38:
+39:def to_super(labels) -> np.ndarray:
+40:    out = np.empty(len(labels), dtype=object)
+41:    for i, x in enumerate(labels):
+42:        out[i] = None if pd.isna(x) else SUPER.get(x, "NT")
+43:    return out
+44:
+45:
+46:def episodes(sup: np.ndarray, cls: str, min_len: int) -> list:
+47:    """Maximal runs of `cls`, length >= min_len -> [(start, end_inclusive), ...]"""
+48:    out = []
+49:    start = None
+50:    for i, v in enumerate(sup):
+51:        if v == cls and start is None:
+52:            start = i
+53:        elif v != cls and start is not None:
+54:            if i - start >= min_len:
+55:                out.append((start, i - 1))
+56:            start = None
+57:    if start is not None and len(sup) - start >= min_len:
+58:        out.append((start, len(sup) - 1))
+59:    return out
+60:
+61:
+62:def match(base_eps: list, fused_eps: list, min_overlap: float):
+63:    """1:1 greedy by overlap desc (deterministic tiebreak by index). Returns
+64:    (pairs [(bi, fi, ov)], unmatched_base_idx, unmatched_fused_idx)."""
+65:    cand = []
+66:    for bi, (bs, be) in enumerate(base_eps):
+67:        for fi, (fs, fe) in enumerate(fused_eps):
+68:            ov = min(be, fe) - max(bs, fs) + 1
+69:            if ov <= 0:
+70:                continue
+71:            shorter = min(be - bs, fe - fs) + 1
+72:            if ov >= min_overlap * shorter:
+73:                cand.append((ov, bi, fi))
+74:    cand.sort(key=lambda t: (-t[0], t[1], t[2]))
+75:    used_b, used_f, pairs = set(), set(), []
+76:    for ov, bi, fi in cand:
+77:        if bi in used_b or fi in used_f:
+78:            continue
+79:        used_b.add(bi)
+80:        used_f.add(fi)
+81:        pairs.append((bi, fi, ov))
+82:    un_b = [i for i in range(len(base_eps)) if i not in used_b]
+83:    un_f = [i for i in range(len(fused_eps)) if i not in used_f]
+84:    return pairs, un_b, un_f
+85:
+86:
+87:def _near_gap(ep, excluded: np.ndarray, pad: int) -> bool:
+88:    s = ep[0]
+89:    lo, hi = max(0, s - pad), min(len(excluded), s + pad + 1)
+90:    return bool(excluded[lo:hi].any())
+91:
+92:
+93:def class_stats(base_sup: np.ndarray, fused_sup: np.ndarray, cls: str,
+94:                mp: MatchParams = DEFAULT_MP, excluded: np.ndarray | None = None) -> dict:
+95:    """Lead/miss/false-alarm stats for one episode class ('UP' or 'DOWN')."""
+96:    n = len(base_sup)
+97:    be = episodes(base_sup, cls, mp.min_len)
+98:    fe = episodes(fused_sup, cls, mp.min_len)
+99:    if excluded is not None:
+100:        n_excl_b = sum(_near_gap(e, excluded, mp.gap_pad) for e in be)
+101:        n_excl_f = sum(_near_gap(e, excluded, mp.gap_pad) for e in fe)
+102:        be = [e for e in be if not _near_gap(e, excluded, mp.gap_pad)]
+103:        fe = [e for e in fe if not _near_gap(e, excluded, mp.gap_pad)]
+104:    else:
+105:        n_excl_b = n_excl_f = 0
+106:    pairs, un_b, un_f = match(be, fe, mp.min_overlap)
+107:    leads = np.array([be[bi][0] - fe[fi][0] for bi, fi, _ in pairs])
+108:    end_deltas = np.array([be[bi][1] - fe[fi][1] for bi, fi, _ in pairs])
+109:    starts_b = [be[bi][0] for bi, fi, _ in pairs]
+110:    return {
+111:        "class": cls,
+112:        "n_base": len(be), "n_fused": len(fe), "n_matched": len(pairs),
+113:        "n_miss": len(un_b), "n_false": len(un_f),
+114:        "n_excluded_base": n_excl_b, "n_excluded_fused": n_excl_f,
+115:        "false_per_100c": len(un_f) / n * 100,
+116:        "leads": leads, "end_deltas": end_deltas, "pair_base_starts": starts_b,
+117:    }
+118:
+119:
+120:def churn3(sup: np.ndarray) -> float:
+121:    """Label flips per 100 candles on the 3-superstate alphabet (None-safe)."""
+122:    v = [x for x in sup if x is not None]
+123:    if len(v) < 2:
+124:        return 0.0
+125:    flips = sum(a != b for a, b in zip(v, v[1:]))
+126:    return flips / len(v) * 100
+127:
+128:
+129:def flap_rate(sup: np.ndarray) -> float:
+130:    """Fraction of label changes reversed within 2 candles (boundary flapping)."""
+131:    v = [x for x in sup if x is not None]
+132:    changes = [i for i in range(1, len(v)) if v[i] != v[i - 1]]
+133:    if not changes:
+134:        return 0.0
+135:    revert = sum(1 for i in changes
+136:                 if (i + 1 < len(v) and v[i + 1] == v[i - 1])
+137:                 or (i + 2 < len(v) and v[i + 2] == v[i - 1] and v[i + 1] == v[i]))
+138:    return revert / len(changes)
+139:
+140:
+141:def hodges_lehmann(x: np.ndarray) -> float:
+142:    if len(x) == 0:
+143:        return np.nan
+144:    i, j = np.triu_indices(len(x))
+145:    return float(np.median((x[i] + x[j]) / 2.0))
+146:
+147:
+148:def month_keys(index: pd.DatetimeIndex, starts: list) -> np.ndarray:
+149:    return np.array([f"{index[s]:%Y-%m}" for s in starts])
+150:
+151:
+152:def month_bootstrap_median(leads: np.ndarray, months: np.ndarray,
+153:                           n_boot: int = 2000, seed: int = 11):
+154:    """Cluster bootstrap over calendar months: resample months, pool their leads, median."""
+155:    if len(leads) == 0:
+156:        return (np.nan, np.nan)
+157:    uniq = np.unique(months)
+158:    g = np.random.default_rng(seed)
+159:    by_month = {m: leads[months == m] for m in uniq}
+160:    meds = []
+161:    for _ in range(n_boot):
+162:        pick = g.choice(uniq, size=len(uniq), replace=True)
+163:        pool = np.concatenate([by_month[m] for m in pick])
+164:        meds.append(np.median(pool))
+165:    return (float(np.percentile(meds, 2.5)), float(np.percentile(meds, 97.5)))
+166:
+167:
+168:def paired_month_bootstrap_diff(leads_f, months_f, leads_b, months_b,
+169:                                n_boot: int = 2000, seed: int = 11):
+170:    """CI for median(F leads) - median(B2 leads) with the SAME month resample on both sides
+171:    (preserves era pairing)."""
+172:    uniq = np.unique(np.concatenate([months_f, months_b]))
+173:    g = np.random.default_rng(seed)
+174:    f_by = {m: leads_f[months_f == m] for m in uniq}
+175:    b_by = {m: leads_b[months_b == m] for m in uniq}
+176:    diffs = []
+177:    for _ in range(n_boot):
+178:        pick = g.choice(uniq, size=len(uniq), replace=True)
+179:        pf = np.concatenate([f_by[m] for m in pick]) if any(len(f_by[m]) for m in pick) else np.array([])
+180:        pb = np.concatenate([b_by[m] for m in pick]) if any(len(b_by[m]) for m in pick) else np.array([])
+181:        if len(pf) == 0 or len(pb) == 0:
+182:            continue
+183:        diffs.append(np.median(pf) - np.median(pb))
+184:    if not diffs:
+185:        return (np.nan, np.nan, np.nan)
+186:    return (float(np.median(diffs)), float(np.percentile(diffs, 2.5)),
+187:            float(np.percentile(diffs, 97.5)))
+188:
+189:
+190:def summarize(leads: np.ndarray) -> dict:
+191:    if len(leads) == 0:
+192:        return {"n": 0, "median": np.nan, "iqr": (np.nan, np.nan), "hl": np.nan}
+193:    return {"n": int(len(leads)),
+194:            "median": float(np.median(leads)),
+195:            "iqr": (float(np.percentile(leads, 25)), float(np.percentile(leads, 75))),
+196:            "hl": hodges_lehmann(leads)}
+
+codex
+Initial tracing confirms the feature formulas are designed causally, but the statistical claims depend heavily on how episodes are filtered, paired, and pooled. I’m now checking those paths against the saved outputs and the Pine implementation.
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/run_all.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/baseline.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/alt_axes.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/build_dataset.py' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 290ms:
+1:#!/usr/bin/env python3
+2:"""B1 baseline: the classic ADX regime detector, nothing else.
+3:
+4:TREND_UP   if ADX >= 25 and DI+ > DI-
+5:TREND_DOWN if ADX >= 25 and DI+ < DI-
+6:SIDEWAYS   otherwise
+7:
+8:Deliberately dumb and slow-to-confirm: this is the reference clock the fused classifier is
+9:measured against. Computed from the SAME feature frame and stamped at the same candle-close
+10:timestamps as the fused track (a per-track stamping difference would bias every lead by a
+11:constant).
+12:"""
+13:import numpy as np
+14:import pandas as pd
+15:
+16:ADX_CUT = 25.0
+17:
+18:
+19:def classify_b1(feat: pd.DataFrame) -> pd.Series:
+20:    adx = feat["adx"].to_numpy(float)
+21:    di = feat["di_diff"].to_numpy(float)
+22:    valid = ~(np.isnan(adx) | np.isnan(di))
+23:    lab = np.where(~valid, None,
+24:                   np.where((adx >= ADX_CUT) & (di > 0), "TREND_UP",
+25:                            np.where((adx >= ADX_CUT) & (di < 0), "TREND_DOWN", "SIDEWAYS")))
+26:    return pd.Series(lab, index=feat.index, name="regime")
+
+ succeeded in 288ms:
+1:#!/usr/bin/env python3
+2:"""End-to-end research runner.
+3:
+4:Stages (each writes results/<SYMBOL>_<stage>.json and prints a summary):
+5:  headline  - lead-lag tables: F vs B1, B2 vs B1, OI marginal contribution (the ONE number),
+6:              churn/flap/false-alarm columns, era decomposition, descriptives,
+7:              sensitivity grid (k x deadzone; d x overlap), OI-lag robustness
+8:  null      - circular time-shift null for the OI marginal (200 shifts) -> permutation p
+9:  collapse  - confidence-collapse early-warning angle vs B1 transitions, time-shift null,
+10:              funding ablation
+11:  sweep     - hysteresis grid (min_dwell x confirm_bars) vs lead/churn table
+12:
+13:Usage: python run_all.py BTCUSDT [--stage headline|null|collapse|sweep|all] [--nulls 200]
+14:"""
+15:import argparse
+16:import json
+17:import sys
+18:from pathlib import Path
+19:
+20:import numpy as np
+21:import pandas as pd
+22:
+23:import baseline
+24:import classifier
+25:import features
+26:import leadlag
+27:from classifier import ClassifierParams
+28:from features import FeatureParams
+29:from leadlag import MatchParams
+30:
+31:HERE = Path(__file__).resolve().parent
+32:RESULTS = HERE / "results"
+33:BURN = features.DEFAULT_FP.burn_in
+34:ERAS = [("2022_bear", "2022-01-01", "2022-12-31"),
+35:        ("2023_range", "2023-01-01", "2023-12-31"),
+36:        ("2024_25_bull", "2024-01-01", "2025-12-31"),
+37:        ("2026", "2026-01-01", "2026-12-31")]
+38:CLASSES = ("UP", "DOWN")
+39:
+40:
+41:def load(symbol: str):
+42:    df = pd.read_parquet(HERE / "data" / f"{symbol}_15m.parquet")
+43:    gaps = json.loads((HERE / "data" / f"{symbol}_gaps.json").read_text())
+44:    excluded = (df["bar_missing"] | ~df["oi_fresh"]).to_numpy(bool)
+45:    return df, excluded, gaps
+46:
+47:
+48:def tracks(df, fp: FeatureParams = features.DEFAULT_FP, cp: ClassifierParams = classifier.DEFAULT_CP,
+49:           oi_col: str = "oi"):
+50:    feat = features.compute(df, fp, oi_col=oi_col)
+51:    f = classifier.classify(feat, cp)
+52:    b2 = classifier.classify(feat, cp, use_fuel=False)
+53:    b1 = baseline.classify_b1(feat)
+54:    return feat, f, b2, b1
+55:
+56:
+57:def trim(x, burn=BURN):
+58:    return x.iloc[burn:]
+59:
+60:
+61:def full_excluded(excluded: np.ndarray, f_trimmed: pd.DataFrame) -> np.ndarray:
+62:    """Data gaps PLUS the fused track's post-gap blackout (rows it could not classify):
+63:    the FSM cold-restarts after a gap, and B1 keeps labeling straight through — episodes
+64:    born inside that blackout would contaminate miss counts and lead outliers. Applied
+65:    symmetrically to every track pairing."""
+66:    return excluded[BURN:] | pd.isna(f_trimmed["regime"].to_numpy(object))
+67:
+68:
+69:def pair_stats(base_lab, fused_lab, index, excluded, mp=MatchParams()):
+70:    """Per-class episode stats + month keys for bootstrap."""
+71:    bs = leadlag.to_super(base_lab)
+72:    fs = leadlag.to_super(fused_lab)
+73:    out = {}
+74:    for cls in CLASSES:
+75:        st = leadlag.class_stats(bs, fs, cls, mp, excluded)
+76:        st["months"] = leadlag.month_keys(index, st["pair_base_starts"])
+77:        out[cls] = st
+78:    out["churn_base"] = leadlag.churn3(bs)
+79:    out["churn_fused"] = leadlag.churn3(fs)
+80:    out["flap_fused"] = leadlag.flap_rate(fs)
+81:    return out
+82:
+83:
+84:def _cls_row(st):
+85:    s = leadlag.summarize(st["leads"])
+86:    ci = leadlag.month_bootstrap_median(st["leads"], st["months"])
+87:    ends = leadlag.summarize(st["end_deltas"])
+88:    ratio = st["n_fused"] / st["n_base"] if st["n_base"] else np.nan
+89:    return {
+90:        "n_base_eps": st["n_base"], "n_fused_eps": st["n_fused"],
+91:        "eps_ratio": round(ratio, 3), "ratio_invalid": bool(ratio > 1.5),
+92:        "matched_frac": round(st["n_matched"] / st["n_base"], 3) if st["n_base"] else np.nan,
+93:        "n_miss": st["n_miss"], "n_false": st["n_false"],
+94:        "false_per_100c": round(st["false_per_100c"], 3),
+95:        "start_lead": {**s, "ci95_month_boot": ci},
+96:        "end_lead": ends,
+97:        "excluded": [st["n_excluded_base"], st["n_excluded_fused"]],
+98:    }
+99:
+100:
+101:def headline(symbol: str, write=True):
+102:    df, excluded, _ = load(symbol)
+103:    feat, f, b2, b1 = tracks(df)
+104:    idx = trim(f).index
+105:    exc = full_excluded(excluded, trim(f))
+106:    F, B2, B1 = trim(f)["regime"], trim(b2)["regime"], trim(b1)
+107:
+108:    fvb = pair_stats(B1, F, idx, exc)
+109:    avb = pair_stats(B1, B2, idx, exc)
+110:
+111:    out = {"symbol": symbol, "n_candles": len(idx),
+112:           "span": [str(idx[0]), str(idx[-1])],
+113:           "F_vs_B1": {}, "B2_vs_B1": {}, "OI_marginal": {}}
+114:    # point estimate = OBSERVED raw median difference (the same estimand the null stage
+115:    # tests); the paired month bootstrap contributes the CI only (its own median is kept as
+116:    # a diagnostic — mixing the two up would report a smoothed number against a raw null)
+117:    for cls in CLASSES:
+118:        out["F_vs_B1"][cls] = _cls_row(fvb[cls])
+119:        out["B2_vs_B1"][cls] = _cls_row(avb[cls])
+120:        obs_diff = float(np.median(fvb[cls]["leads"]) - np.median(avb[cls]["leads"])) \
+121:            if len(fvb[cls]["leads"]) and len(avb[cls]["leads"]) else np.nan
+122:        boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(
+123:            fvb[cls]["leads"], fvb[cls]["months"], avb[cls]["leads"], avb[cls]["months"])
+124:        out["OI_marginal"][cls] = {"median_diff": obs_diff, "ci95": [lo, hi],
+125:                                   "boot_median_diff": boot_med}
+126:    # pooled enter-TREND (both directions) — the pre-registered primary endpoint uses this
+127:    lf = np.concatenate([fvb[c]["leads"] for c in CLASSES])
+128:    mf = np.concatenate([fvb[c]["months"] for c in CLASSES])
+129:    lb = np.concatenate([avb[c]["leads"] for c in CLASSES])
+130:    mb = np.concatenate([avb[c]["months"] for c in CLASSES])
+131:    boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(lf, mf, lb, mb)
+132:    obs_pooled = float(np.median(lf) - np.median(lb)) if len(lf) and len(lb) else np.nan
+133:    out["OI_marginal"]["enter_pooled"] = {"median_diff": obs_pooled, "ci95": [lo, hi],
+134:                                          "boot_median_diff": boot_med,
+135:                                          "F_median": float(np.median(lf)) if len(lf) else np.nan,
+136:                                          "B2_median": float(np.median(lb)) if len(lb) else np.nan}
+137:    out["churn"] = {"B1": round(fvb["churn_base"], 3), "F": round(fvb["churn_fused"], 3),
+138:                    "B2": round(avb["churn_fused"], 3), "F_flap": round(fvb["flap_fused"], 3)}
+139:
+140:    # era decomposition (sign consistency): median F-vs-B1 lead per era, per class pooled
+141:    eras = {}
+142:    for name, a, b in ERAS:
+143:        t0 = pd.Timestamp(a, tz="UTC")
+144:        t1 = pd.Timestamp(b, tz="UTC") + pd.Timedelta(days=1)
+145:        leads = []
+146:        for cls in CLASSES:
+147:            st = fvb[cls]
+148:            sel = [(idx[s] >= t0) and (idx[s] < t1) for s in st["pair_base_starts"]]
+149:            leads += list(st["leads"][np.array(sel, dtype=bool)]) if st["n_matched"] else []
+150:        eras[name] = {"n": len(leads),
+151:                      "median": float(np.median(leads)) if leads else np.nan}
+152:    out["eras"] = eras
+153:    signs = [e["median"] for e in eras.values() if e["n"] >= 10]
+154:    out["era_sign_consistency"] = f"{sum(1 for s in signs if s > 0)}/{len(signs)} eras positive"
+155:
+156:    # descriptives: occupancy + dwell per state (the current-state deliverable's health check)
+157:    occ = F.value_counts(normalize=True).round(4).to_dict()
+158:    sup = leadlag.to_super(F)
+159:    dwell = {}
+160:    for state in classifier.REGIMES:
+161:        runs = []
+162:        cnt = 0
+163:        for x in F:
+164:            if (not pd.isna(x)) and x == state:
+165:                cnt += 1
+166:            elif cnt:
+167:                runs.append(cnt)
+168:                cnt = 0
+169:        if cnt:
+170:            runs.append(cnt)
+171:        dwell[state] = {"n_runs": len(runs), "median_bars": float(np.median(runs)) if runs else 0}
+172:    out["descriptives"] = {"occupancy": occ, "dwell": dwell,
+173:                           "native_churn_F": round(float((F != F.shift()).sum() / len(F) * 100), 3)}
+174:
+175:    # sensitivity: fuel params (k x deadzone) -> pooled enter median of F vs B1
+176:    sens = {}
+177:    for k in (4, 8, 16):
+178:        for dq in (0.10, 0.25):
+179:            fp2 = FeatureParams(oi_lookback=k, dead_q=dq)
+180:            _, f2, _, _ = tracks(df, fp=fp2)
+181:            p2 = pair_stats(B1, trim(f2)["regime"], idx, exc)
+182:            leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
+183:            sens[f"k{k}_dz{dq}"] = {"median": float(np.median(leads2)) if len(leads2) else np.nan,
+184:                                    "n": int(len(leads2)),
+185:                                    "churn_F": round(p2["churn_fused"], 3)}
+186:    out["sensitivity_fuel"] = sens
+187:    # sensitivity: matching params (min_len x overlap)
+188:    sens_m = {}
+189:    for d in (1, 4, 8):
+190:        for ovl in (0.01, 0.25, 0.5):
+191:            mp = MatchParams(min_len=d, min_overlap=ovl)
+192:            p2 = pair_stats(B1, F, idx, exc, mp)
+193:            leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
+194:            sens_m[f"d{d}_ov{ovl}"] = {"median": float(np.median(leads2)) if len(leads2) else np.nan,
+195:                                       "n": int(len(leads2))}
+196:    out["sensitivity_match"] = sens_m
+197:
+198:    # OI publication-latency robustness: fuel from oi lagged one 5m snapshot
+199:    if "oi_lag1" in df.columns:
+200:        _, f_lag, _, _ = tracks(df, oi_col="oi_lag1")
+201:        pl = pair_stats(B1, trim(f_lag)["regime"], idx, exc)
+202:        leads_l = np.concatenate([pl[c]["leads"] for c in CLASSES])
+203:        med_diff_l, lo_l, hi_l = leadlag.paired_month_bootstrap_diff(
+204:            leads_l, np.concatenate([pl[c]["months"] for c in CLASSES]), lb, mb)
+205:        out["oi_lag1_robustness"] = {
+206:            "F_median": float(np.median(leads_l)) if len(leads_l) else np.nan,
+207:            "OI_marginal_median_diff": med_diff_l, "ci95": [lo_l, hi_l]}
+208:
+209:    if write:
+210:        RESULTS.mkdir(exist_ok=True)
+211:        (RESULTS / f"{symbol}_headline.json").write_text(json.dumps(out, indent=1, default=str))
+212:    return out
+213:
+214:
+215:def null_run(symbol: str, n_shifts=200, seed=42):
+216:    """Circular time-shift null: roll the OI series (alignment broken, autocorrelation kept),
+217:    rerun the FULL fused pipeline, pooled enter median lead vs B1 per shift.
+218:    p = P(null OI-marginal >= observed OI-marginal)."""
+219:    df, excluded, _ = load(symbol)
+220:    feat, f, b2, b1 = tracks(df)
+221:    idx = trim(f).index
+222:    exc = full_excluded(excluded, trim(f))
+223:    B1 = trim(b1)
+224:    obs = pair_stats(B1, trim(f)["regime"], idx, exc)
+225:    obs_med = float(np.median(np.concatenate([obs[c]["leads"] for c in CLASSES])))
+226:    b2s = pair_stats(B1, trim(b2)["regime"], idx, exc)
+227:    b2_med = float(np.median(np.concatenate([b2s[c]["leads"] for c in CLASSES])))
+228:    obs_marginal = obs_med - b2_med
+229:
+230:    obs_cls = {c: float(np.median(obs[c]["leads"])) - float(np.median(b2s[c]["leads"]))
+231:               for c in CLASSES}
+232:
+233:    g = np.random.default_rng(seed)
+234:    n = len(df)
+235:    lo, hi = 192, 96 * 90  # 2 days .. 90 days
+236:    null_marginals = []
+237:    null_cls = {c: [] for c in CLASSES}
+238:    oi = df["oi"].to_numpy()
+239:    fresh = df["oi_fresh"].to_numpy()
+240:    bar_missing = df["bar_missing"].to_numpy(bool)
+241:    k_lb = features.DEFAULT_FP.oi_lookback
+242:    for i in range(n_shifts):
+243:        s = int(g.integers(lo, hi)) * (1 if g.random() < 0.5 else -1)
+244:        df2 = df.copy()
+245:        df2["oi"] = np.roll(oi, s)
+246:        fresh2 = np.roll(fresh, s).copy()
+247:        # mask the wrap seam: dOI across it is a fake discontinuity, not misalignment
+248:        seam = s % n
+249:        fresh2[max(0, seam - k_lb):min(n, seam + k_lb + 1)] = False
+250:        df2["oi_fresh"] = fresh2
+251:        feat2 = features.compute(df2)
+252:        f2 = classifier.classify(feat2)
+253:        # exclusion mask must follow the ROLLED freshness (same filtering rule as observed)
+254:        exc2 = (bar_missing | ~fresh2)[BURN:] | pd.isna(trim(f2)["regime"].to_numpy(object))
+255:        p2 = pair_stats(B1, trim(f2)["regime"], idx, exc2)
+256:        leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
+257:        if len(leads2):
+258:            null_marginals.append(float(np.median(leads2)) - b2_med)
+259:        for c in CLASSES:
+260:            if len(p2[c]["leads"]):
+261:                null_cls[c].append(float(np.median(p2[c]["leads"]))
+262:                                   - float(np.median(b2s[c]["leads"])))
+263:        if (i + 1) % 20 == 0:
+264:            print(f"  null {i + 1}/{n_shifts}", flush=True)
+265:    null_arr = np.array(null_marginals)
+266:    p = (1 + int((null_arr >= obs_marginal).sum())) / (len(null_arr) + 1)
+267:    per_class = {}
+268:    for c in CLASSES:
+269:        arr = np.array(null_cls[c])
+270:        if len(arr) == 0:
+271:            per_class[c] = {"observed": obs_cls[c], "n_null": 0, "p_one_sided": None,
+272:                            "note": "degenerate null — no replicates produced leads"}
+273:            continue
+274:        per_class[c] = {"observed": obs_cls[c], "n_null": int(len(arr)),
+275:                        "null_median": float(np.median(arr)),
+276:                        "null_iqr": [float(np.percentile(arr, 25)), float(np.percentile(arr, 75))],
+277:                        "p_one_sided": (1 + int((arr >= obs_cls[c]).sum())) / (len(arr) + 1)}
+278:    out = {"symbol": symbol, "observed_F_median": obs_med, "B2_median": b2_med,
+279:           "observed_OI_marginal": obs_marginal,
+280:           "null_n": len(null_arr), "null_median": float(np.median(null_arr)),
+281:           "null_iqr": [float(np.percentile(null_arr, 25)), float(np.percentile(null_arr, 75))],
+282:           "p_one_sided": p, "per_class": per_class}
+283:    RESULTS.mkdir(exist_ok=True)
+284:    (RESULTS / f"{symbol}_null.json").write_text(json.dumps(out, indent=1))
+285:    return out
+286:
+287:
+288:def collapse_events(conf: pd.Series, fuel_avail: pd.Series, excluded: np.ndarray,
+289:                    q_window=2880, debounce=2, pad=96):
+290:    """Collapse = confidence crossing below its own past-only rolling q20, needing `debounce`
+291:    consecutive bars; the event is stamped at the bar where the criterion is SATISFIED.
+292:    Events near data gaps or fuel-availability boundaries are masked."""
+293:    thr = conf.rolling(q_window, min_periods=q_window).quantile(0.2).shift(1)
+294:    below = (conf < thr).to_numpy(bool)
+295:    ok = np.zeros(len(conf), dtype=bool)
+296:    run = 0
+297:    for i, b in enumerate(below):
+298:        run = run + 1 if b else 0
+299:        if run == debounce:  # stamped at satisfaction bar, never back-dated
+300:            ok[i] = True
+301:    # mask around gaps and availability flips
+302:    bad = excluded.copy()
+303:    av = fuel_avail.to_numpy(bool)
+304:    flips = np.flatnonzero(av[1:] != av[:-1]) + 1
+305:    for i in np.concatenate([flips, np.flatnonzero(excluded)]):
+306:        bad[max(0, i - pad):i + pad] = True
+307:    ok &= ~bad
+308:    return np.flatnonzero(ok)
+309:
+310:
+311:def collapse_metrics(ev_idx: np.ndarray, trans_idx: np.ndarray, n: int, W=96):
+312:    """Convention: a collapse stamped exactly ON a transition bar counts as a lead-0 hit,
+313:    on BOTH sides (precision via side='left' on transitions, recall via side='right' on
+314:    events — asymmetric sides would silently deflate recall for coincident events)."""
+315:    if len(ev_idx) == 0 or len(trans_idx) == 0:
+316:        return {"n_events": int(len(ev_idx)), "n_transitions": int(len(trans_idx)),
+317:                "precision": np.nan, "recall": np.nan, "median_lead": np.nan}
+318:    t = np.sort(trans_idx)
+319:    pos = np.searchsorted(t, ev_idx, side="left")
+320:    dist = np.where(pos < len(t), t[np.minimum(pos, len(t) - 1)] - ev_idx, n)
+321:    hits = dist <= W
+322:    e = np.sort(ev_idx)
+323:    pos_e = np.searchsorted(e, t, side="right")
+324:    prev_ev = np.where(pos_e > 0, t - e[np.maximum(pos_e - 1, 0)], n)
+325:    covered = prev_ev <= W
+326:    return {"n_events": int(len(ev_idx)), "n_transitions": int(len(t)),
+327:            "precision": float(hits.mean()),
+328:            "recall": float(covered.mean()),
+329:            "median_lead": float(np.median(dist[hits])) if hits.any() else np.nan}
+330:
+331:
+332:def collapse_stage(symbol: str, n_shifts=200, seed=43, W=96):
+333:    df, excluded, _ = load(symbol)
+334:    feat, f, b2, b1 = tracks(df)
+335:    conf = trim(f)["confidence"]
+336:    fuel_avail = trim(f)["fuel_available"]
+337:    exc = full_excluded(excluded, trim(f))
+338:    B1 = trim(b1)
+339:    lab = B1.to_numpy(object)
+340:    valid = ~pd.isna(lab)
+341:    trans = np.flatnonzero(valid[1:] & valid[:-1] & (lab[1:] != lab[:-1])) + 1
+342:    n = len(conf)
+343:
+344:    ev = collapse_events(conf, fuel_avail, exc)
+345:    obs = collapse_metrics(ev, trans, n, W)
+346:    if len(ev) == 0 or np.isnan(obs["precision"]):
+347:        out = {"symbol": symbol, "observed": obs, "p_precision": None, "p_recall": None,
+348:               "note": "no collapse events — p undefined"}
+349:        RESULTS.mkdir(exist_ok=True)
+350:        (RESULTS / f"{symbol}_collapse.json").write_text(json.dumps(out, indent=1))
+351:        return out
+352:
+353:    g = np.random.default_rng(seed)
+354:    null_prec, null_lead, null_rec = [], [], []
+355:    for _ in range(n_shifts):
+356:        s = int(g.integers(W, n - W))
+357:        ev_s = (ev + s) % n
+358:        m = collapse_metrics(np.sort(ev_s), trans, n, W)
+359:        null_prec.append(m["precision"])
+360:        null_rec.append(m["recall"])
+361:        if not np.isnan(m["median_lead"]):
+362:            null_lead.append(m["median_lead"])
+363:    p_prec = (1 + sum(1 for x in null_prec if x >= obs["precision"])) / (n_shifts + 1)
+364:    p_rec = (1 + sum(1 for x in null_rec if x >= obs["recall"])) / (n_shifts + 1)
+365:
+366:    # funding ablation: same angle with the funding modifier off
+367:    f_nf = classifier.classify(feat, use_funding=False)
+368:    ev_nf = collapse_events(trim(f_nf)["confidence"], trim(f_nf)["fuel_available"], exc)
+369:    obs_nf = collapse_metrics(ev_nf, trans, n, W)
+370:
+371:    out = {"symbol": symbol, "window_bars": W, "observed": obs,
+372:           "null": {"precision_mean": float(np.mean(null_prec)),
+373:                    "recall_mean": float(np.mean(null_rec)),
+374:                    "median_lead_mean": float(np.mean(null_lead)) if null_lead else np.nan},
+375:           "p_precision": p_prec, "p_recall": p_rec,
+376:           "funding_ablation": obs_nf}
+377:    RESULTS.mkdir(exist_ok=True)
+378:    (RESULTS / f"{symbol}_collapse.json").write_text(json.dumps(out, indent=1))
+379:    return out
+380:
+381:
+382:def posthoc(symbol: str, horizons=(4, 16, 96)):
+383:    """Post-hoc label audit: was each state RIGHT about the market's character?
+384:    For every candle labeled state S, the realized return over the NEXT h bars.
+385:    Uses future data BY DESIGN — this is a retrospective audit of past labels
+386:    (published as diagnostics), never a feature; the classifier contract is untouched."""
+387:    df, excluded, _ = load(symbol)
+388:    feat, f, b2, b1 = tracks(df)
+389:    F = trim(f)["regime"]
+390:    exc = full_excluded(excluded, trim(f))
+391:    lab = F.to_numpy(object)
+392:    c = df["close"].iloc[BURN:].to_numpy(float)
+393:    out = {"symbol": symbol, "horizons_bars": list(horizons), "states": {}}
+394:    for state in classifier.REGIMES:
+395:        base = (~pd.isna(lab)) & (lab == state) & ~exc
+396:        row = {}
+397:        for h in horizons:
+398:            mask = base.copy()
+399:            mask[-h:] = False
+400:            r = (np.roll(c, -h) / c - 1.0)[mask]  # wrapped tail rows are masked off
+401:            row[str(h)] = {
+402:                "n": int(mask.sum()),
+403:                "median_ret_pct": round(float(np.median(r)) * 100, 3),
+404:                "share_up": round(float((r > 0).mean()), 3),
+405:                "iqr_pct": [round(float(np.percentile(r, 25)) * 100, 3),
+406:                            round(float(np.percentile(r, 75)) * 100, 3)],
+407:                "abs_move_med_pct": round(float(np.median(np.abs(r))) * 100, 3),
+408:            }
+409:        out["states"][state] = row
+410:    RESULTS.mkdir(exist_ok=True)
+411:    (RESULTS / f"{symbol}_posthoc.json").write_text(json.dumps(out, indent=1))
+412:
+413:    names = {"TREND_UP": "상승추세", "TREND_DOWN": "하락추세", "SQUEEZE": "수렴",
+414:             "RANGE": "박스권", "CHOP": "난장판"}
+415:    hours = {4: "1시간", 16: "4시간", 96: "24시간"}
+416:    print(f"\n[{symbol}] 상태별 사후 성과 — '라벨이 붙은 뒤 실제로 어떻게 갔나'")
+417:    print(f"{'상태':12s}" + "".join(f"{hours.get(h, str(h)+'봉'):>26s}" for h in horizons))
+418:    for state in classifier.REGIMES:
+419:        cells = []
+420:        for h in horizons:
+421:            d = out["states"][state][str(h)]
+422:            cells.append(f"중앙 {d['median_ret_pct']:+.2f}% ↑비율 {d['share_up']:.0%} "
+423:                         f"|폭| {d['abs_move_med_pct']:.2f}%")
+424:        print(f"{names[state]:12s}" + "".join(f"{s:>26s}" for s in cells))
+425:    return out
+426:
+427:
+428:def sweep(symbol: str):
+429:    df, excluded, _ = load(symbol)
+430:    feat, f, b2, b1 = tracks(df)
+431:    idx = trim(f).index
+432:    exc = full_excluded(excluded, trim(f))
+433:    B1 = trim(b1)
+434:    base_pooled = None
+435:    rows = {}
+436:    for dwell in (0, 2, 4, 8):
+437:        for confirm in (0, 1, 2, 3):
+438:            cp = ClassifierParams(min_dwell=dwell, confirm_bars=confirm)
+439:            f2 = classifier.classify(feat, cp)
+440:            p2 = pair_stats(B1, trim(f2)["regime"], idx, exc)
+441:            leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
+442:            med = float(np.median(leads2)) if len(leads2) else np.nan
+443:            if dwell == 0 and confirm == 0:
+444:                base_pooled = med
+445:            rows[f"dwell{dwell}_confirm{confirm}"] = {
+446:                "median_lead": med, "n": int(len(leads2)),
+447:                "lead_sacrificed": round(base_pooled - med, 2) if base_pooled is not None else np.nan,
+448:                "churn3_F": round(p2["churn_fused"], 3),
+449:                "flap_F": round(p2["flap_fused"], 3),
+450:                "false_per_100c": round(sum(p2[c]["false_per_100c"] for c in CLASSES), 3),
+451:            }
+452:    out = {"symbol": symbol, "grid": rows,
+453:           "churn3_B1": round(leadlag.churn3(leadlag.to_super(B1)), 3)}
+454:    RESULTS.mkdir(exist_ok=True)
+455:    (RESULTS / f"{symbol}_hysteresis.json").write_text(json.dumps(out, indent=1))
+456:    return out
+457:
+458:
+459:def main():
+460:    ap = argparse.ArgumentParser()
+461:    ap.add_argument("symbol", nargs="?", default="BTCUSDT")
+462:    ap.add_argument("--stage", default="headline")
+463:    ap.add_argument("--nulls", type=int, default=200)
+464:    args = ap.parse_args()
+465:    if hasattr(sys.stdout, "reconfigure"):
+466:        sys.stdout.reconfigure(encoding="utf-8")
+467:    stages = ["headline", "null", "collapse", "sweep", "posthoc"] if args.stage == "all" \
+468:        else [args.stage]
+469:    for st in stages:
+470:        print(f"=== {args.symbol} :: {st} ===", flush=True)
+471:        if st == "headline":
+472:            out = headline(args.symbol)
+473:            print(json.dumps({k: out[k] for k in
+474:                              ["F_vs_B1", "B2_vs_B1", "OI_marginal", "churn", "eras",
+475:                               "era_sign_consistency"]}, indent=1, default=str))
+476:        elif st == "null":
+477:            print(json.dumps(null_run(args.symbol, args.nulls), indent=1))
+478:        elif st == "collapse":
+479:            print(json.dumps(collapse_stage(args.symbol, args.nulls), indent=1))
+480:        elif st == "sweep":
+481:            print(json.dumps(sweep(args.symbol), indent=1))
+482:        elif st == "posthoc":
+483:            posthoc(args.symbol)
+484:
+485:
+486:if __name__ == "__main__":
+487:    main()
+
+ succeeded in 275ms:
+1:#!/usr/bin/env python3
+2:"""Assemble the per-symbol 15m research dataset from raw Binance Vision zips.
+3:
+4:ALL timestamp/alignment conventions live HERE and nowhere else:
+5:- canonical candle close = open_time + 15m; the archive's close_time field (open+15m-1ms) is never read
+6:- every timestamp is normalized to tz-aware UTC at load; metrics CSVs carry naive datetime strings
+7:  and are parsed with utc=True explicitly (a KST-local parse would shift OI 9h into the future)
+8:- kline epoch columns are milliseconds until 2025-01 and MICROSECONDS after; unit is detected
+9:  per file by magnitude
+10:- OI joined with merge_asof(direction="backward", tolerance=25min); the snapshot exactly at close
+11:  IS included; beyond tolerance the candle has no OI (degrade path), never a stale fill
+12:- klines are reindexed to a complete 15m UTC grid; missing bars flagged, never interpolated
+13:- funding is snapped to the 8h UTC grid (assert offset < 60s) and applied to candles closing
+14:  at-or-after the event (backward merge)
+15:
+16:Usage: python build_dataset.py BTCUSDT [ETHUSDT ...]
+17:Writes  data/<SYMBOL>_15m.parquet  and  data/<SYMBOL>_gaps.json
+18:"""
+19:import io
+20:import json
+21:import sys
+22:import zipfile
+23:from pathlib import Path
+24:
+25:import numpy as np
+26:import pandas as pd
+27:
+28:HERE = Path(__file__).resolve().parent
+29:RAW = HERE / "data" / "raw"
+30:OUT = HERE / "data"
+31:BAR = pd.Timedelta(minutes=15)
+32:OI_TOLERANCE = pd.Timedelta(minutes=25)
+33:
+34:KLINE_COLS = ["open_time", "open", "high", "low", "close", "volume",
+35:              "close_time_unused", "quote_volume", "count",
+36:              "taker_buy_volume", "taker_buy_quote_volume", "ignore"]
+37:
+38:
+39:def _tag(p: Path) -> str:
+40:    """Trailing date portion of a Vision zip stem: YYYY-MM (monthly) or YYYY-MM-DD (daily)."""
+41:    parts = p.stem.split("-")
+42:    if len(parts) >= 3 and parts[-3].isdigit() and len(parts[-3]) == 4:
+43:        return "-".join(parts[-3:])
+44:    return "-".join(parts[-2:])
+45:
+46:
+47:def _in_range(p: Path, start: str | None, end: str | None) -> bool:
+48:    t = _tag(p)
+49:    return (start is None or t >= start[: len(t)]) and (end is None or t <= end[: len(t)])
+50:
+51:
+52:def _read_zip_csv(path: Path, **kw) -> pd.DataFrame:
+53:    """Read the single CSV inside a Vision zip, tolerating an optional header row."""
+54:    with zipfile.ZipFile(path) as z:
+55:        name = z.namelist()[0]
+56:        raw = z.read(name)
+57:    first = raw.split(b"\n", 1)[0]
+58:    has_header = not first.split(b",")[0].strip().replace(b".", b"").replace(b"-", b"").isdigit()
+59:    return pd.read_csv(io.BytesIO(raw), header=0 if has_header else None, **kw)
+60:
+61:
+62:def _as_ns(s: pd.Series) -> pd.Series:
+63:    """Normalize any tz-aware datetime series to ns resolution (pandas 3 keeps ms/us units)."""
+64:    return s.astype("datetime64[ns, UTC]")
+65:
+66:
+67:def _epoch_to_utc(series: pd.Series) -> pd.Series:
+68:    """Epoch ints of unknown unit (ms until 2025-01, us after) -> tz-aware UTC (ns)."""
+69:    v = series.astype("int64")
+70:    med = float(v.median())
+71:    if med > 1e14:  # microseconds
+72:        v = v // 1000
+73:    return _as_ns(pd.to_datetime(v, unit="ms", utc=True))
+74:
+75:
+76:def read_klines_raw(symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
+77:    """Kline rows keyed by open_ts (pre-grid) — the cut/poison unit for look-ahead tests."""
+78:    files = [f for f in sorted((RAW / symbol / "klines").glob("*.zip")) if _in_range(f, start, end)]
+79:    if not files:
+80:        raise FileNotFoundError(f"no kline zips for {symbol}")
+81:    parts = []
+82:    for f in files:
+83:        df = _read_zip_csv(f)
+84:        df.columns = KLINE_COLS[: len(df.columns)]
+85:        df["open_ts"] = _epoch_to_utc(df["open_time"])
+86:        parts.append(df[["open_ts", "open", "high", "low", "close", "volume"]])
+87:    k = pd.concat(parts, ignore_index=True)
+88:    for c in ["open", "high", "low", "close", "volume"]:
+89:        k[c] = k[c].astype("float64")
+90:    k = k.sort_values("open_ts")
+91:    dup = k.duplicated("open_ts", keep=False)
+92:    if dup.any():
+93:        # monthly/daily overlap: assert identical rows, then drop
+94:        g = k[dup].groupby("open_ts").agg(["min", "max"])
+95:        mismatch = 0
+96:        for c in ["open", "high", "low", "close", "volume"]:
+97:            mismatch += int((g[(c, "min")] != g[(c, "max")]).sum())
+98:        assert mismatch == 0, f"{symbol}: {mismatch} conflicting duplicate kline rows"
+99:        k = k.drop_duplicates("open_ts", keep="first")
+100:    return k.reset_index(drop=True)
+101:
+102:
+103:def grid_klines(kraw: pd.DataFrame) -> pd.DataFrame:
+104:    """Canonical close time (open+15m, never the archive close_time field), complete grid."""
+105:    k = kraw.copy()
+106:    k["ts"] = k["open_ts"] + BAR
+107:    k = k.set_index("ts").drop(columns=["open_ts"]).sort_index()
+108:    grid = pd.date_range(k.index[0], k.index[-1], freq="15min", tz="UTC", unit="ns")
+109:    k = k.reindex(grid)
+110:    k.index.name = "ts"
+111:    k["bar_missing"] = k["close"].isna()
+112:    return k
+113:
+114:
+115:def read_metrics(symbol: str, start: str | None = None, end: str | None = None):
+116:    files = [f for f in sorted((RAW / symbol / "metrics").glob("*.zip")) if _in_range(f, start, end)]
+117:    if not files:
+118:        raise FileNotFoundError(f"no metrics zips for {symbol}")
+119:    METRIC_COLS = ["create_time", "symbol", "sum_open_interest", "sum_open_interest_value",
+120:                   "count_toptrader_long_short_ratio", "sum_toptrader_long_short_ratio",
+121:                   "count_long_short_ratio", "sum_taker_long_short_vol_ratio"]
+122:    parts = []
+123:    for f in files:
+124:        df = _read_zip_csv(f)
+125:        if df.columns.dtype != object or "create_time" not in df.columns:
+126:            df.columns = METRIC_COLS[: len(df.columns)]
+127:        parts.append(df[[c for c in METRIC_COLS if c in df.columns and c != "symbol"]])
+128:    m = pd.concat(parts, ignore_index=True)
+129:    # naive datetime strings -> explicit UTC (never local time)
+130:    m["snap_ts"] = _as_ns(pd.to_datetime(m["create_time"], utc=True, format="mixed"))
+131:    m["oi"] = m["sum_open_interest"].astype("float64")
+132:    # positioning/flow companions riding the same snapshots (free, same causality rules)
+133:    for src, dst in [("sum_toptrader_long_short_ratio", "lsr_top"),
+134:                     ("count_long_short_ratio", "lsr_all"),
+135:                     ("sum_taker_long_short_vol_ratio", "taker_ratio")]:
+136:        m[dst] = m[src].astype("float64") if src in m.columns else np.nan
+137:    m = m.sort_values("snap_ts")
+138:    # snapshots are creation times with seconds-level jitter off the 5m grid (measured on the
+139:    # real archive); keep RAW times (they are availability times — no snapping) but assert the
+140:    # cadence is intact: median spacing 5min, few big holes
+141:    d = m["snap_ts"].diff().dropna()
+142:    med = d.median()
+143:    assert pd.Timedelta(minutes=4, seconds=30) <= med <= pd.Timedelta(minutes=5, seconds=30), \
+144:        f"{symbol}: OI snapshot median spacing {med} != ~5min"
+145:    n_offgrid = int((d > pd.Timedelta(minutes=10)).sum())  # count of cadence holes (info only)
+146:    dup = m.duplicated("snap_ts", keep=False)
+147:    n_conflict = 0
+148:    if dup.any():
+149:        g = m[dup].groupby("snap_ts")["oi"].agg(["min", "max"])
+150:        rel = (g["max"] - g["min"]) / g["max"].replace(0, np.nan)
+151:        n_conflict = int((rel > 0.001).sum())
+152:        m = m.drop_duplicates("snap_ts", keep="first")
+153:    keep = ["snap_ts", "oi", "lsr_top", "lsr_all", "taker_ratio"]
+154:    return m[keep].reset_index(drop=True), n_offgrid, n_conflict
+155:
+156:
+157:def read_funding(symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
+158:    files = [f for f in sorted((RAW / symbol / "funding").glob("*.zip")) if _in_range(f, start, end)]
+159:    parts = []
+160:    for f in files:
+161:        df = _read_zip_csv(f)
+162:        if df.columns.dtype != object or "calc_time" not in df.columns:
+163:            df.columns = ["calc_time", "funding_interval_hours", "last_funding_rate"][: len(df.columns)]
+164:        parts.append(df[["calc_time", "last_funding_rate"]])
+165:    if not parts:
+166:        return pd.DataFrame(columns=["event_ts", "funding"])
+167:    # unit detection must be per-file like klines: a mid-archive ms->us switch would poison
+168:    # a single concat-level median
+169:    for p_ in parts:
+170:        p_["raw_ts"] = _epoch_to_utc(p_["calc_time"])
+171:    fu = pd.concat(parts, ignore_index=True)
+172:    # funding boundaries land on the hour, but the INTERVAL is not always 8h (Binance switches
+173:    # some symbols to 4h in volatile periods — hence the funding_interval_hours column).
+174:    # Snap to the 1h grid; the backward merge is causal regardless of cadence.
+175:    snapped = fu["raw_ts"].dt.round("1h")
+176:    offset = (fu["raw_ts"] - snapped).abs()
+177:    assert (offset < pd.Timedelta(seconds=60)).all(), \
+178:        f"{symbol}: funding event >60s off the 1h grid (max {offset.max()})"
+179:    fu["event_ts"] = snapped
+180:    fu["funding"] = fu["last_funding_rate"].astype("float64")
+181:    fu = fu.sort_values("event_ts").drop_duplicates("event_ts", keep="first")
+182:    return fu[["event_ts", "funding"]].reset_index(drop=True)
+183:
+184:
+185:def runs_of(mask: pd.Series) -> list:
+186:    """Contiguous True-runs of a boolean series -> [(start_iso, end_iso, n), ...]."""
+187:    out = []
+188:    idx = mask.index
+189:    arr = mask.to_numpy()
+190:    start = None
+191:    for i, v in enumerate(arr):
+192:        if v and start is None:
+193:            start = i
+194:        elif not v and start is not None:
+195:            out.append((str(idx[start]), str(idx[i - 1]), i - start))
+196:            start = None
+197:    if start is not None:
+198:        out.append((str(idx[start]), str(idx[-1]), len(arr) - start))
+199:    return out
+200:
+201:
+202:def assemble(kraw: pd.DataFrame, m: pd.DataFrame, fu: pd.DataFrame) -> pd.DataFrame:
+203:    """Join the three raw tables into the final candle frame. Pure function of its inputs —
+204:    the look-ahead tests cut/poison the raw tables and re-run exactly this."""
+205:    k = grid_klines(kraw)
+206:    df = k.reset_index()
+207:    # OI: last snapshot at-or-before candle close, within tolerance (boundary snapshot included)
+208:    df = pd.merge_asof(df, m.rename(columns={"snap_ts": "ts"}), on="ts",
+209:                       direction="backward", tolerance=OI_TOLERANCE)
+210:    # OI lagged by one 5m snapshot (publication-latency robustness run): last snapshot
+211:    # at-or-before close-5min
+212:    lag = pd.merge_asof(
+213:        k.reset_index()[["ts"]].assign(ts_l=lambda d: d["ts"] - pd.Timedelta(minutes=5)),
+214:        m[["snap_ts", "oi"]].rename(columns={"snap_ts": "ts_l", "oi": "oi_lag1"}),
+215:        on="ts_l", direction="backward", tolerance=OI_TOLERANCE)
+216:    df["oi_lag1"] = lag["oi_lag1"].to_numpy()
+217:    # funding: last event at-or-before close (rate known at event time, applied thereafter)
+218:    df = pd.merge_asof(df, fu.rename(columns={"event_ts": "ts"}), on="ts",
+219:                       direction="backward")
+220:    df = df.set_index("ts")
+221:    df["oi_fresh"] = df["oi"].notna() & ~df["bar_missing"]
+222:    return df
+223:
+224:
+225:def build(symbol: str) -> None:
+226:    kraw = read_klines_raw(symbol)
+227:    m, n_offgrid, n_conflict = read_metrics(symbol)
+228:    fu = read_funding(symbol)
+229:    df = assemble(kraw, m, fu)
+230:
+231:    gaps = {
+232:        "bar_missing_runs": runs_of(df["bar_missing"]),
+233:        "oi_missing_runs": runs_of(~df["oi_fresh"]),
+234:    }
+235:    (OUT / f"{symbol}_gaps.json").write_text(json.dumps(gaps, indent=1))
+236:    df.to_parquet(OUT / f"{symbol}_15m.parquet")
+237:
+238:    oi_cov = df["oi_fresh"].mean()
+239:    print(f"{symbol}: {len(df)} bars  {df.index[0]} .. {df.index[-1]}")
+240:    print(f"  bar_missing: {int(df['bar_missing'].sum())}  "
+241:          f"oi coverage: {oi_cov:.3%}  oi gaps(runs): {len(gaps['oi_missing_runs'])}  "
+242:          f"offgrid snaps dropped: {n_offgrid}  conflicting dup snaps: {n_conflict}")
+243:    print(f"  funding events: {df['funding'].notna().sum() and len(fu)}  "
+244:          f"first: {fu['event_ts'].iloc[0] if len(fu) else 'n/a'}")
+245:    top = sorted(gaps["oi_missing_runs"], key=lambda r: -r[2])[:5]
+246:    for s, e, n in top:
+247:        print(f"  oi gap {n:5d} bars  {s} .. {e}")
+248:
+249:
+250:if __name__ == "__main__":
+251:    for sym in sys.argv[1:] or ["BTCUSDT"]:
+252:        build(sym)
+
+ succeeded in 290ms:
+1:#!/usr/bin/env python3
+2:"""Free-data axis candidates, tested on the existing harness. Encodings are PRE-REGISTERED
+3:in NOTES.md before any result was seen — no tuning on outcome.
+4:
+5:  A taker: taker buy/sell vol ratio 30d past-only percentile; >=0.75 votes TREND_UP,
+6:           <=0.25 votes TREND_DOWN (replaces the OI fuel axis; reference = B2)
+7:  B lsr:   top-trader long/short ratio, k-bar relative change with rolling-q25 deadzone;
+8:           rising votes UP, falling votes DOWN (reference = B2)
+9:  C dvol:  Deribit DVOL (implied vol) blended into the volatility axis as a third
+10:           percentile; fuel stays standard OI (reference = standard F)
+11:
+12:Metric per variant: pooled enter-TREND lead vs B1; marginal = observed raw median diff vs
+13:the reference; paired month-cluster CI; circular time-shift null (200) of the SOURCE series.
+14:
+15:Usage: python alt_axes.py [BTCUSDT] [--nulls 200]
+16:"""
+17:import argparse
+18:import datetime as dt
+19:import json
+20:import sys
+21:from pathlib import Path
+22:
+23:import numpy as np
+24:import pandas as pd
+25:import requests
+26:
+27:import baseline
+28:import classifier
+29:import features
+30:import leadlag
+31:import run_all
+32:
+33:HERE = Path(__file__).resolve().parent
+34:QW = features.DEFAULT_FP.q_window
+35:MPF = features.DEFAULT_FP.q_min_periods_fuel
+36:K = features.DEFAULT_FP.oi_lookback
+37:CLASSES = ("UP", "DOWN")
+38:
+39:
+40:def fetch_dvol(currency="BTC") -> pd.DataFrame:
+41:    cache = HERE / "data" / f"DVOL_{currency}.parquet"
+42:    if cache.exists():
+43:        return pd.read_parquet(cache)
+44:    url = "https://www.deribit.com/api/v2/public/get_volatility_index_data"
+45:    start = int(dt.datetime(2021, 3, 24, tzinfo=dt.timezone.utc).timestamp() * 1000)
+46:    now = int(dt.datetime.now(dt.timezone.utc).timestamp() * 1000)
+47:    rows = []
+48:    cur = start
+49:    step = 1000 * 3600 * 1000  # 1000 hourly candles per call
+50:    while cur < now:
+51:        r = requests.get(url, params=dict(currency=currency, resolution=3600,
+52:                                          start_timestamp=cur,
+53:                                          end_timestamp=min(cur + step, now)), timeout=30)
+54:        r.raise_for_status()
+55:        rows += r.json()["result"]["data"]
+56:        cur += step
+57:    df = pd.DataFrame(rows, columns=["ts_start", "open", "high", "low", "dvol"])
+58:    df = df.drop_duplicates("ts_start").sort_values("ts_start")
+59:    # candle close value is KNOWN only at candle end: availability = start + 1h
+60:    df["known_ts"] = pd.to_datetime(df["ts_start"].astype("int64"), unit="ms", utc=True) \
+61:        + pd.Timedelta(hours=1)
+62:    df["known_ts"] = df["known_ts"].astype("datetime64[ns, UTC]")
+63:    out = df[["known_ts", "dvol"]].reset_index(drop=True)
+64:    out.to_parquet(cache)
+65:    return out
+66:
+67:
+68:def variant_feat(feat_std: pd.DataFrame, source: pd.Series, kind: str) -> pd.DataFrame:
+69:    """Build the variant feature frame from a (possibly time-shifted) source series."""
+70:    feat = feat_std.copy()
+71:    if kind == "taker":
+72:        pct = features.past_pct_rank(source, QW, MPF)
+73:        quad = np.select([pct >= 0.75, pct <= 0.25], [1, 2], 0)
+74:        feat["quadrant"] = quad
+75:        feat["fuel_defined"] = pct.notna().to_numpy()
+76:    elif kind == "lsr":
+77:        d = source / source.shift(K) - 1.0
+78:        dz = d.abs().rolling(QW, min_periods=MPF).quantile(0.25).shift(1)
+79:        ok = d.notna() & dz.notna()
+80:        quad = np.select([ok & (d >= dz), ok & (d <= -dz)], [1, 2], 0)
+81:        feat["quadrant"] = quad
+82:        feat["fuel_defined"] = ok.to_numpy()
+83:    elif kind == "dvol":
+84:        dp = features.past_pct_rank(source, QW, MPF)
+85:        feat["vol_pct"] = (feat["bbw_pct"] + feat["atrp_pct"] + dp) / 3.0
+86:    else:
+87:        raise ValueError(kind)
+88:    return feat
+89:
+90:
+91:def leads_of(B1, track, idx, exc):
+92:    p = run_all.pair_stats(B1, track, idx, exc)
+93:    leads = np.concatenate([p[c]["leads"] for c in CLASSES])
+94:    months = np.concatenate([p[c]["months"] for c in CLASSES])
+95:    churn = p["churn_fused"]
+96:    return leads, months, churn
+97:
+98:
+99:def main():
+100:    ap = argparse.ArgumentParser()
+101:    ap.add_argument("symbol", nargs="?", default="BTCUSDT")
+102:    ap.add_argument("--nulls", type=int, default=200)
+103:    args = ap.parse_args()
+104:    if hasattr(sys.stdout, "reconfigure"):
+105:        sys.stdout.reconfigure(encoding="utf-8")
+106:    sym = args.symbol
+107:
+108:    df, excluded, _ = run_all.load(sym)
+109:    feat_std = features.compute(df)
+110:    f_std = classifier.classify(feat_std)
+111:    b2 = classifier.classify(feat_std, use_fuel=False)
+112:    b1 = baseline.classify_b1(feat_std)
+113:    trim = run_all.trim
+114:    idx = trim(f_std).index
+115:    exc = run_all.full_excluded(excluded, trim(f_std))
+116:    B1 = trim(b1)
+117:
+118:    lf_std, mf_std, churn_std = leads_of(B1, trim(f_std)["regime"], idx, exc)
+119:    lb2, mb2, churn_b2 = leads_of(B1, trim(b2)["regime"], idx, exc)
+120:    ref_med = {"B2": float(np.median(lb2)), "F": float(np.median(lf_std))}
+121:    ref_leads = {"B2": (lb2, mb2), "F": (lf_std, mf_std)}
+122:
+123:    # source series per variant (aligned to the candle index)
+124:    dvol_raw = fetch_dvol("BTC" if sym.startswith("BTC") else "ETH") \
+125:        if sym[:3] in ("BTC", "ETH") else None
+126:    sources = {"taker": df["taker_ratio"], "lsr": df["lsr_top"]}
+127:    if dvol_raw is not None:
+128:        dv = pd.merge_asof(df.reset_index()[["ts"]], dvol_raw.rename(columns={"known_ts": "ts"}),
+129:                           on="ts", direction="backward",
+130:                           tolerance=pd.Timedelta(hours=2)).set_index("ts")["dvol"]
+131:        sources["dvol"] = dv
+132:    refs = {"taker": "B2", "lsr": "B2", "dvol": "F"}
+133:
+134:    g = np.random.default_rng(77)
+135:    n = len(df)
+136:    out = {"symbol": sym, "variants": {}}
+137:    for kind, src in sources.items():
+138:        if src.isna().all():
+139:            out["variants"][kind] = {"note": "source column empty"}
+140:            continue
+141:        feat_v = variant_feat(feat_std, src, kind)
+142:        f_v = classifier.classify(feat_v)
+143:        lv, mv, churn_v = leads_of(B1, trim(f_v)["regime"], idx, exc)
+144:        obs_med = float(np.median(lv)) if len(lv) else np.nan
+145:        rk = refs[kind]
+146:        obs_marg = obs_med - ref_med[rk]
+147:        rl, rm = ref_leads[rk]
+148:        _, lo, hi = leadlag.paired_month_bootstrap_diff(lv, mv, rl, rm)
+149:
+150:        nulls = []
+151:        for i in range(args.nulls):
+152:            s = int(g.integers(192, 96 * 90)) * (1 if g.random() < 0.5 else -1)
+153:            src_roll = pd.Series(np.roll(src.to_numpy(), s), index=src.index)
+154:            f_n = classifier.classify(variant_feat(feat_std, src_roll, kind))
+155:            ln, _, _ = leads_of(B1, trim(f_n)["regime"], idx, exc)
+156:            if len(ln):
+157:                nulls.append(float(np.median(ln)) - ref_med[rk])
+158:            if (i + 1) % 50 == 0:
+159:                print(f"  {kind} null {i + 1}/{args.nulls}", flush=True)
+160:        arr = np.array(nulls)
+161:        p = (1 + int((arr >= obs_marg).sum())) / (len(arr) + 1) if len(arr) else None
+162:        out["variants"][kind] = {
+163:            "reference": rk, "n_pairs": int(len(lv)),
+164:            "lead_median_vs_B1": obs_med, "reference_median": ref_med[rk],
+165:            "marginal_obs": obs_marg, "marginal_ci95_month": [lo, hi],
+166:            "null_median": float(np.median(arr)) if len(arr) else None,
+167:            "null_iqr": [float(np.percentile(arr, 25)), float(np.percentile(arr, 75))] if len(arr) else None,
+168:            "p_one_sided": p, "churn": round(churn_v, 3),
+169:        }
+170:        print(f"[{kind}] lead {obs_med} (ref {rk} {ref_med[rk]}) marginal {obs_marg:+.1f} "
+171:              f"CI[{lo},{hi}] null_med {out['variants'][kind]['null_median']} p={p} "
+172:              f"churn {churn_v:.2f}", flush=True)
+173:
+174:    out["baseline_churn"] = {"F": round(churn_std, 3), "B2": round(churn_b2, 3)}
+175:    run_all.RESULTS.mkdir(exist_ok=True)
+176:    (run_all.RESULTS / f"{sym}_altaxes.json").write_text(json.dumps(out, indent=1))
+177:    print(json.dumps(out, indent=1))
+178:
+179:
+180:if __name__ == "__main__":
+181:    main()
+
+2026-07-05T07:41:29.816470Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-ChildItem research/regime/run_all.py,research/regime/build_dataset.py,pine/REGIME_v1_indicator.pine | Select-Object Name,Length; Get-Content research/regime/results/BTCUSDT_headline.json; Get-Content research/regime/results/BTCUSDT_null.json; Get-Content research/regime/results/BTCUSDT_altaxes.json; Get-Content research/regime/results/BTCUSDT_posthoc.json'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-ChildItem research/regime/run_all.py,research/regime/build_dataset.py,pine/REGIME_v1_indicator.pine | Select-Object Name,Length; Get-Content research/regime/results/BTCUSDT_headline.json; Get-Content research/regime/results/BTCUSDT_null.json; Get-Content research/regime/results/BTCUSDT_altaxes.json; Get-Content research/regime/results/BTCUSDT_posthoc.json' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-ChildItem research/regime/run_all.py,research/regime/build_dataset.py,pine/REGIME_v1_indicator.pine | Select-Object Name,Length; Get-Content research/regime/results/BTCUSDT_headline.json; Get-Content research/regime/results/BTCUSDT_null.json; Get-Content research/regime/results/BTCUSDT_altaxes.json; Get-Content research/regime/results/BTCUSDT_posthoc.json'` rejected: blocked by policy
+2026-07-05T07:41:39.176218Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Item research/regime/run_all.py,research/regime/build_dataset.py,pine/REGIME_v1_indicator.pine | Select-Object Name,Length'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content research/regime/results/BTCUSDT_posthoc.json' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content research/regime/results/BTCUSDT_null.json' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content research/regime/results/BTCUSDT_altaxes.json' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Item research/regime/run_all.py,research/regime/build_dataset.py,pine/REGIME_v1_indicator.pine | Select-Object Name,Length' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content research/regime/results/BTCUSDT_headline.json' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Item research/regime/run_all.py,research/regime/build_dataset.py,pine/REGIME_v1_indicator.pine | Select-Object Name,Length'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/results/BTCUSDT_altaxes.json' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/results/BTCUSDT_posthoc.json' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/results/BTCUSDT_null.json' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/results/BTCUSDT_headline.json' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 253ms:
+1:{
+2: "symbol": "BTCUSDT",
+3: "variants": {
+4:  "taker": {
+5:   "reference": "B2",
+6:   "n_pairs": 1343,
+7:   "lead_median_vs_B1": -6.0,
+8:   "reference_median": -6.0,
+9:   "marginal_obs": 0.0,
+10:   "marginal_ci95_month": [
+11:    0.0,
+12:    1.0
+13:   ],
+14:   "null_median": 0.0,
+15:   "null_iqr": [
+16:    0.0,
+17:    0.0
+18:   ],
+19:   "p_one_sided": 1.0,
+20:   "churn": 4.365
+21:  },
+22:  "lsr": {
+23:   "reference": "B2",
+24:   "n_pairs": 1455,
+25:   "lead_median_vs_B1": -6.0,
+26:   "reference_median": -6.0,
+27:   "marginal_obs": 0.0,
+28:   "marginal_ci95_month": [
+29:    0.0,
+30:    1.0
+31:   ],
+32:   "null_median": 1.0,
+33:   "null_iqr": [
+34:    1.0,
+35:    1.0
+36:   ],
+37:   "p_one_sided": 1.0,
+38:   "churn": 2.994
+39:  },
+40:  "dvol": {
+41:   "reference": "F",
+42:   "n_pairs": 1438,
+43:   "lead_median_vs_B1": -5.0,
+44:   "reference_median": -5.0,
+45:   "marginal_obs": 0.0,
+46:   "marginal_ci95_month": [
+47:    -1.0,
+48:    1.0
+49:   ],
+50:   "null_median": 0.0,
+51:   "null_iqr": [
+52:    0.0,
+53:    0.0
+54:   ],
+55:   "p_one_sided": 1.0,
+56:   "churn": 3.23
+57:  }
+58: },
+59: "baseline_churn": {
+60:  "F": 3.254,
+61:  "B2": 2.187
+62: }
+63:}
+
+ succeeded in 253ms:
+1:{
+2: "symbol": "BTCUSDT",
+3: "horizons_bars": [
+4:  4,
+5:  16,
+6:  96
+7: ],
+8: "states": {
+9:  "TREND_UP": {
+10:   "4": {
+11:    "n": 18503,
+12:    "median_ret_pct": -0.019,
+13:    "share_up": 0.475,
+14:    "iqr_pct": [
+15:     -0.255,
+16:     0.229
+17:    ],
+18:    "abs_move_med_pct": 0.243
+19:   },
+20:   "16": {
+21:    "n": 18496,
+22:    "median_ret_pct": -0.045,
+23:    "share_up": 0.471,
+24:    "iqr_pct": [
+25:     -0.477,
+26:     0.467
+27:    ],
+28:    "abs_move_med_pct": 0.472
+29:   },
+30:   "96": {
+31:    "n": 18496,
+32:    "median_ret_pct": -0.019,
+33:    "share_up": 0.496,
+34:    "iqr_pct": [
+35:     -1.341,
+36:     1.402
+37:    ],
+38:    "abs_move_med_pct": 1.37
+39:   }
+40:  },
+41:  "TREND_DOWN": {
+42:   "4": {
+43:    "n": 18518,
+44:    "median_ret_pct": 0.03,
+45:    "share_up": 0.536,
+46:    "iqr_pct": [
+47:     -0.235,
+48:     0.269
+49:    ],
+50:    "abs_move_med_pct": 0.253
+51:   },
+52:   "16": {
+53:    "n": 18518,
+54:    "median_ret_pct": 0.066,
+55:    "share_up": 0.541,
+56:    "iqr_pct": [
+57:     -0.441,
+58:     0.502
+59:    ],
+60:    "abs_move_med_pct": 0.479
+61:   },
+62:   "96": {
+63:    "n": 18518,
+64:    "median_ret_pct": 0.13,
+65:    "share_up": 0.527,
+66:    "iqr_pct": [
+67:     -1.495,
+68:     1.468
+69:    ],
+70:    "abs_move_med_pct": 1.481
+71:   }
+72:  },
+73:  "SQUEEZE": {
+74:   "4": {
+75:    "n": 28064,
+76:    "median_ret_pct": 0.003,
+77:    "share_up": 0.507,
+78:    "iqr_pct": [
+79:     -0.114,
+80:     0.122
+81:    ],
+82:    "abs_move_med_pct": 0.118
+83:   },
+84:   "16": {
+85:    "n": 28064,
+86:    "median_ret_pct": 0.007,
+87:    "share_up": 0.51,
+88:    "iqr_pct": [
+89:     -0.237,
+90:     0.249
+91:    ],
+92:    "abs_move_med_pct": 0.243
+93:   },
+94:   "96": {
+95:    "n": 28045,
+96:    "median_ret_pct": 0.036,
+97:    "share_up": 0.517,
+98:    "iqr_pct": [
+99:     -0.888,
+100:     0.873
+101:    ],
+102:    "abs_move_med_pct": 0.882
+103:   }
+104:  },
+105:  "RANGE": {
+106:   "4": {
+107:    "n": 74667,
+108:    "median_ret_pct": 0.0,
+109:    "share_up": 0.5,
+110:    "iqr_pct": [
+111:     -0.206,
+112:     0.21
+113:    ],
+114:    "abs_move_med_pct": 0.208
+115:   },
+116:   "16": {
+117:    "n": 74662,
+118:    "median_ret_pct": 0.005,
+119:    "share_up": 0.503,
+120:    "iqr_pct": [
+121:     -0.413,
+122:     0.433
+123:    ],
+124:    "abs_move_med_pct": 0.423
+125:   },
+126:   "96": {
+127:    "n": 74601,
+128:    "median_ret_pct": 0.003,
+129:    "share_up": 0.501,
+130:    "iqr_pct": [
+131:     -1.184,
+132:     1.238
+133:    ],
+134:    "abs_move_med_pct": 1.211
+135:   }
+136:  },
+137:  "CHOP": {
+138:   "4": {
+139:    "n": 14764,
+140:    "median_ret_pct": 0.03,
+141:    "share_up": 0.524,
+142:    "iqr_pct": [
+143:     -0.334,
+144:     0.369
+145:    ],
+146:    "abs_move_med_pct": 0.352
+147:   },
+148:   "16": {
+149:    "n": 14764,
+150:    "median_ret_pct": 0.06,
+151:    "share_up": 0.53,
+152:    "iqr_pct": [
+153:     -0.578,
+154:     0.722
+155:    ],
+156:    "abs_move_med_pct": 0.651
+157:   },
+158:   "96": {
+159:    "n": 14764,
+160:    "median_ret_pct": 0.202,
+161:    "share_up": 0.538,
+162:    "iqr_pct": [
+163:     -1.4,
+164:     1.763
+165:    ],
+166:    "abs_move_med_pct": 1.592
+167:   }
+168:  }
+169: }
+170:}
+
+ succeeded in 264ms:
+1:{
+2: "symbol": "BTCUSDT",
+3: "observed_F_median": -5.0,
+4: "B2_median": -6.0,
+5: "observed_OI_marginal": 1.0,
+6: "null_n": 200,
+7: "null_median": 1.0,
+8: "null_iqr": [
+9:  1.0,
+10:  1.0
+11: ],
+12: "p_one_sided": 1.0,
+13: "per_class": {
+14:  "UP": {
+15:   "observed": 2.0,
+16:   "n_null": 200,
+17:   "null_median": 1.0,
+18:   "null_iqr": [
+19:    1.0,
+20:    1.0
+21:   ],
+22:   "p_one_sided": 0.14925373134328357
+23:  },
+24:  "DOWN": {
+25:   "observed": 1.0,
+26:   "n_null": 200,
+27:   "null_median": 1.0,
+28:   "null_iqr": [
+29:    1.0,
+30:    2.0
+31:   ],
+32:   "p_one_sided": 1.0
+33:  }
+34: }
+35:}
+
+ succeeded in 252ms:
+1:{
+2: "symbol": "BTCUSDT",
+3: "n_candles": 154560,
+4: "span": [
+5:  "2022-02-05 00:15:00+00:00",
+6:  "2026-07-04 00:00:00+00:00"
+7: ],
+8: "F_vs_B1": {
+9:  "UP": {
+10:   "n_base_eps": 1586,
+11:   "n_fused_eps": 844,
+12:   "eps_ratio": 0.532,
+13:   "ratio_invalid": false,
+14:   "matched_frac": 0.471,
+15:   "n_miss": 839,
+16:   "n_false": 97,
+17:   "false_per_100c": 0.063,
+18:   "start_lead": {
+19:    "n": 747,
+20:    "median": -4.0,
+21:    "iqr": [
+22:     -8.0,
+23:     -2.0
+24:    ],
+25:    "hl": -5.0,
+26:    "ci95_month_boot": [
+27:     -4.0,
+28:     -4.0
+29:    ]
+30:   },
+31:   "end_lead": {
+32:    "n": 747,
+33:    "median": 1.0,
+34:    "iqr": [
+35:     0.0,
+36:     5.0
+37:    ],
+38:    "hl": 2.5
+39:   },
+40:   "excluded": [
+41:    0,
+42:    0
+43:   ]
+44:  },
+45:  "DOWN": {
+46:   "n_base_eps": 1684,
+47:   "n_fused_eps": 805,
+48:   "eps_ratio": 0.478,
+49:   "ratio_invalid": false,
+50:   "matched_frac": 0.416,
+51:   "n_miss": 984,
+52:   "n_false": 105,
+53:   "false_per_100c": 0.068,
+54:   "start_lead": {
+55:    "n": 700,
+56:    "median": -6.0,
+57:    "iqr": [
+58:     -10.0,
+59:     -3.0
+60:    ],
+61:    "hl": -6.5,
+62:    "ci95_month_boot": [
+63:     -6.0,
+64:     -5.0
+65:    ]
+66:   },
+67:   "end_lead": {
+68:    "n": 700,
+69:    "median": 2.0,
+70:    "iqr": [
+71:     0.0,
+72:     6.0
+73:    ],
+74:    "hl": 3.0
+75:   },
+76:   "excluded": [
+77:    0,
+78:    0
+79:   ]
+80:  }
+81: },
+82: "B2_vs_B1": {
+83:  "UP": {
+84:   "n_base_eps": 1586,
+85:   "n_fused_eps": 719,
+86:   "eps_ratio": 0.453,
+87:   "ratio_invalid": false,
+88:   "matched_frac": 0.414,
+89:   "n_miss": 929,
+90:   "n_false": 62,
+91:   "false_per_100c": 0.04,
+92:   "start_lead": {
+93:    "n": 657,
+94:    "median": -6.0,
+95:    "iqr": [
+96:     -10.0,
+97:     -4.0
+98:    ],
+99:    "hl": -6.5,
+100:    "ci95_month_boot": [
+101:     -6.0,
+102:     -5.0
+103:    ]
+104:   },
+105:   "end_lead": {
+106:    "n": 657,
+107:    "median": 1.0,
+108:    "iqr": [
+109:     0.0,
+110:     5.0
+111:    ],
+112:    "hl": 2.0
+113:   },
+114:   "excluded": [
+115:    0,
+116:    0
+117:   ]
+118:  },
+119:  "DOWN": {
+120:   "n_base_eps": 1684,
+121:   "n_fused_eps": 696,
+122:   "eps_ratio": 0.413,
+123:   "ratio_invalid": false,
+124:   "matched_frac": 0.375,
+125:   "n_miss": 1052,
+126:   "n_false": 64,
+127:   "false_per_100c": 0.041,
+128:   "start_lead": {
+129:    "n": 632,
+130:    "median": -7.0,
+131:    "iqr": [
+132:     -12.0,
+133:     -4.0
+134:    ],
+135:    "hl": -7.5,
+136:    "ci95_month_boot": [
+137:     -7.0,
+138:     -6.0
+139:    ]
+140:   },
+141:   "end_lead": {
+142:    "n": 632,
+143:    "median": 2.0,
+144:    "iqr": [
+145:     0.0,
+146:     6.0
+147:    ],
+148:    "hl": 3.0
+149:   },
+150:   "excluded": [
+151:    0,
+152:    0
+153:   ]
+154:  }
+155: },
+156: "OI_marginal": {
+157:  "UP": {
+158:   "median_diff": 2.0,
+159:   "ci95": [
+160:    1.0,
+161:    2.0
+162:   ],
+163:   "boot_median_diff": 2.0
+164:  },
+165:  "DOWN": {
+166:   "median_diff": 1.0,
+167:   "ci95": [
+168:    0.0,
+169:    2.0
+170:   ],
+171:   "boot_median_diff": 1.0
+172:  },
+173:  "enter_pooled": {
+174:   "median_diff": 1.0,
+175:   "ci95": [
+176:    1.0,
+177:    2.0
+178:   ],
+179:   "boot_median_diff": 1.0,
+180:   "F_median": -5.0,
+181:   "B2_median": -6.0
+182:  }
+183: },
+184: "churn": {
+185:  "B1": 4.83,
+186:  "F": 3.254,
+187:  "B2": 2.187,
+188:  "F_flap": 0.231
+189: },
+190: "eras": {
+191:  "2022_bear": {
+192:   "n": 307,
+193:   "median": -5.0
+194:  },
+195:  "2023_range": {
+196:   "n": 297,
+197:   "median": -5.0
+198:  },
+199:  "2024_25_bull": {
+200:   "n": 665,
+201:   "median": -5.0
+202:  },
+203:  "2026": {
+204:   "n": 178,
+205:   "median": -4.0
+206:  }
+207: },
+208: "era_sign_consistency": "0/4 eras positive",
+209: "descriptives": {
+210:  "occupancy": {
+211:   "RANGE": 0.4833,
+212:   "SQUEEZE": 0.1816,
+213:   "TREND_DOWN": 0.1198,
+214:   "TREND_UP": 0.1197,
+215:   "CHOP": 0.0956
+216:  },
+217:  "dwell": {
+218:   "TREND_UP": {
+219:    "n_runs": 1268,
+220:    "median_bars": 8.0
+221:   },
+222:   "TREND_DOWN": {
+223:    "n_runs": 1248,
+224:    "median_bars": 7.0
+225:   },
+226:   "SQUEEZE": {
+227:    "n_runs": 1546,
+228:    "median_bars": 9.0
+229:   },
+230:   "RANGE": {
+231:    "n_runs": 3663,
+232:    "median_bars": 13.0
+233:   },
+234:   "CHOP": {
+235:    "n_runs": 1320,
+236:    "median_bars": 7.0
+237:   }
+238:  },
+239:  "native_churn_F": 5.851
+240: },
+241: "sensitivity_fuel": {
+242:  "k4_dz0.1": {
+243:   "median": -5.0,
+244:   "n": 1403,
+245:   "churn_F": 3.773
+246:  },
+247:  "k4_dz0.25": {
+248:   "median": -5.0,
+249:   "n": 1360,
+250:   "churn_F": 3.505
+251:  },
+252:  "k8_dz0.1": {
+253:   "median": -4.0,
+254:   "n": 1499,
+255:   "churn_F": 3.458
+256:  },
+257:  "k8_dz0.25": {
+258:   "median": -5.0,
+259:   "n": 1447,
+260:   "churn_F": 3.254
+261:  },
+262:  "k16_dz0.1": {
+263:   "median": -4.0,
+264:   "n": 1566,
+265:   "churn_F": 3.191
+266:  },
+267:  "k16_dz0.25": {
+268:   "median": -4.0,
+269:   "n": 1507,
+270:   "churn_F": 3.081
+271:  }
+272: },
+273: "sensitivity_match": {
+274:  "d1_ov0.01": {
+275:   "median": -4.0,
+276:   "n": 1806
+277:  },
+278:  "d1_ov0.25": {
+279:   "median": -4.0,
+280:   "n": 1806
+281:  },
+282:  "d1_ov0.5": {
+283:   "median": -4.0,
+284:   "n": 1806
+285:  },
+286:  "d4_ov0.01": {
+287:   "median": -5.0,
+288:   "n": 1447
+289:  },
+290:  "d4_ov0.25": {
+291:   "median": -5.0,
+292:   "n": 1447
+293:  },
+294:  "d4_ov0.5": {
+295:   "median": -5.0,
+296:   "n": 1447
+297:  },
+298:  "d8_ov0.01": {
+299:   "median": -5.0,
+300:   "n": 1192
+301:  },
+302:  "d8_ov0.25": {
+303:   "median": -5.0,
+304:   "n": 1192
+305:  },
+306:  "d8_ov0.5": {
+307:   "median": -5.0,
+308:   "n": 1192
+309:  }
+310: },
+311: "oi_lag1_robustness": {
+312:  "F_median": -5.0,
+313:  "OI_marginal_median_diff": 1.0,
+314:  "ci95": [
+315:   1.0,
+316:   2.0
+317:  ]
+318: }
+319:}
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-Content research/regime/run_all.py -TotalCount 215' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 258ms:
+#!/usr/bin/env python3
+"""End-to-end research runner.
+
+Stages (each writes results/<SYMBOL>_<stage>.json and prints a summary):
+  headline  - lead-lag tables: F vs B1, B2 vs B1, OI marginal contribution (the ONE number),
+              churn/flap/false-alarm columns, era decomposition, descriptives,
+              sensitivity grid (k x deadzone; d x overlap), OI-lag robustness
+  null      - circular time-shift null for the OI marginal (200 shifts) -> permutation p
+  collapse  - confidence-collapse early-warning angle vs B1 transitions, time-shift null,
+              funding ablation
+  sweep     - hysteresis grid (min_dwell x confirm_bars) vs lead/churn table
+
+Usage: python run_all.py BTCUSDT [--stage headline|null|collapse|sweep|all] [--nulls 200]
+"""
+import argparse
+import json
+import sys
+from pathlib import Path
+
+import numpy as np
+import pandas as pd
+
+import baseline
+import classifier
+import features
+import leadlag
+from classifier import ClassifierParams
+from features import FeatureParams
+from leadlag import MatchParams
+
+HERE = Path(__file__).resolve().parent
+RESULTS = HERE / "results"
+BURN = features.DEFAULT_FP.burn_in
+ERAS = [("2022_bear", "2022-01-01", "2022-12-31"),
+        ("2023_range", "2023-01-01", "2023-12-31"),
+        ("2024_25_bull", "2024-01-01", "2025-12-31"),
+        ("2026", "2026-01-01", "2026-12-31")]
+CLASSES = ("UP", "DOWN")
+
+
+def load(symbol: str):
+    df = pd.read_parquet(HERE / "data" / f"{symbol}_15m.parquet")
+    gaps = json.loads((HERE / "data" / f"{symbol}_gaps.json").read_text())
+    excluded = (df["bar_missing"] | ~df["oi_fresh"]).to_numpy(bool)
+    return df, excluded, gaps
+
+
+def tracks(df, fp: FeatureParams = features.DEFAULT_FP, cp: ClassifierParams = classifier.DEFAULT_CP,
+           oi_col: str = "oi"):
+    feat = features.compute(df, fp, oi_col=oi_col)
+    f = classifier.classify(feat, cp)
+    b2 = classifier.classify(feat, cp, use_fuel=False)
+    b1 = baseline.classify_b1(feat)
+    return feat, f, b2, b1
+
+
+def trim(x, burn=BURN):
+    return x.iloc[burn:]
+
+
+def full_excluded(excluded: np.ndarray, f_trimmed: pd.DataFrame) -> np.ndarray:
+    """Data gaps PLUS the fused track's post-gap blackout (rows it could not classify):
+    the FSM cold-restarts after a gap, and B1 keeps labeling straight through ??episodes
+    born inside that blackout would contaminate miss counts and lead outliers. Applied
+    symmetrically to every track pairing."""
+    return excluded[BURN:] | pd.isna(f_trimmed["regime"].to_numpy(object))
+
+
+def pair_stats(base_lab, fused_lab, index, excluded, mp=MatchParams()):
+    """Per-class episode stats + month keys for bootstrap."""
+    bs = leadlag.to_super(base_lab)
+    fs = leadlag.to_super(fused_lab)
+    out = {}
+    for cls in CLASSES:
+        st = leadlag.class_stats(bs, fs, cls, mp, excluded)
+        st["months"] = leadlag.month_keys(index, st["pair_base_starts"])
+        out[cls] = st
+    out["churn_base"] = leadlag.churn3(bs)
+    out["churn_fused"] = leadlag.churn3(fs)
+    out["flap_fused"] = leadlag.flap_rate(fs)
+    return out
+
+
+def _cls_row(st):
+    s = leadlag.summarize(st["leads"])
+    ci = leadlag.month_bootstrap_median(st["leads"], st["months"])
+    ends = leadlag.summarize(st["end_deltas"])
+    ratio = st["n_fused"] / st["n_base"] if st["n_base"] else np.nan
+    return {
+        "n_base_eps": st["n_base"], "n_fused_eps": st["n_fused"],
+        "eps_ratio": round(ratio, 3), "ratio_invalid": bool(ratio > 1.5),
+        "matched_frac": round(st["n_matched"] / st["n_base"], 3) if st["n_base"] else np.nan,
+        "n_miss": st["n_miss"], "n_false": st["n_false"],
+        "false_per_100c": round(st["false_per_100c"], 3),
+        "start_lead": {**s, "ci95_month_boot": ci},
+        "end_lead": ends,
+        "excluded": [st["n_excluded_base"], st["n_excluded_fused"]],
+    }
+
+
+def headline(symbol: str, write=True):
+    df, excluded, _ = load(symbol)
+    feat, f, b2, b1 = tracks(df)
+    idx = trim(f).index
+    exc = full_excluded(excluded, trim(f))
+    F, B2, B1 = trim(f)["regime"], trim(b2)["regime"], trim(b1)
+
+    fvb = pair_stats(B1, F, idx, exc)
+    avb = pair_stats(B1, B2, idx, exc)
+
+    out = {"symbol": symbol, "n_candles": len(idx),
+           "span": [str(idx[0]), str(idx[-1])],
+           "F_vs_B1": {}, "B2_vs_B1": {}, "OI_marginal": {}}
+    # point estimate = OBSERVED raw median difference (the same estimand the null stage
+    # tests); the paired month bootstrap contributes the CI only (its own median is kept as
+    # a diagnostic ??mixing the two up would report a smoothed number against a raw null)
+    for cls in CLASSES:
+        out["F_vs_B1"][cls] = _cls_row(fvb[cls])
+        out["B2_vs_B1"][cls] = _cls_row(avb[cls])
+        obs_diff = float(np.median(fvb[cls]["leads"]) - np.median(avb[cls]["leads"])) \
+            if len(fvb[cls]["leads"]) and len(avb[cls]["leads"]) else np.nan
+        boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(
+            fvb[cls]["leads"], fvb[cls]["months"], avb[cls]["leads"], avb[cls]["months"])
+        out["OI_marginal"][cls] = {"median_diff": obs_diff, "ci95": [lo, hi],
+                                   "boot_median_diff": boot_med}
+    # pooled enter-TREND (both directions) ??the pre-registered primary endpoint uses this
+    lf = np.concatenate([fvb[c]["leads"] for c in CLASSES])
+    mf = np.concatenate([fvb[c]["months"] for c in CLASSES])
+    lb = np.concatenate([avb[c]["leads"] for c in CLASSES])
+    mb = np.concatenate([avb[c]["months"] for c in CLASSES])
+    boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(lf, mf, lb, mb)
+    obs_pooled = float(np.median(lf) - np.median(lb)) if len(lf) and len(lb) else np.nan
+    out["OI_marginal"]["enter_pooled"] = {"median_diff": obs_pooled, "ci95": [lo, hi],
+                                          "boot_median_diff": boot_med,
+                                          "F_median": float(np.median(lf)) if len(lf) else np.nan,
+                                          "B2_median": float(np.median(lb)) if len(lb) else np.nan}
+    out["churn"] = {"B1": round(fvb["churn_base"], 3), "F": round(fvb["churn_fused"], 3),
+                    "B2": round(avb["churn_fused"], 3), "F_flap": round(fvb["flap_fused"], 3)}
+
+    # era decomposition (sign consistency): median F-vs-B1 lead per era, per class pooled
+    eras = {}
+    for name, a, b in ERAS:
+        t0 = pd.Timestamp(a, tz="UTC")
+        t1 = pd.Timestamp(b, tz="UTC") + pd.Timedelta(days=1)
+        leads = []
+        for cls in CLASSES:
+            st = fvb[cls]
+            sel = [(idx[s] >= t0) and (idx[s] < t1) for s in st["pair_base_starts"]]
+            leads += list(st["leads"][np.array(sel, dtype=bool)]) if st["n_matched"] else []
+        eras[name] = {"n": len(leads),
+                      "median": float(np.median(leads)) if leads else np.nan}
+    out["eras"] = eras
+    signs = [e["median"] for e in eras.values() if e["n"] >= 10]
+    out["era_sign_consistency"] = f"{sum(1 for s in signs if s > 0)}/{len(signs)} eras positive"
+
+    # descriptives: occupancy + dwell per state (the current-state deliverable's health check)
+    occ = F.value_counts(normalize=True).round(4).to_dict()
+    sup = leadlag.to_super(F)
+    dwell = {}
+    for state in classifier.REGIMES:
+        runs = []
+        cnt = 0
+        for x in F:
+            if (not pd.isna(x)) and x == state:
+                cnt += 1
+            elif cnt:
+                runs.append(cnt)
+                cnt = 0
+        if cnt:
+            runs.append(cnt)
+        dwell[state] = {"n_runs": len(runs), "median_bars": float(np.median(runs)) if runs else 0}
+    out["descriptives"] = {"occupancy": occ, "dwell": dwell,
+                           "native_churn_F": round(float((F != F.shift()).sum() / len(F) * 100), 3)}
+
+    # sensitivity: fuel params (k x deadzone) -> pooled enter median of F vs B1
+    sens = {}
+    for k in (4, 8, 16):
+        for dq in (0.10, 0.25):
+            fp2 = FeatureParams(oi_lookback=k, dead_q=dq)
+            _, f2, _, _ = tracks(df, fp=fp2)
+            p2 = pair_stats(B1, trim(f2)["regime"], idx, exc)
+            leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
+            sens[f"k{k}_dz{dq}"] = {"median": float(np.median(leads2)) if len(leads2) else np.nan,
+                                    "n": int(len(leads2)),
+                                    "churn_F": round(p2["churn_fused"], 3)}
+    out["sensitivity_fuel"] = sens
+    # sensitivity: matching params (min_len x overlap)
+    sens_m = {}
+    for d in (1, 4, 8):
+        for ovl in (0.01, 0.25, 0.5):
+            mp = MatchParams(min_len=d, min_overlap=ovl)
+            p2 = pair_stats(B1, F, idx, exc, mp)
+            leads2 = np.concatenate([p2[c]["leads"] for c in CLASSES])
+            sens_m[f"d{d}_ov{ovl}"] = {"median": float(np.median(leads2)) if len(leads2) else np.nan,
+                                       "n": int(len(leads2))}
+    out["sensitivity_match"] = sens_m
+
+    # OI publication-latency robustness: fuel from oi lagged one 5m snapshot
+    if "oi_lag1" in df.columns:
+        _, f_lag, _, _ = tracks(df, oi_col="oi_lag1")
+        pl = pair_stats(B1, trim(f_lag)["regime"], idx, exc)
+        leads_l = np.concatenate([pl[c]["leads"] for c in CLASSES])
+        med_diff_l, lo_l, hi_l = leadlag.paired_month_bootstrap_diff(
+            leads_l, np.concatenate([pl[c]["months"] for c in CLASSES]), lb, mb)
+        out["oi_lag1_robustness"] = {
+            "F_median": float(np.median(leads_l)) if len(leads_l) else np.nan,
+            "OI_marginal_median_diff": med_diff_l, "ci95": [lo_l, hi_l]}
+
+    if write:
+        RESULTS.mkdir(exist_ok=True)
+        (RESULTS / f"{symbol}_headline.json").write_text(json.dumps(out, indent=1, default=str))
+    return out
+
+
+def null_run(symbol: str, n_shifts=200, seed=42):
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ pine/REGIME_v1_indicator.pine' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 211ms:
+1://@version=6
+2:// REGIME v1.1 — 5-상태 레짐 분류기 (research/regime 파이썬 구현의 차트 포팅)
+3://
+4:// 산출물 계약: 캔들마다 {레짐, confidence} 만. 예측·목표가·시그널 없음.
+5:// 5상태(색): 🟢상승추세 / 🔴하락추세 / 🔵수렴(돌파대기) / ⚪박스권 / 🟠난장판(관망)
+6://
+7:// 파라미터는 파이썬 리서치에서 동결된 값 그대로 (재튜닝 금지 — 포킹패스 규율).
+8:// 검증된 사실(BTCUSDT 15m, 2022→2026 + ETH/SOL/XRP 무튜닝 복제):
+9://   - 원시 ADX(25) 대비 진입이 중앙값 4~6캔들 늦은 대신 churn −33%·오경보 ~0.07/100봉
+10://     — "늦지만 깨끗한" 레짐 게이트.
+11://   - 정직성 고지: OI 융합의 +1캔들 조기화는 시간이동 널과 구별 불가(p=1.0) — OI 정렬의
+12://     타이밍 알파는 미검출. ΔOI 하강(숏커버·청산)은 라벨 불변·확신만 삭감.
+13://   - confirm_bars=1 로 올리면 리드 희생 0에 churn 추가 −26%.
+14:// 알림은 반드시 "Once Per Bar Close"로 설정 (FSM이 확정 봉에서만 갱신 — 리페인트 방지).
+15:indicator("REGIME v1 — 5-state regime [Gunner]", overlay = false, max_bars_back = 5000, max_labels_count = 100)
+16:
+17:// ── 동결 파라미터 ────────────────────────────────────────────────────────────
+18:adxLen   = input.int(14,  "ADX/DI 기간",       group = "동결 파라미터(리서치)")
+19:adxLo    = input.float(20, "ADX 하한",          group = "동결 파라미터(리서치)")
+20:adxScale = input.float(15, "ADX 스케일",        group = "동결 파라미터(리서치)")
+21:emaFLen  = input.int(20,  "EMA fast",           group = "동결 파라미터(리서치)")
+22:emaSLen  = input.int(50,  "EMA slow",           group = "동결 파라미터(리서치)")
+23:bbLen    = input.int(20,  "BB 기간",            group = "동결 파라미터(리서치)")
+24:bbK      = input.float(2.0, "BB 표준편차",      group = "동결 파라미터(리서치)")
+25:qWin     = input.int(2880, "분위수 창(봉)",     group = "동결 파라미터(리서치)", tooltip = "15m에서 30일")
+26:kOI      = input.int(8,   "ΔOI lookback(봉)",   group = "동결 파라미터(리서치)")
+27:deadQ    = input.int(25,  "데드존 분위(%)",     group = "동결 파라미터(리서치)")
+28:wDir     = 0.5
+29:wVol     = 0.3
+30:wFuel    = 0.2
+31:nearTie  = 0.02
+32:minDwell    = input.int(0, "min_dwell(봉)",     group = "hysteresis (기본 OFF)")
+33:confirmBars = input.int(0, "confirm_bars(봉)",  group = "hysteresis (기본 OFF)", tooltip = "1로 올리면 리드 희생 없이 잦은 전환 −26% (리서치 스윕)")
+34:// ── 표시 옵션 ────────────────────────────────────────────────────────────────
+35:posStr   = input.string("우상단", "테이블 위치", options = ["좌상단", "중앙상단", "우상단", "좌중앙", "중앙", "우중앙", "좌하단", "중앙하단", "우하단"], group = "표시")
+36:ribbonMode = input.string("메인 차트", "리본 표시", options = ["메인 차트", "레짐 패널", "끄기"], group = "표시", tooltip = "다른 지표 배경과 겹쳐 어지러우면 '레짐 패널'이나 '끄기'로")
+37:showLbl  = input.bool(true, "레짐 전환 마커(차트)", group = "표시")
+38:tblSize  = input.string("보통", "테이블 글자", options = ["작게", "보통", "크게"], group = "표시")
+39:
+40:// ── 피처 (전부 인과: 현재 봉 종가까지만) ────────────────────────────────────
+41:[diP, diM, adx] = ta.dmi(adxLen, adxLen)
+42:atr  = ta.rma(ta.tr(true), adxLen)
+43:m    = (ta.ema(close, emaFLen) - ta.ema(close, emaSLen)) / atr
+44:bbw  = 2 * bbK * ta.stdev(close, bbLen) / ta.sma(close, bbLen)
+45:atrp = atr / close
+46:volPct = (ta.percentrank(bbw, qWin) + ta.percentrank(atrp, qWin)) / 200.0  // 과거 전용
+47:
+48:// OI 피드: 현재 심볼 → 없으면 무기한(.P) 폴백 (현물 차트에서 OI OFF 되는 문제 해결)
+49:string oiSym  = syminfo.prefix + ":" + syminfo.ticker + "_OI"
+50:string oiSymP = syminfo.prefix + ":" + syminfo.ticker + ".P_OI"
+51:oi1 = request.security(oiSym, timeframe.period, close, ignore_invalid_symbol = true)
+52:oi2 = request.security(oiSymP, timeframe.period, close, ignore_invalid_symbol = true)
+53:oiClose = na(oi1) ? oi2 : oi1
+54:bool oiFromPerp = na(oi1) and not na(oi2)
+55:oiOk    = not na(oiClose) and not na(oiClose[kOI])
+56:doi     = oiOk ? (oiClose - oiClose[kOI]) / oiClose[kOI] : na
+57:dpr     = (close - close[kOI]) / close[kOI]
+58:dzDoi   = ta.percentile_nearest_rank(math.abs(doi[1]), qWin, deadQ)   // 과거 전용(1봉 시프트)
+59:dzDpr   = ta.percentile_nearest_rank(math.abs(dpr[1]), qWin, deadQ)
+60:quadOn = oiOk and not na(dzDoi) and not na(dzDpr) and math.abs(doi) >= dzDoi and math.abs(dpr) >= dzDpr
+61:quad   = not quadOn ? 0 : doi > 0 and dpr > 0 ? 1 : doi > 0 and dpr < 0 ? 2 : doi < 0 and dpr > 0 ? 3 : doi < 0 and dpr < 0 ? 4 : 0
+62:
+63:// ── 축 점수 → 5상태 ─────────────────────────────────────────────────────────
+64:tanhPos(float x) =>
+65:    float xc = math.min(x, 20.0)
+66:    float e2 = math.exp(2.0 * xc)
+67:    (e2 - 1.0) / (e2 + 1.0)
+68:
+69:a      = math.max(0.0, math.min(1.0, (adx - adxLo) / adxScale))
+70:tRaw   = a * tanhPos(math.abs(m))
+71:agreeD = math.sign(diP - diM) == math.sign(m)
+72:T      = agreeD ? tRaw : tRaw * 0.5
+73:dirUp   = m > 0 ? T : 0.0
+74:dirDn   = m < 0 ? T : 0.0
+75:dirRest = (1.0 - dirUp - dirDn) / 3.0
+76:muL = math.max(0.0, math.min(1.0, (0.25 - volPct) / 0.10))
+77:muH = math.max(0.0, math.min(1.0, (volPct - 0.75) / 0.10))
+78:muM = math.max(0.0, 1.0 - muL - muH)
+79:
+80:fuelVotes = quad == 1 or quad == 2
+81:wPresent  = wDir + wVol + (fuelVotes ? wFuel : 0.0)
+82:sUP = (wDir * dirUp   + (quad == 1 ? wFuel : 0.0)) / wPresent
+83:sDN = (wDir * dirDn   + (quad == 2 ? wFuel : 0.0)) / wPresent
+84:sSQ = (wDir * dirRest + wVol * muL) / wPresent
+85:sRA = (wDir * dirRest + wVol * muM) / wPresent
+86:sCH = (wDir * dirRest + wVol * muH) / wPresent
+87:
+88:// argmax + 니어타이 현직 우선 + 온라인 FSM(확정 봉 스탬프, 역서명 없음)
+89:var int cur = -1
+90:var int pending = -1
+91:var int pendCnt = 0
+92:var int sinceSwitch = 100000
+93:score(i) => i == 0 ? sUP : i == 1 ? sDN : i == 2 ? sSQ : i == 3 ? sRA : sCH
+94:int best = 0
+95:float bestV = sUP
+96:if sDN > bestV
+97:    best := 1
+98:    bestV := sDN
+99:if sSQ > bestV
+100:    best := 2
+101:    bestV := sSQ
+102:if sRA > bestV
+103:    best := 3
+104:    bestV := sRA
+105:if sCH > bestV
+106:    best := 4
+107:    bestV := sCH
+108:bool ready = not na(volPct) and not na(m) and not na(adx)
+109:if ready and barstate.isconfirmed
+110:    int cand = cur >= 0 and score(cur) >= bestV - nearTie ? cur : best
+111:    if cur < 0
+112:        cur := cand
+113:        sinceSwitch := 0
+114:    else if cand != cur
+115:        pendCnt := cand == pending ? pendCnt + 1 : 1
+116:        pending := cand
+117:        if pendCnt >= confirmBars + 1 and sinceSwitch >= minDwell
+118:            cur := cand
+119:            sinceSwitch := 0
+120:            pending := -1
+121:            pendCnt := 0
+122:    else
+123:        pending := -1
+124:        pendCnt := 0
+125:    sinceSwitch += 1
+126:else if not ready and barstate.isconfirmed
+127:    cur := -1
+128:    pending := -1
+129:    pendCnt := 0
+130:    sinceSwitch := 100000
+131:
+132:// confidence = 합의 × 마진 × 수정자, [0,1] 클램프
+133:float agreement = ready and cur >= 0 ? score(cur) : na
+134:float runnerUp = 0.0
+135:if ready and cur >= 0
+136:    for i = 0 to 4
+137:        if i != cur and score(i) > runnerUp
+138:            runnerUp := score(i)
+139:bool dzDefined = oiOk and not na(dzDoi) and not na(dzDpr)
+140:float fuelMod = quad == 3 or quad == 4 ? 0.85 : dzDefined and quad == 0 ? 0.95 : 1.0
+141:float conf = na(agreement) ? na : math.max(0.0, math.min(1.0, agreement * (1.0 - 0.5 * (agreement > 1e-12 ? runnerUp / agreement : 2.0)) * fuelMod * (dzDefined ? 1.0 : 0.8)))
+142:
+143:// ── 상태 이름·색 (범례와 리본이 같은 색을 씀 — "무슨 색=무슨 시장") ─────────
+144:color stCol = cur == 0 ? color.green : cur == 1 ? color.red : cur == 2 ? color.blue : cur == 3 ? color.gray : color.orange
+145:nameOf(i) => i == 0 ? "상승추세" : i == 1 ? "하락추세" : i == 2 ? "수렴(돌파대기)" : i == 3 ? "박스권" : i == 4 ? "난장판(관망)" : "준비 중"
+146:emojiOf(i) => i == 0 ? "🟢" : i == 1 ? "🔴" : i == 2 ? "🔵" : i == 3 ? "⚪" : i == 4 ? "🟠" : "…"
+147:
+148:// 리본 (진할수록 확신 높음): 메인 차트 / 레짐 패널 / 끄기
+149:int transp = na(conf) ? 90 : int(90 - 70 * math.min(conf / 0.6, 1.0))
+150:bgcolor(ready and ribbonMode == "메인 차트" ? color.new(stCol, transp) : na, title = "regime ribbon (main)", force_overlay = true)
+151:bgcolor(ready and ribbonMode == "레짐 패널" ? color.new(stCol, transp) : na, title = "regime ribbon (pane)")
+152:
+153:// 상위 4H 방향 힌트 (단순 ADX/DI, 확정 봉만 — 리페인트 방지). 정밀 MTF는 current.py
+154:f_htfDir() =>
+155:    [dp, dm, ax] = ta.dmi(adxLen, adxLen)
+156:    [dp[1], dm[1], ax[1]]
+157:[dp4, dm4, adx4] = request.security(syminfo.tickerid, "240", f_htfDir())
+158:string htfTxt = na(adx4) ? "…" : adx4 >= 25 and dp4 > dm4 ? "🟢 추세 위" : adx4 >= 25 and dm4 > dp4 ? "🔴 추세 아래" : "⚪ 비추세"
+159:
+160:// 전환 마커: 과거로 스크롤하며 "언제 무슨 시장으로 바뀌었나" 확인용
+161:if showLbl and barstate.isconfirmed and cur >= 0 and cur != cur[1]
+162:    label.new(bar_index, na, emojiOf(cur) + " " + nameOf(cur), yloc = yloc.abovebar, style = label.style_label_down, color = color.new(stCol, 25), textcolor = color.white, size = size.small, force_overlay = true)
+163:
+164:// 확신도 서브패널
+165:plot(conf, "confidence", color = color.new(color.blue, 0), linewidth = 1)
+166:confQ20 = ta.percentile_nearest_rank(conf[1], qWin, 20)
+167:plot(confQ20, "conf rolling q20", color = color.new(color.gray, 40), style = plot.style_line)
+168:collapse = not na(conf) and not na(conf[1]) and not na(confQ20) and not na(confQ20[1]) and conf < confQ20 and conf[1] < confQ20[1]
+169:plotshape(collapse, "confidence collapse", style = shape.xcross, location = location.bottom, color = color.new(color.red, 0), size = size.tiny)
+170:
+171:// ── 상태 테이블 (메인 차트 위, 위치 선택 가능) ──────────────────────────────
+172:posOf(string s) =>
+173:    s == "좌상단" ? position.top_left : s == "중앙상단" ? position.top_center : s == "우상단" ? position.top_right : s == "좌중앙" ? position.middle_left : s == "중앙" ? position.middle_center : s == "우중앙" ? position.middle_right : s == "좌하단" ? position.bottom_left : s == "중앙하단" ? position.bottom_center : position.bottom_right
+174:txtSz = tblSize == "작게" ? size.small : tblSize == "크게" ? size.large : size.normal
+175:
+176:// 확신 등급: 절대값(상한 ~0.6)이 아니라 "최근 30일 나 자신 대비" 분위로 번역
+177:confPct = ta.percentrank(conf, qWin)
+178:
+179:// 플레이북 문구에 143k 백테스트 인사이트 반영: 돌파는 최약체 생존군(휩소) → 수렴에서
+180:// '첫 돌파 추격' 금지·확인 후 진입, 박스권 역매매는 거래량 동반 이탈/회귀만
+181:doTxt(i) => i == 0 ? "눌림목 롱 (4H 방향 확인)" : i == 1 ? "되돌림 숏 (4H 방향 확인)" : i == 2 ? "돌파 '확인 후' 진입 · 레벨 알림" : i == 3 ? "박스 상/하단 역매매 (거래량 확인)" : "관망 · 사이즈 축소"
+182:dontTxt(i) => i == 0 ? "역추세 숏 · 물타기" : i == 1 ? "역추세 롱 · 나이프 캐칭" : i == 2 ? "첫 돌파 추격 · 미리 방향 베팅" : i == 3 ? "추세추종 · 돌파 추격" : "방향 베팅 전부 · 복수 매매"
+183:
+184:var table tb = table.new(posOf(posStr), 2, 8, border_width = 1, force_overlay = true)
+185:if barstate.islast
+186:    string gradeTxt = na(confPct) ? "계산 중…" : (confPct >= 70 ? "높음 ●●●" : confPct >= 30 ? "보통 ●●○" : "낮음 ●○○") + "  (" + str.tostring(conf, "0.00") + ")"
+187:    string dataTxt = dzDefined ? (oiFromPerp ? "정상 (무기한 OI 폴백)" : "정상 (OI 포함)") : "OI 준비/끊김 → 보수 모드(확신 하향)"
+188:    table.cell(tb, 0, 0, "지금 시장", text_size = txtSz)
+189:    table.cell(tb, 1, 0, emojiOf(cur) + " " + nameOf(cur), text_color = color.white, bgcolor = stCol, text_size = txtSz)
+190:    table.cell(tb, 0, 1, "판단 확신", text_size = txtSz)
+191:    table.cell(tb, 1, 1, gradeTxt, text_size = txtSz, tooltip = "최근 30일의 나 자신과 비교한 상대 등급")
+192:    table.cell(tb, 0, 2, "4H 방향(참고)", text_size = txtSz)
+193:    table.cell(tb, 1, 2, htfTxt, text_size = txtSz, tooltip = "상위TF 단순 ADX/DI 힌트. 방향·레버리지 결정은 4H가 우선 (정밀 MTF: python current.py)")
+194:    table.cell(tb, 0, 3, "지금 할 것", text_size = txtSz)
+195:    table.cell(tb, 1, 3, cur >= 0 ? doTxt(cur) : "…", text_size = txtSz)
+196:    table.cell(tb, 0, 4, "하지 말 것", text_size = txtSz)
+197:    table.cell(tb, 1, 4, cur >= 0 ? dontTxt(cur) : "…", text_size = txtSz, text_color = color.new(color.red, 20))
+198:    table.cell(tb, 0, 5, "데이터", text_size = txtSz)
+199:    table.cell(tb, 1, 5, dataTxt, text_size = txtSz)
+200:    table.cell(tb, 0, 6, collapse ? "⚠ 전환 경고" : "", text_size = txtSz, bgcolor = collapse ? color.new(color.red, 70) : na)
+201:    table.cell(tb, 1, 6, collapse ? "확신 급락 — 시장 성격이 바뀌는 중일 수 있음. 사이즈 축소" : "", text_size = txtSz, bgcolor = collapse ? color.new(color.red, 70) : na)
+202:    table.cell(tb, 0, 7, "색 안내", text_size = size.small)
+203:    table.cell(tb, 1, 7, "🟢상승 🔴하락 🔵수렴 ⚪박스 🟠난장", text_size = size.small, text_color = color.new(color.gray, 20))
+204:
+205:alertcondition(ta.change(cur) != 0, "Regime change", "REGIME v1: 레짐 전환")
+206:alertcondition(collapse, "Confidence collapse", "REGIME v1: 확신 급락 — 전환 가능성")
+
+2026-07-05T07:42:21.655811Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python -B -m pytest -q -p no:cacheprovider research/regime/tests/test_no_lookahead.py'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n \"round\\(|merge_asof|oi_fresh|tolerance|snap\" research/regime/build_dataset.py" in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python -B -m pytest -q -p no:cacheprovider research/regime/tests/test_no_lookahead.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python -B -m pytest -q -p no:cacheprovider research/regime/tests/test_leadlag.py research/regime/tests/test_states.py research/regime/tests/test_quadrant.py' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python -B -m pytest -q -p no:cacheprovider research/regime/tests/test_no_lookahead.py'` rejected: blocked by policy
+2026-07-05T07:42:21.669026Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python -B -m pytest -q -p no:cacheprovider research/regime/tests/test_leadlag.py research/regime/tests/test_states.py research/regime/tests/test_quadrant.py'` rejected: blocked by policy
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python -B -m pytest -q -p no:cacheprovider research/regime/tests/test_leadlag.py research/regime/tests/test_states.py research/regime/tests/test_quadrant.py'` rejected: blocked by policy
+2026-07-05T07:42:24.408081Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python --version'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python --version' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'python --version'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/README.md' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/tests/test_leadlag.py' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/NOTES.md' in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'rg -n ''^ research/regime/tests/test_axes_synthetic.py' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 294ms:
+1:# 크립토 선물 레짐 분류기 — 5상태 + OI 리드-래그 검증
+2:
+3:목적은 분류 정확도가 아니라 **전환 조기 감지**다. 산출물 두 개:
+4:
+5:1. **현재 상태 분류기** — 매 15m 캔들(번인 후)에 `{regime, confidence∈[0,1], timestamp}` 방출.
+6:   5상태 `TREND_UP / TREND_DOWN / SQUEEZE / RANGE / CHOP`, 플레이북(`playbook.py`)으로 전략
+7:   on/off 연결. 예측·목표가·시그널 없음.
+8:2. **OI 융합의 조기성 검증** — OI 융합 라벨(F)이 베이스라인을 몇 캔들 선행하는가.
+9:   레짐엔 그라운드 트루스가 없으므로 정확도는 지표가 아님. **핵심 숫자 = OI 한계기여**
+10:   (= lead(F vs B1) − lead(B2 vs B1); B2 = 연료 축 뺀 동일 분류기).
+11:
+12:설계 전문과 적대 검증(에이전트 6, 21개 급소) 반영 내역: `NOTES.md` + `~/.claude/plans/task-crypto-futures-warm-peacock.md`.
+13:
+14:## 핵심 결과 (BTCUSDT 15m, 2022-01→2026-07, 154k 캔들)
+15:
+16:| 지표 | 값 |
+17:|---|---|
+18:| OI 한계기여 (1차 엔드포인트) | enter-TREND 풀링 **+1캔들** [월클러스터 CI 1, 2] · UP +2 [1,2] · DOWN +1 [0,2] |
+19:| **★ 순환 시간이동 널 (200회)** | 풀링: 널 **+1.0 [1,1], p=1.0** — 관측 +1과 **구별 불가**. 클래스별: UP 관측 +2 vs 널 +1, **p=0.144(ns)** · DOWN +1 = 널, p=1.0 |
+20:| OI 1스냅샷(5분) 지연 강건성 | +1 [1,2] (동일 — 널 해석과 정합) |
+21:| 원시 F vs B1 (참고용) | 중앙값 −4(UP)/−6(DOWN): 원시 ADX보다 **늦게** 진입. 4개 era 전부 음(일관) |
+22:| churn (3-슈퍼상태, flips/100봉) | B1 4.83 · **F 3.25** · B2 2.19 — F는 늦는 대신 훨씬 안정 |
+23:| F 오경보율 | ~0.07 에피소드/100봉 (B1 미확인 추세 진입이 거의 없음) |
+24:| hysteresis | `confirm=1`: churn −26%(3.25→2.41)·플랩 0.23→0.06에 **리드 희생 0** — 공짜 안정화 |
+25:| 무튜닝 복제 | ETH/SOL/XRP 셋 다 한계기여 +1 [1,2]·churn 서열·점유율 구조 동일 재현 |
+26:
+27:**정직한 결론 (널 보정):** 관측된 +1캔들 조기화는 시간이동(정렬 파괴) OI로도 그대로 재현된다
+28:(p=1.0). 사분면의 방향 정보는 ΔOI가 아니라 **Δprice 레그**에서 나오므로, 이 +1은 "제3축이
+29:실제 가격 방향으로 투표한다"는 구조 효과이지 **OI 정렬 정보가 아니다**. 즉 — 이 설정에서
+30:**OI의 타이밍 알파는 검출되지 않았다.** 이 널 검정이 없었다면 "+1캔들 OI 엣지"(CI가 0을
+31:제외!)를 오보로 출하했을 것이다 — 월클러스터 CI만으로는 부족했다는 것이 이 리서치의 핵심
+32:방법론적 교훈. collapse 각도(2차)는 precision 0.982 vs 널 0.974(p=0.005)로 유의하지만
+33:효과량이 미미하고 recall은 ns(p=0.114) — 약한 신호. (전 수치는 적대적 코드리뷰 후 교정된
+34:기계로 재산출한 최종값 — 수정 전후 결론 불변이 그 자체로 강건성 증거.)
+35:
+36:분류기 자체는 결과와 무관하게 출하: 5상태 전부 활성(점유율 9.6~48%), 체류 중앙값 7~13봉,
+37:B1 대비 churn −33%·오경보 근절 — "늦지만 깨끗한" 레짐 게이트로서의 가치는 리드-래그와 별개.
+38:
+39:**R2 추가 검증 (2026-07-05):**
+40:- **사후 성과 감사**(`--stage posthoc`): 변동성 서열 완벽(24h |폭|: 수렴 0.88% < 박스 1.21% <
+41:  추세 1.4%대 < 난장 1.59%) — 상태 의미는 실재. 방향 지속성은 없음(추세 라벨 후 미세 되돌림)
+42:  — **라벨은 시장의 '성격' 기술이지 방향 예측이 아니다.**
+43:- **무료 파생 신호 3종 전패**: 테이커 흐름·톱트레이더 LSR·DVOL(내재변동성) 전부 한계기여
+44:  0.0, 시간이동 널 p=1.0 (사전등록 인코딩, `alt_axes.py`). OI 포함 네 신호가 enter-TREND
+45:  타이밍에 무기여 — 남은 후보는 청산 이벤트(유료) 또는 타깃 변경(변동성 팽창 타이밍).
+46:- `current.py`에 **멀티TF(15m/1h/4h) 합의 뷰**, Pine v1.1(차트 위 한글 테이블·범례·전환 마커).
+47:
+48:## 매매 적용 프로토콜 (선물 레버리지 데이트레이딩, R:R 게이트)
+49:
+50:검증이 말해주는 사용법: **이 지표는 진입 시그널이 아니라 "어떤 전략을 켜고, 얼마나 걸까"의
+51:게이트**다. 15m 라벨엔 방향 예측력이 없고(사후 감사), 143k 백테스트 생존 통계도 방향
+52:결정은 1H/4H에서 하라고 말한다. 위계:
+53:
+54:1. **방향·전략 클래스 = 4H(주)·1H(보조) 레짐** — `python current.py`의 MTF 판정 또는
+55:   지표의 "4H 방향" 행. 4H가 추세면 그 방향만, 비추세면 방향 베팅 금지.
+56:2. **진입 타이밍·회피 = 15m 레짐** — 4H 방향과 15m 상태 조합으로 셋업 선택.
+57:3. **사이즈/레버리지 = 확신 등급 + 전환경고** — 확신 '낮음' 또는 ⚠경고 시 절반, CHOP은 0.
+58:
+59:| 4H \ 15m | 🟢/🔴 추세 | 🔵 수렴 | ⚪ 박스권 | 🟠 난장판 |
+60:|---|---|---|---|---|
+61:| **추세 (4H)** | 눌림목/되돌림 진입, R:R≥2, 구조 SL | 확장 '확인 후' 추세방향만 | 박스 이탈-리테스트만, R:R≥2 | 관망 |
+62:| **비추세 (4H)** | 15m 단독추세 추격 금지 | 대기 (방향 없음) | 박스 역매매, R:R 1.5, 짧은 SL | 관망 |
+63:
+64:- 청산 정책·트리거는 HT1 v2 확정안 유지 — 이 게이트는 그 앞단의 on/off 스위치.
+65:- 돌파는 통계적 최약체 전략군(생존 19/196): 수렴 돌파는 반드시 확장 확인(또는 리테스트) 후.
+66:
+67:## 파일
+68:
+69:| 파일 | 역할 |
+70:|---|---|
+71:| `fetch_data.py` | Binance Vision 다운로드+캐시+체크섬. `python fetch_data.py BTCUSDT ...` |
+72:| `build_dataset.py` | 인제스트·정렬 규약의 **유일한** 강제 지점 (정본 종가=open+15m, UTC ns, merge_asof backward, 갭 인벤토리) → parquet |
+73:| `features.py` | 인과 피처 전부 (과거-전용 분위수, 상대 ΔOI(계약 수), 사분면) |
+74:| `classifier.py` | 축 점수 → 5상태+confidence, 니어타이 현직 우선, 온라인 FSM hysteresis, degrade |
+75:| `baseline.py` | B1 = 고전 ADX 3상태 (ADX≥25 + DI 부호) |
+76:| `playbook.py` | `REGIME_PLAYBOOK` (분류기와 상호 import 금지 — 테스트로 강제) |
+77:| `leadlag.py` | **에피소드(구간) 겹침 매칭** 하네스 + 월클러스터 부트스트랩 (포인트 매칭은 churn으로 게이밍 가능해 폐기 — NOTES 참조) |
+78:| `run_all.py` | 스테이지 러너: headline / null / collapse / sweep |
+79:| `current.py` | 라이브 스냅샷 CLI (REST, 무키): `python current.py BTCUSDT` |
+80:| `viz.py` | 리본 / 리드-래그 스코어카드 / 전이 다이어그램 (Plotly HTML) |
+81:| `tests/` | 28+ 테스트. **`test_no_lookahead.py`가 전체를 보호** — 원시 3테이블 절단/오염 + 카나리(심은 누수가 잡히는지 확인) + FSM 셀 불변성 |
+82:| `results/` | 헤드라인·널·collapse·스윕 JSON + 시각화 HTML |
+83:
+84:## 재현
+85:
+86:```bash
+87:pip install pandas numpy pyarrow plotly requests pytest
+88:python fetch_data.py BTCUSDT ETHUSDT SOLUSDT XRPUSDT   # ~115MB, 재개 가능
+89:python build_dataset.py BTCUSDT ETHUSDT SOLUSDT XRPUSDT
+90:python -m pytest tests/ -q                              # 전부 녹색이어야 진행
+91:python run_all.py BTCUSDT --stage all                   # headline+null+collapse+sweep (~15분)
+92:python viz.py BTCUSDT
+93:python current.py BTCUSDT                               # 지금 어떤 레짐인가
+94:```
+95:
+96:## 정직성 규약 (요약)
+97:
+98:- 룩어헤드 테스트는 **원시 클라인·metrics·펀딩 3테이블 전부**를 벽시계 t*에서 절단/오염하고
+99:  파이프라인 전체를 재실행, t* 이전 출력의 정확 일치를 요구. 카나리(OI −1캔들 시프트)가
+100:  **실제로 빨간불**이 되는 것까지 테스트함.
+101:- 매칭은 에피소드 단위·H 파라미터 없음. 오경보율이 1급 지표. 매처 자가검증 3종
+102:  (노이지 비선행 ~0 / 노이지 선행 k 복원 / 갭)을 실데이터 전에 통과.
+103:- 모든 분위수는 과거 전용. 번인 35일 제외. 갭 인접 에피소드 통계 제외.
+104:- 파라미터는 실데이터 접촉 전 동결. 민감도 그리드(k×데드존, d×겹침)로 knife-edge 여부 공개.
+105:
+106:## 한계
+107:
+108:- OI 아카이브는 2021-12 이후만 존재 → 2022 이전 레짐 검증 불가. Binance 단일 거래소 OI.
+109:- confidence는 확률이 아니라 축 합의 점수(상한 ~0.65) — collapse 탐지는 자기 분위수 기반이라 무영향.
+110:- 30일 롤링 분위수 창보다 오래 지속되는 레짐은 서서히 재정규화됨(적응형 임계값의 본질).
+111:- 리드-래그는 B1과 F가 공동 검출한 에피소드(매칭률 ~0.44)에 한정 — B1 단독 에피소드 대부분은
+112:  F가 아예 추세로 보지 않은 단명 구간(오경보일 수도, 미탐일 수도 — 그라운드 트루스 없음).
+
+ succeeded in 309ms:
+1:"""The measuring instrument is validated BEFORE it touches real data.
+2:
+3:Three mandatory gates (a clean known-lead recovery alone would also pass a matcher that is
+4:gameable by churn — that is exactly the failure mode episode matching exists to close):
+5:  (a) noisy NON-leader: extra spurious episodes, zero injected lead -> median lead ~ 0,
+6:      false alarms reported
+7:  (b) noisy leader: injected lead k + spurious episodes -> recovers k without inflation
+8:  (c) gap case: episodes near excluded bars are dropped and counted, remaining leads intact
+9:"""
+10:import numpy as np
+11:
+12:import leadlag
+13:from leadlag import MatchParams
+14:
+15:
+16:def build_track(n=20000, ep_len=40, gap_len=80, seed=3):
+17:    """Baseline: alternating NT blocks and UP/DOWN episodes."""
+18:    g = np.random.default_rng(seed)
+19:    sup = np.array(["NT"] * n, dtype=object)
+20:    pos, cls = gap_len, 0
+21:    starts = []
+22:    while pos + ep_len < n - gap_len:
+23:        c = "UP" if cls % 2 == 0 else "DOWN"
+24:        sup[pos:pos + ep_len] = c
+25:        starts.append((pos, c))
+26:        pos += ep_len + gap_len
+27:        cls += 1
+28:    return sup, starts
+29:
+30:
+31:def shift_earlier(sup, k):
+32:    """Fused track that enters (and exits) every episode k bars EARLIER."""
+33:    out = np.roll(sup.copy(), -k)
+34:    out[-k:] = "NT"
+35:    return out
+36:
+37:
+38:def inject_spurious(sup, n_spur, seed=9, length=6):
+39:    g = np.random.default_rng(seed)
+40:    out = sup.copy()
+41:    n = len(out)
+42:    added = 0
+43:    tries = 0
+44:    while added < n_spur and tries < n_spur * 50:
+45:        tries += 1
+46:        s = int(g.integers(0, n - length))
+47:        seg = out[s - 2:s + length + 2]
+48:        if all(x == "NT" for x in seg):  # only inside NT zones, not touching real episodes
+49:            out[s:s + length] = g.choice(["UP", "DOWN"])
+50:            added += 1
+51:    assert added == n_spur
+52:    return out
+53:
+54:
+55:def median_lead(base, fused, mp=MatchParams(), excluded=None):
+56:    leads = np.concatenate([
+57:        leadlag.class_stats(base, fused, c, mp, excluded)["leads"] for c in ("UP", "DOWN")])
+58:    return np.median(leads), leads
+59:
+60:
+61:def test_clean_known_lead_recovered():
+62:    base, _ = build_track()
+63:    for k in (2, 5, 10):
+64:        fused = shift_earlier(base, k)
+65:        med, leads = median_lead(base, fused)
+66:        assert med == k, f"expected lead {k}, got {med}"
+67:        assert len(leads) > 100
+68:
+69:
+70:def test_noisy_non_leader_reports_zero():
+71:    base, _ = build_track()
+72:    fused = inject_spurious(base, n_spur=120)  # ~75% extra episodes, ZERO real lead
+73:    med, leads = median_lead(base, fused)
+74:    assert abs(med) <= 1, f"churny non-leader must not fake lead, got median {med}"
+75:    st = leadlag.class_stats(base, fused, "UP")
+76:    assert st["n_false"] > 20, "spurious episodes must surface as false alarms"
+77:
+78:
+79:def test_noisy_leader_recovers_k_without_inflation():
+80:    base, _ = build_track()
+81:    k = 5
+82:    fused = inject_spurious(shift_earlier(base, k), n_spur=120)
+83:    med, _ = median_lead(base, fused)
+84:    assert abs(med - k) <= 1, f"expected ~{k}, got {med}"
+85:
+86:
+87:def test_gap_exclusion():
+88:    base, starts = build_track()
+89:    k = 5
+90:    fused = shift_earlier(base, k)
+91:    excluded = np.zeros(len(base), dtype=bool)
+92:    # kill the zone around the 3rd and 4th episode starts
+93:    for s, _ in starts[2:4]:
+94:        excluded[s - 10:s + 10] = True
+95:    mp = MatchParams()
+96:    st_up = leadlag.class_stats(base, fused, "UP", mp, excluded)
+97:    st_dn = leadlag.class_stats(base, fused, "DOWN", mp, excluded)
+98:    assert st_up["n_excluded_base"] + st_dn["n_excluded_base"] >= 2
+99:    med = np.median(np.concatenate([st_up["leads"], st_dn["leads"]]))
+100:    assert med == k, "exclusion must not distort surviving leads"
+101:
+102:
+103:def test_direct_flip_is_two_episodes():
+104:    sup = np.array(["NT"] * 20 + ["UP"] * 10 + ["DOWN"] * 10 + ["NT"] * 20, dtype=object)
+105:    ups = leadlag.episodes(sup, "UP", 4)
+106:    dns = leadlag.episodes(sup, "DOWN", 4)
+107:    assert ups == [(20, 29)] and dns == [(30, 39)]
+108:
+109:
+110:def test_blips_are_not_episodes():
+111:    sup = np.array(["NT"] * 50, dtype=object)
+112:    sup[10:12] = "UP"  # 2-bar blip < min_len 4
+113:    assert leadlag.episodes(sup, "UP", 4) == []
+114:
+115:
+116:def test_churn_and_flap():
+117:    sup = np.array(["NT", "UP", "NT", "UP", "NT", "NT", "NT", "NT"], dtype=object)
+118:    assert leadlag.churn3(sup) > 0
+119:    assert 0.0 <= leadlag.flap_rate(sup) <= 1.0
+
+ succeeded in 296ms:
+1:# 레짐 분류기 — 러닝 노트
+2:
+3:> 목적·설계·동결 파라미터 전문: `~/.claude/plans/task-crypto-futures-warm-peacock.md` (승인본).
+4:> 이 파일은 실행 로그: 각 단계의 verify 결과·결정·이슈를 시간순 기록. 재개 시 여기부터 읽는다.
+5:
+6:## 진행 로그
+7:
+8:### 2026-07-05 — Step 0: 스캐폴드
+9:- 환경: Python 3.12.10, pandas 3.0.3 / numpy 2.5.1 / pyarrow 24.0.0 / plotly 6.8.0 / pytest 9.1.1 설치 완료.
+10:- pandas 3.x 주의: CoW 기본, `fillna(method=)` 제거됨 → `ffill()` 사용. 금지 idiom 목록은 플랜의 정렬 규약 참조.
+11:- Binance Vision 가용성 HEAD 검증(플랜 단계에서): BTC/ETH/SOL/XRP metrics 2022-01-01→2026-07-03 전부 200.
+12:- 프로젝트 메모리 `regime-classifier.md` 생성.
+13:
+14:### 2026-07-05 — Step 1: 데이터 파이프라인 ✅
+15:- 4심볼 원시 다운로드 완료(각 1,756파일, 아카이브 결측 0, 체크섬 검증). 총 114MB.
+16:- BTC/ETH: 157,920봉(2022-01-01→2026-07-04), 결측봉 0, OI 커버리지 99.975%, OI 갭 1건(2024-02-16 40봉, Binance metrics 장애).
+17:- SOL/XRP: 클라인 결측 480봉(2022-02-26~03-01, 04-01~03 — 아카이브 자체 공백), OI 커버리지 99.67% — 전부 갭 플래그로 통계 제외 처리.
+18:
+19:### 2026-07-05 — Step 2~4: features·분류기·테스트 ✅ (21/21 녹색)
+20:- 룩어헤드 스위트: 원시 3테이블 절단 7지점 + 오염 7지점 전부 통과, **카나리(OI −1캔들 시프트)가 실제로 잡힘** — 테스트의 테스트 통과.
+21:- 실데이터 BTC 점유율: RANGE 48.3% / SQUEEZE 18.2% / TREND_DOWN 12.0% / TREND_UP 12.0% / CHOP 9.6% — 5상태 전부 >2% 바닥 통과. 번인 후 NaN 라벨 0.
+22:- confidence: 평균 0.37, 범위 [0.11, 0.62], 연속(693 고유값/1000봉). 상한이 1보다 낮은 건 3축 합의 구조상 자연스러움(확률 아님, 자기 분위수 기반 collapse 탐지에 무영향) — 문서화.
+23:
+24:## 결정 기록 (실행 중 추가분)
+25:
+26:1. **OI 스냅샷 타임스탬프는 스냅하지 않음**: 실데이터가 정각+수십 초 지터의 '생성시각' — 가용 시점 그대로 backward 조인이 더 정직(어서션은 중앙 간격 5분 무결성으로 교체).
+27:2. **펀딩 그리드는 1h 스냅**: Binance는 고변동 시 일부 심볼 펀딩 주기를 4h로 전환(SOL 실측) — 8h 고정 가정 폐기, backward 조인은 주기 무관 인과.
+28:3. **합성 시나리오는 수축형 스퀴즈/증폭형 촙**: 정적 저변동 블록은 롤링 분위수 창이 포화되며 자기 정규화됨(적응형 임계값의 본질 — 실데이터에선 30d 창 ≫ 레짐 지속시간이라 무해). 평가창은 온셋+60~128.
+29:4. **라벨-불활성 검증은 점수 벡터 동일성으로**: FSM 경로 의존성(니어타이 현직 우선) 때문에 라벨 비교는 오탐 — 결정 입력(점수)과 라벨 동일 행의 confidence 비율로 검증.
+30:5. pandas 3: 타임스탬프 단위 보존 → 전부 ns 정규화(`_as_ns`). merge_asof는 동일 해상도 요구.
+31:
+32:### 2026-07-05 — Step 5~9: 하네스·헤드라인·널·collapse·스윕 ✅
+33:
+34:**헤드라인 (BTCUSDT, 154k 캔들, 에피소드 매칭):**
+35:- F vs B1 진입 리드: UP 중앙값 **−4** [IQR −8,−2] (n=747pair), DOWN **−6** [−10,−3] — 융합 분류기는 원시 ADX보다 **늦게** 진입. 4 era 전부 음(부호 일관), 민감도 그리드(k×데드존 6셀, d×겹침 9셀) 전부 −4~−5.
+36:- 대신 churn: B1 4.83 > F 3.25 > B2 2.19 flips/100봉, F 오경보 ~0.07/100봉 — **늦는 만큼 훨씬 깨끗함**.
+37:- OI 한계기여(F−B2): UP +2 [1,2], DOWN +1 [0,2], 풀링 +1 [1,2]. OI 1스냅샷 지연에도 동일(+1 [1,2]).
+38:
+39:**★ 널 검정이 잡아낸 것 (이 프로젝트의 핵심 교훈):**
+40:- 순환 시간이동 널(200회): 널 중앙값 **+1.0, IQR [1,1], p=1.0** — 관측 +1과 동일.
+41:- 해석: 사분면의 방향 정보는 ΔOI가 아니라 **Δprice 레그**에서 나옴(셔플된 OI도 실제 가격 방향으로 투표) → +1캔들 조기화는 "제3축 존재"의 구조 효과이지 OI 정렬 정보가 아님.
+42:- **적대 검증이 요구한 널이 없었다면 "+1캔들 OI 엣지"를 오보로 출하했을 것.**
+43:- 클래스별 널(200회): **UP 관측 +2 vs 널 +1 [1,1], p=0.144 — 비유의**(BH 보정 전에도). DOWN +1 = 널 그 자체(p=1.0). 롱사이드 OI 축적이 약간 더 유익할 가능성은 후속 가설로만 기록.
+44:
+45:**collapse 각도 (W=96봉):** precision 0.982 vs 시간이동 널 0.974 (p=0.005 — 유의하나 효과량 +0.8pp로 미미), recall p=0.22 (ns), 관측 리드 중앙값 12봉 < 널 15.7봉(전환에 더 근접 = 약한 타이밍 정보). 펀딩 ablation: 차이 없음(0.9822 vs 0.9822) — 펀딩 수정자는 collapse 각도에도 사실상 무기여.
+46:
+47:**hysteresis 스윕 (16셀, FSM 셀 룩어헤드 불변성 테스트 통과):**
+48:- `confirm=1`: churn 3.25→2.41, flap 0.23→0.06, **리드 희생 0** — 공짜 안정화.
+49:- `confirm=2/3`: 리드 −1/−2캔들에 churn 2.07/1.88. dwell 단독은 오경보를 늘림(잘못된 진입을 잠금).
+50:
+51:**무튜닝 복제 (ETH/SOL/XRP):** OI 한계기여 풀링 +1 [1,2] 셋 다 동일, churn 서열·점유율 구조 재현. (같은 이유로 이 +1도 구조 효과로 해석.)
+52:
+53:**분류기 자체(1급 산출물) 상태:** 점유율 RANGE 48/SQUEEZE 18/UP 12/DOWN 12/CHOP 10%, 체류 중앙값 7~13봉, 번인 후 미분류 0. `current.py` 라이브 검증: 2026-07-05 01:30 UTC BTC = RANGE conf 0.389, 24h SQUEEZE↔TREND_UP→RANGE.
+54:
+55:### 2026-07-05 — Step 13: 적대적 코드리뷰 (3 에이전트, 22만 토큰) 및 수정 ✅
+56:
+57:리뷰 판정: "핵심 리드-래그 기계는 건전, p=1.0 판정을 뒤집는 결함 없음" — 그러나 발표 수치를 만지는 실결함 다수 발견, 전부 수정:
+58:
+59:1. **[high] vol_pct 블랙아웃 증폭기**: min_periods=창 전체(2880) → 결측 1봉이 vol_pct를 30일 NaN화, SOL/XRP 각 ~65일 에피소드 손실. → min_periods 5% 슬랙.
+60:2. ADX/DI가 갭에서 가짜 0-DM 주입(NaN>NaN=False) → NaN 마스킹 (1번과 함께 고쳐야 안전).
+61:3. **추정량 불일치**: 헤드라인 한계기여=부트스트랩 중앙값 vs 널=원시 풀링 차이 → 점추정=관측 원시 차이로 통일(부트스트랩은 CI 전용).
+62:4. **널 필터링 비대칭**: 널이 원본 oi_fresh 제외 마스크 재사용 + np.roll seam 미마스킹 → 셔프트별 마스크 재계산 + seam ±k 무효화.
+63:5. FSM 블랙아웃(2880봉) vs 갭 제외 패드(±8) 불일치 → 제외 마스크에 "F가 분류 못한 행" 합집합(모든 트랙 쌍에 대칭 적용).
+64:6. **classifier degrade의 `.any()` 룩어헤드** → 행 단위 인과 패널티로 교체(Pine per-bar와 정합).
+65:7. collapse recall의 side='left' off-by-one(전환 봉 위 collapse가 precision엔 잡히고 recall엔 안 잡힘) → side='right', lead-0 규약 문서화.
+66:8. 빈 이벤트 시 p≈0.005 가짜 유의 → 가드. oi_lag1 경로의 신선도 규칙 완화 → bar_missing 게이트 통일. 펀딩 단위 감지 파일별로.
+67:9. Pine: 무효 봉 FSM 리셋 else 추가, `barstate.isconfirmed` 게이트(인트라바 리페인트 방지, 알림은 Once Per Bar Close), 데드존 트림 na 가드, argmax first-max 정합(파이썬을 np.argmax로).
+68:10. current.py: 15m 그리드 reindex(REST 갭 시 시간 기반 유지), oi_fresh 규칙 통일, 서버시간 기준 미완결 캔들 제거.
+69:
+70:리뷰어 확인 사항: `fuel_usable` 삼항 우선순위는 버그 아니었음(그럼에도 6번으로 구조 자체 교체). 수정 후 전체 스위트 32/32 녹색, 전 결과 재산출 실행.
+71:
+72:### 2026-07-05 — R2: 무료 축 검증 사전등록 (결과 보기 전 인코딩 동결)
+73:
+74:Binance metrics의 미사용 컬럼 + Deribit DVOL(무료)로 연료/변동성 축 후보 3종을 기존 하네스로 검정. **인코딩은 아래로 고정, 결과 따라 변경 금지**:
+75:
+76:- **A. 테이커 흐름축**: `taker_pct` = 테이커 매수/매도 비율의 30d 과거-전용 백분위. ≥0.75 → TREND_UP 투표, ≤0.25 → TREND_DOWN 투표 (기존 연료축 자리, w=0.2). 기준선 = B2.
+77:- **B. 톱트레이더 포지셔닝축**: `d` = lsr_top의 k=8봉 상대변화, 데드존 = |d|의 30d 롤링 q25(shift 1, min 20d). d≥dz → UP, d≤−dz → DOWN. 기준선 = B2.
+78:- **C. 내재변동성축**: vol_pct를 (bbw_pct + atrp_pct + dvol_pct)/3 으로 교체 (dvol_pct = DVOL 1h 종가의 30d 과거-전용 백분위, 가용시각 = 캔들 종료+1h, backward 조인). 연료축은 표준 OI 유지. 기준선 = **표준 F** (변동성축만의 한계효과).
+79:- 지표: enter-TREND 풀링 리드 중앙값, 한계기여 = 관측 원시 차이, 월 페어드 부트스트랩 CI, **소스 계열 순환 시간이동 널 200회** p. BTC 먼저(DVOL은 BTC/ETH만 존재).
+80:
+81:### 2026-07-05 — R2 결과 ✅
+82:
+83:**사후 성과표(BTC, 라벨 후 실현 성과):** 변동성 서열 완벽 — 24h |폭| 수렴 0.88% < 박스권 1.21% < 상승 1.37% < 하락 1.48% < 난장판 1.59% (상태 의미 실재). 방향 지속성 없음 — 상승추세 라벨 후 중앙 −0.02%(↑47~50%), 하락추세 후 +0.13%(↑53%) = 미세 되돌림 편향. RC1의 "15m 추세추종 알파 없음"과 정합. **레짐 라벨은 '성격(변동성 구조)' 기술이지 방향 예측이 아님** — 플레이북이 눌림목 진입인 이유.
+84:
+85:**무료 축 검증 3종 전패 (사전등록 인코딩, 각 널 200회):**
+86:| 축 | 한계기여 | 널 | p | churn |
+87:|---|---|---|---|---|
+88:| 테이커 흐름 (vs B2) | +0.0 | 0.0 [0,0] | 1.0 | 4.36 (노이지) |
+89:| 톱트레이더 LSR (vs B2) | +0.0 | 1.0 [1,1]* | 1.0 | 2.99 |
+90:| DVOL 내재변동성 (vs 표준 F) | +0.0 CI[−1,1] | 0.0 [0,0] | 1.0 | 3.23 |
+91:
+92:*LSR은 관측이 자기 널보다도 낮음. **결론: OI·테이커·LSR·DVOL 네 파생 포지셔닝/흐름 신호 전부, 이 아키텍처의 enter-TREND 타이밍에 알파 없음.** 남은 미검증 카테고리는 청산 이벤트 스트림(유료)뿐이며, 또는 타깃 자체를 바꿔야 함(추세 진입이 아니라 변동성 팽창/SQUEEZE 탈출 타이밍 — DVOL의 이론적 강점은 후자, 새 사전등록 필요).
+93:
+94:**Pine v1.1 / MTF CLI:** 차트 위 테이블(위치 선택)·한글화·확신 자기분위 등급·전환 마커·범례. current.py MTF 실검증: 15m 수렴(높음)/1h 상승추세(보통)/4h 박스권(낮음) → 혼조 판정 출력 확인.
+95:
+96:### 2026-07-05 — R3: 실차트 점검·Pine v1.2·매매 프로토콜·외부(Codex) 검증
+97:
+98:사용자 실차트 스크린샷 점검에서 발견·수정:
+99:1. **현물 차트에서 OI OFF**: `BTCUSDT`(현물)에는 `_OI` 피드가 없음 → 무기한 `.P_OI` 폴백 추가(oiFromPerp 표기). 리서치와 완전 동일 조건은 .P 차트 권장.
+100:2. **리본 시인성**: 다중 지표 배경과 겹쳐 혼돈 → 리본 표시 모드 입력(메인 차트/레짐 패널/끄기).
+101:3. **4H 방향 힌트 행** 추가(단순 ADX/DI, 확정 봉만·리페인트 방지) — 방향/레버리지 결정은 4H 우선이라는 위계를 테이블에 명시.
+102:
+103:**143k 백테스트 요약(md) 인사이트 반영** — 우리 결과와 정합: 1H/4H 생존 ≫ 분봉(우리 posthoc의 '15m 방향 지속성 없음'과 일치) → README에 매매 적용 프로토콜(4H=방향, 15m=타이밍, 확신=사이즈) 추가. 돌파=최약체 생존군(19/196) → SQUEEZE 플레이북 '첫 돌파 추격 금지·확인 후 진입'. BB+거래량 신뢰도 67% → RANGE 역매매에 거래량 확인 조건. HH/HL 구조 추적 지표 고가중 → 4번째 축(시장구조) 후보로 백로그(사전등록 필수). 주의: 해당 md는 홍보성 요약이라 생존편향·다중검정 문제를 그대로 안고 있음 — 휴리스틱으로만 수용.
+104:영상 2개 중 ①(실계좌 매매)은 시청 불가로 미반영, ②(143k 테스트)는 md가 요약본.
+105:
+106:**Codex CLI(0.142.5) 외부 감사** 실행 — 결과는 `results/codex_review.log` + 아래 verify에 기록.
+107:
+108:## verify 결과 (최종 — 리뷰 수정 후 전면 재산출)
+109:
+110:- 전체 스위트: `pytest tests/ -q` → **32 passed** (룩어헤드 3+FSM셀 4 + 축 4 + 상태 5 + 사분면 4 + degrade 3 + playbook 2 + 매처 7). 카나리(심은 OI −1캔들 누수) 빨간불 확인.
+111:- **최종 수치(교정 기계, 4심볼 전부)**: OI 한계기여 풀링 +1 [CI 1,2] — 널 +1 [1,1] **p=1.0**(구조 효과 판정), UP: BTC +2 vs 널 +1 p=0.149(ns). F vs B1 −4/−6캔들·4 era 부호 일관, churn B1 4.83 > F 3.25 > B2 2.19, 오경보 0.07/100봉. collapse prec p=0.005(효과량 미미)·recall p=0.114(ns). 스윕: confirm=1 = 리드 희생 0/churn −26%. OI 지연 강건성 +1 [1,2].
+112:- **수정 전후 모든 결론 불변** — 그 자체가 강건성 증거.
+113:- current.py 라이브 재검증(그리드 reindex·서버시간 적용 후): 2026-07-05 02:00 UTC BTC = RANGE conf 0.399.
+114:- 성공 체크리스트 6항: 룩어헤드 테스트(미래참조 시 실패, 카나리 증명) ✓ / 번인 후 매 캔들 5상태+confidence(결측 0) ✓ / 리드-래그 정량화(관측·CI·널 p, 추정량 통일) ✓ / collapse 독립 검정(시간이동 널) ✓ / hysteresis 16셀 표 ✓ / 오버빌드 아님(에피소드 매칭이 그리디+H보다 단순) ✓
+
+ succeeded in 304ms:
+1:"""Each axis must return the expected sign/reading on obvious synthetic segments.
+2:
+3:Assertions read scenarios.WIN (40..120 bars after onset): indicators have re-converged there
+4:but the past-only percentile window is not yet saturated by the scenario itself.
+5:"""
+6:import numpy as np
+7:
+8:import features
+9:import scenarios
+10:from conftest import FP_SMALL
+11:from scenarios import WIN
+12:
+13:
+14:def win(feat, col):
+15:    return feat[col].iloc[WIN]
+16:
+17:
+18:def test_direction_axis_signs():
+19:    up = features.compute(scenarios.trend_up(), FP_SMALL)
+20:    dn = features.compute(scenarios.trend_down(), FP_SMALL)
+21:    assert (win(up, "m") > 0).all() and (win(up, "adx") > 25).all()
+22:    assert (win(up, "di_diff") > 0).all()
+23:    assert (win(dn, "m") < 0).all() and (win(dn, "adx") > 25).all()
+24:    assert (win(dn, "di_diff") < 0).all()
+25:
+26:
+27:def test_volatility_axis_percentiles():
+28:    sq = features.compute(scenarios.squeeze(), FP_SMALL)
+29:    ch = features.compute(scenarios.chop(), FP_SMALL)
+30:    rg = features.compute(scenarios.range_mid(), FP_SMALL)
+31:    assert (win(sq, "vol_pct") < 0.15).all(), "squeeze onset must rank in the low-vol quantile"
+32:    assert (win(ch, "vol_pct") > 0.85).all(), "chop onset must rank in the high-vol quantile"
+33:    # a stationary walk's past-only percentile is ~uniform in the LONG run (short windows can
+34:    # legitimately sit anywhere) — assert distributional properties over the whole series
+35:    u = rg["vol_pct"].dropna()
+36:    assert 0.35 < u.mean() < 0.65, "steady walk vol percentile must center near 0.5"
+37:    assert u.between(0.15, 0.85).mean() > 0.55
+38:
+39:
+40:def test_fuel_axis_quadrants():
+41:    q1 = features.compute(scenarios.trend_up("rising"), FP_SMALL)
+42:    q2 = features.compute(scenarios.trend_down("rising"), FP_SMALL)
+43:    q3 = features.compute(scenarios.trend_up("falling"), FP_SMALL)
+44:    q4 = features.compute(scenarios.trend_down("falling"), FP_SMALL)
+45:    dz = features.compute(scenarios.trend_up("flat"), FP_SMALL)
+46:    assert (win(q1, "quadrant") == 1).mean() > 0.9  # dOI up, price up: new longs
+47:    assert (win(q2, "quadrant") == 2).mean() > 0.9  # dOI up, price down: new shorts
+48:    assert (win(q3, "quadrant") == 3).mean() > 0.9  # dOI down, price up: short covering
+49:    assert (win(q4, "quadrant") == 4).mean() > 0.9  # dOI down, price down: long liquidation
+50:    assert (win(dz, "quadrant") == 0).mean() > 0.9  # ~0 dOI: deadzone / no fuel
+51:    assert win(dz, "fuel_defined").all()
+52:
+53:
+54:def test_causality_smoke_no_centered_windows():
+55:    """features at t must not move when only future closes change (spot check)."""
+56:    df = scenarios.range_mid()
+57:    feat_full = features.compute(df, FP_SMALL)
+58:    cut = len(df) - 50
+59:    df2 = df.copy()
+60:    df2.iloc[cut:, df2.columns.get_loc("close")] *= 3.0
+61:    feat_cut = features.compute(df2, FP_SMALL)
+62:    a = feat_full.iloc[:cut][["vol_pct", "adx", "m", "doi"]]
+63:    b = feat_cut.iloc[:cut][["vol_pct", "adx", "m", "doi"]]
+64:    assert np.allclose(a.fillna(-9), b.fillna(-9), atol=1e-12)
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n 'np.isclose|pytest.skip|shift\\(-1\\)|cut_points' research/regime/tests/test_no_lookahead.py" in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n 'def full_excluded|def pair_stats|def _cls_row|paired_month_bootstrap_diff|false_per_100c|obs_pooled|posthoc|np.roll\\(c' research/regime/run_all.py" in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n 'def null_run|lo, hi =|np.roll\\(oi|exc2 =|p = \\(1' research/regime/run_all.py" in C:\Users\user\Desktop\Auto-trade-system
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command "rg -n 'def assemble|snapped =|merge_asof|oi_fresh' research/regime/build_dataset.py" in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 259ms:
+61:def full_excluded(excluded: np.ndarray, f_trimmed: pd.DataFrame) -> np.ndarray:
+69:def pair_stats(base_lab, fused_lab, index, excluded, mp=MatchParams()):
+84:def _cls_row(st):
+94:        "false_per_100c": round(st["false_per_100c"], 3),
+122:        boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(
+131:    boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(lf, mf, lb, mb)
+132:    obs_pooled = float(np.median(lf) - np.median(lb)) if len(lf) and len(lb) else np.nan
+133:    out["OI_marginal"]["enter_pooled"] = {"median_diff": obs_pooled, "ci95": [lo, hi],
+203:        med_diff_l, lo_l, hi_l = leadlag.paired_month_bootstrap_diff(
+382:def posthoc(symbol: str, horizons=(4, 16, 96)):
+400:            r = (np.roll(c, -h) / c - 1.0)[mask]  # wrapped tail rows are masked off
+411:    (RESULTS / f"{symbol}_posthoc.json").write_text(json.dumps(out, indent=1))
+450:                "false_per_100c": round(sum(p2[c]["false_per_100c"] for c in CLASSES), 3),
+467:    stages = ["headline", "null", "collapse", "sweep", "posthoc"] if args.stage == "all" \
+482:        elif st == "posthoc":
+483:            posthoc(args.symbol)
+
+ succeeded in 265ms:
+35:        pytest.skip("raw archive not downloaded")
+45:        df["oi"] = df["oi"].shift(-1)  # deliberate future reference (canary)
+87:        cneq = ~(np.isclose(ca, cb, atol=1e-12) | (np.isnan(ca) & np.isnan(cb)))
+96:def cut_points(full_f):
+115:    for tstar in cut_points(full_run[0]):
+122:    for tstar in cut_points(full_run[0]):
+147:    for tstar in cut_points(full_leaky[0]):
+
+ succeeded in 271ms:
+122:        boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(
+131:    boot_med, lo, hi = leadlag.paired_month_bootstrap_diff(lf, mf, lb, mb)
+215:def null_run(symbol: str, n_shifts=200, seed=42):
+235:    lo, hi = 192, 96 * 90  # 2 days .. 90 days
+245:        df2["oi"] = np.roll(oi, s)
+254:        exc2 = (bar_missing | ~fresh2)[BURN:] | pd.isna(trim(f2)["regime"].to_numpy(object))
+266:    p = (1 + int((null_arr >= obs_marginal).sum())) / (len(null_arr) + 1)
+
+ succeeded in 284ms:
+10:- OI joined with merge_asof(direction="backward", tolerance=25min); the snapshot exactly at close
+175:    snapped = fu["raw_ts"].dt.round("1h")
+202:def assemble(kraw: pd.DataFrame, m: pd.DataFrame, fu: pd.DataFrame) -> pd.DataFrame:
+208:    df = pd.merge_asof(df, m.rename(columns={"snap_ts": "ts"}), on="ts",
+212:    lag = pd.merge_asof(
+218:    df = pd.merge_asof(df, fu.rename(columns={"event_ts": "ts"}), on="ts",
+221:    df["oi_fresh"] = df["oi"].notna() & ~df["bar_missing"]
+233:        "oi_missing_runs": runs_of(~df["oi_fresh"]),
+238:    oi_cov = df["oi_fresh"].mean()
+
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'Get-ChildItem research/regime/data/raw/BTCUSDT/funding -Filter *.zip | Select-Object -First 3 -ExpandProperty FullName' in C:\Users\user\Desktop\Auto-trade-system
+ succeeded in 319ms:
+C:\Users\user\Desktop\Auto-trade-system\research\regime\data\raw\BTCUSDT\funding\BTCUSDT-fundingRate-2022-01.zip
+C:\Users\user\Desktop\Auto-trade-system\research\regime\data\raw\BTCUSDT\funding\BTCUSDT-fundingRate-2022-02.zip
+C:\Users\user\Desktop\Auto-trade-system\research\regime\data\raw\BTCUSDT\funding\BTCUSDT-fundingRate-2022-03.zip
+
+2026-07-05T07:43:35.862971Z ERROR codex_core::tools::router: error=`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'tar -xOf research/regime/data/raw/BTCUSDT/funding/BTCUSDT-fundingRate-2022-01.zip'` rejected: blocked by policy
+exec
+"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'tar -xOf research/regime/data/raw/BTCUSDT/funding/BTCUSDT-fundingRate-2022-01.zip' in C:\Users\user\Desktop\Auto-trade-system
+ declined in 0ms:
+`"C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe" -Command 'tar -xOf research/regime/data/raw/BTCUSDT/funding/BTCUSDT-fundingRate-2022-01.zip'` rejected: blocked by policy
+codex
+Static audit of current code and saved outputs; Python execution was blocked by the read-only environment.
+
+1. High — The “4–6 candles later” result is conditional on a minority of baseline episodes. Only 47.1% of UP and 41.6% of DOWN episodes match; 1,823 of 3,270 baseline episodes are missed. The matcher greedily maximizes overlap rather than globally maximizing match cardinality, and accepts 25% of the shorter interval, permitting weak correspondences ([leadlag.py:62](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:62), [leadlag.py:71](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:71)). The defensible claim is: “among jointly detected episodes, F starts 4–6 bars later.”
+
+2. High — “Near-zero false alarms” is denominator-driven. False episodes are divided by all 154,560 candles ([leadlag.py:115](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:115)). Relative to fused episodes, 202/1,649 = 12.2% are unmatched—materially different from “near zero.” The −32.6% churn claim itself is numerically correct.
+
+3. Medium — Bootstrap uncertainty is understated. Months are resampled after matching; episodes and matches are not reconstructed ([leadlag.py:152](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:152)). Cross-month dependence and matching-selection uncertainty are omitted. The “paired” F−B2 bootstrap uses the same months but separately matched event populations, not episode-paired differences ([leadlag.py:168](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:168)). Moving multi-month blocks with full rematching would be stronger.
+
+4. High — `p=1.0` does not establish “indistinguishable” or equivalence. It is a one-sided exceedance test with discrete, heavily tied medians ([run_all.py:266](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:266)). It supports “no evidence of superior timing,” not “no effect.” The OI result is plausibly structural because random OI still gates votes using actual price direction, but an equivalence margin was never tested.
+
+5. Medium — Circular shifts are not an exact randomization null under nonstationarity. Shifts are restricted to 2–90 days ([run_all.py:235](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:235)); slow DVOL/positioning regimes can remain aligned. Null runs also move missingness and change the evaluation mask ([run_all.py:245](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:245), [run_all.py:254](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:254)). Alternative-axis shifts additionally omit seam masking ([alt_axes.py:150](C:/Users/user/Desktop/Auto-trade-system/research/regime/alt_axes.py:150)). False negatives therefore remain possible.
+
+6. Medium — Core rolling features are causal, but test claims are overstated. The test can skip completely without archives, checks only seven cut points, and the canary covers only OI ([test_no_lookahead.py:34](C:/Users/user/Desktop/Auto-trade-system/research/regime/tests/test_no_lookahead.py:34), [test_no_lookahead.py:96](C:/Users/user/Desktop/Auto-trade-system/research/regime/tests/test_no_lookahead.py:96)). Float comparison retains NumPy’s default relative tolerance, so it is not exact `atol=1e-12` ([test_no_lookahead.py:87](C:/Users/user/Desktop/Auto-trade-system/research/regime/tests/test_no_lookahead.py:87)). Funding timestamps are rounded, potentially backdating a slightly late event by up to 60 seconds ([build_dataset.py:175](C:/Users/user/Desktop/Auto-trade-system/research/regime/build_dataset.py:175)).
+
+7. Pine — No obvious syntax blocker, but substantial reference divergence exists: TradingView percentile rank includes the current observation; OI requests forward-fill gaps without Python’s 25-minute freshness rule; nearest-rank quantiles differ from pandas interpolation; and funding confidence adjustment is absent ([REGIME_v1_indicator.pine:46](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:46), [REGIME_v1_indicator.pine:51](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:51), [REGIME_v1_indicator.pine:58](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:58)). Labels update only on confirmed bars, but confidence, ribbons, collapse, and collapse alerts repaint intrabar ([REGIME_v1_indicator.pine:133](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:133), [REGIME_v1_indicator.pine:206](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:206)).
+
+The volatility ordering and slight mean reversion are valid descriptives, but overlapping forward returns receive no clustered inference; “NO persistence” is stronger than demonstrated.
+
+VERDICT: Core Python classification is substantially causal, but episode coverage, false-alarm framing, null interpretation, and Pine equivalence are materially overstated; conclusions are exploratory, not audit-grade proof.
+tokens used
+79,370
+Static audit of current code and saved outputs; Python execution was blocked by the read-only environment.
+
+1. High — The “4–6 candles later” result is conditional on a minority of baseline episodes. Only 47.1% of UP and 41.6% of DOWN episodes match; 1,823 of 3,270 baseline episodes are missed. The matcher greedily maximizes overlap rather than globally maximizing match cardinality, and accepts 25% of the shorter interval, permitting weak correspondences ([leadlag.py:62](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:62), [leadlag.py:71](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:71)). The defensible claim is: “among jointly detected episodes, F starts 4–6 bars later.”
+
+2. High — “Near-zero false alarms” is denominator-driven. False episodes are divided by all 154,560 candles ([leadlag.py:115](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:115)). Relative to fused episodes, 202/1,649 = 12.2% are unmatched—materially different from “near zero.” The −32.6% churn claim itself is numerically correct.
+
+3. Medium — Bootstrap uncertainty is understated. Months are resampled after matching; episodes and matches are not reconstructed ([leadlag.py:152](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:152)). Cross-month dependence and matching-selection uncertainty are omitted. The “paired” F−B2 bootstrap uses the same months but separately matched event populations, not episode-paired differences ([leadlag.py:168](C:/Users/user/Desktop/Auto-trade-system/research/regime/leadlag.py:168)). Moving multi-month blocks with full rematching would be stronger.
+
+4. High — `p=1.0` does not establish “indistinguishable” or equivalence. It is a one-sided exceedance test with discrete, heavily tied medians ([run_all.py:266](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:266)). It supports “no evidence of superior timing,” not “no effect.” The OI result is plausibly structural because random OI still gates votes using actual price direction, but an equivalence margin was never tested.
+
+5. Medium — Circular shifts are not an exact randomization null under nonstationarity. Shifts are restricted to 2–90 days ([run_all.py:235](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:235)); slow DVOL/positioning regimes can remain aligned. Null runs also move missingness and change the evaluation mask ([run_all.py:245](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:245), [run_all.py:254](C:/Users/user/Desktop/Auto-trade-system/research/regime/run_all.py:254)). Alternative-axis shifts additionally omit seam masking ([alt_axes.py:150](C:/Users/user/Desktop/Auto-trade-system/research/regime/alt_axes.py:150)). False negatives therefore remain possible.
+
+6. Medium — Core rolling features are causal, but test claims are overstated. The test can skip completely without archives, checks only seven cut points, and the canary covers only OI ([test_no_lookahead.py:34](C:/Users/user/Desktop/Auto-trade-system/research/regime/tests/test_no_lookahead.py:34), [test_no_lookahead.py:96](C:/Users/user/Desktop/Auto-trade-system/research/regime/tests/test_no_lookahead.py:96)). Float comparison retains NumPy’s default relative tolerance, so it is not exact `atol=1e-12` ([test_no_lookahead.py:87](C:/Users/user/Desktop/Auto-trade-system/research/regime/tests/test_no_lookahead.py:87)). Funding timestamps are rounded, potentially backdating a slightly late event by up to 60 seconds ([build_dataset.py:175](C:/Users/user/Desktop/Auto-trade-system/research/regime/build_dataset.py:175)).
+
+7. Pine — No obvious syntax blocker, but substantial reference divergence exists: TradingView percentile rank includes the current observation; OI requests forward-fill gaps without Python’s 25-minute freshness rule; nearest-rank quantiles differ from pandas interpolation; and funding confidence adjustment is absent ([REGIME_v1_indicator.pine:46](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:46), [REGIME_v1_indicator.pine:51](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:51), [REGIME_v1_indicator.pine:58](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:58)). Labels update only on confirmed bars, but confidence, ribbons, collapse, and collapse alerts repaint intrabar ([REGIME_v1_indicator.pine:133](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:133), [REGIME_v1_indicator.pine:206](C:/Users/user/Desktop/Auto-trade-system/pine/REGIME_v1_indicator.pine:206)).
+
+The volatility ordering and slight mean reversion are valid descriptives, but overlapping forward returns receive no clustered inference; “NO persistence” is stronger than demonstrated.
+
+VERDICT: Core Python classification is substantially causal, but episode coverage, false-alarm framing, null interpretation, and Pine equivalence are materially overstated; conclusions are exploratory, not audit-grade proof.

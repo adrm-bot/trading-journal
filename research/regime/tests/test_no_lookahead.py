@@ -84,7 +84,9 @@ def _mismatches(full, sub, upto):
             out.append(f"{name}: {neq.sum()} label mismatches, first at {ai.index[neq][0]}")
         ca = ai["confidence"].to_numpy(float)
         cb = bi["confidence"].to_numpy(float)
-        cneq = ~(np.isclose(ca, cb, atol=1e-12) | (np.isnan(ca) & np.isnan(cb)))
+        # rtol=0: the default relative tolerance (1e-5) would silently allow ~4e-6 drift
+        # on typical confidence values — the whole point here is EXACT reproduction
+        cneq = ~(np.isclose(ca, cb, rtol=0, atol=1e-12) | (np.isnan(ca) & np.isnan(cb)))
         if cneq.any():
             out.append(f"{name}: {cneq.sum()} confidence mismatches, first at {ai.index[cneq][0]}")
     neq = _labels(full[2].loc[full[2].index <= upto]) != _labels(sub[2].loc[sub[2].index <= upto])
