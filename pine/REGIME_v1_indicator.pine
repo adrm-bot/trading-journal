@@ -330,12 +330,12 @@ if hMature
     setupTxt := "⚠ " + hTfName + " " + L("추세가 이미 과열 구간입니다(ADX 40 초과)\n지금 새로 올라타면 꼭지를 잡을 위험이 큽니다", "mature (ADX>40) — new entries risky")
 else if hSweetUp and inPB
     // 검증(continuation_study): 횡보 중 확신급락은 재점화가 아니라 추세 '반대' 기울어짐(BTC/ETH 4h ↑44%)
-    string warnL = recentClps ? " · ⚠" + L("확신 급락 — 역방향 압력 주의", "collapse(counter-pressure)") : ""
+    string warnL = recentClps ? " · ⚠" + L("판단 확신 급감 — 역방향 압력 주의", "collapse(counter-pressure)") : ""
     string ext = (stackUpS ? " · " + L("EMA 정배열", "EMA stacked") : "") + (dippedDn ? " · " + L("직전 하락 경유", "post-dip") : "") + warnL
     string base = reUpS ? "⚡ " + L("눌림목 롱 진입 신호 — DI 재가속이 확인됐습니다", "Pullback LONG — DI re-accel") : "🟡 " + L("눌림목 롱 후보 — 진입 신호(DI 재가속) 대기 중", "Pullback long candidate (await trigger)")
     setupTxt := ext == "" ? base : base + "\n" + str.substring(ext, 3)   // 태그는 둘째 줄로 (폭 관리)
 else if hSweetDn and inPB
-    string warnS = recentClps ? " · ⚠" + L("확신 급락 — 역방향 압력 주의", "collapse(counter-pressure)") : ""
+    string warnS = recentClps ? " · ⚠" + L("판단 확신 급감 — 역방향 압력 주의", "collapse(counter-pressure)") : ""
     string ext2 = (stackDnS ? " · " + L("EMA 역배열", "EMA stacked dn") : "") + (dippedUp ? " · " + L("직전 반등 경유", "post-pop") : "") + warnS
     string base2 = reDnS ? "⚡ " + L("되돌림 숏 진입 신호 — DI 재가속이 확인됐습니다", "Pullback SHORT — DI re-accel") : "🟡 " + L("되돌림 숏 후보 — 진입 신호(DI 재가속) 대기 중", "Pullback short candidate (await trigger)")
     setupTxt := ext2 == "" ? base2 : base2 + "\n" + str.substring(ext2, 3)
@@ -351,7 +351,7 @@ if barstate.isconfirmed
     negRun := losing ? negRun + 1 : 0
     watchNext := losing ? runnerIdx : -1
 bool watchOn = negRun >= 2 and not na(sinceCollapse) and sinceCollapse <= 8
-string watchTxt = watchOn ? "⚠ " + L("판정이 흔들리고 있습니다 — 점수가 ", "votes shifting → #2: ") + emojiOf(watchNext) + " " + nameOf(watchNext) + L(" 쪽으로\n", " for ") + str.tostring(negRun) + L("봉째 기울고 있어 전환 확률이 높아졌습니다", " bars") : collapse ? "⚠ " + L("확신이 급락했습니다 — 시장 성격이 바뀔 가능성이\n있으니 포지션을 줄이는 편이 안전합니다", "confidence collapse — possible shift, size down") : L("안정적입니다 — 현재 상태가 뚜렷하게 우세합니다", "stable — incumbent leads")
+string watchTxt = watchOn ? "⚠ " + L("판정이 흔들리고 있습니다 — 점수가 ", "votes shifting → #2: ") + emojiOf(watchNext) + " " + nameOf(watchNext) + L(" 쪽으로\n", " for ") + str.tostring(negRun) + L("봉째 기울고 있어 전환 확률이 높아졌습니다", " bars") : collapse ? "⚠ " + L("판단 확신이 급감했습니다 — 시장 성격이 바뀔 가능성이\n있으니 포지션을 줄이는 편이 안전합니다", "confidence collapse — possible shift, size down") : L("안정적입니다 — 현재 상태가 뚜렷하게 우세합니다", "stable — incumbent leads")
 
 // 전환 마커 — '성김'(기본): 1봉 생존한 전환만 + 최소 8봉 간격 (빠른 TF 마커 홍수 방지)
 var int lastLblBar = -100000
@@ -504,7 +504,7 @@ if barstate.islast
     table.cell(tb, 1, 3, setupTxt, text_size = txtSz, bgcolor = setupTrig ? color.new(color.teal, 40) : BG2, text_color = TXT, tooltip = L("상위 타임프레임이 추세이고 현재 타임프레임이 횡보일 때 눌림목 진입 후보를 감지합니다. 다만 이 조건에 있다는 것만으로는 통계적인 우위가 없었습니다(4년 검증) — 진입 신호(DI 재가속)가 확정되고 손절 구조를 갖췄을 때만 의미가 있습니다. 기준 상위 타임프레임: ", "Habitat alone has NO edge (validated) — trigger & stop structure required. Ref HTF=") + hTfName + L(", 적정 추세 강도는 ADX 20~40입니다.", " sweet spot ADX 20-40"))
     // r4 전환 감시
     table.cell(tb, 0, 4, L("전환 감시", "Shift watch"), text_size = txtSz, bgcolor = BG, text_color = TXT)
-    table.cell(tb, 1, 4, watchTxt, text_size = txtSz, bgcolor = watchOn or collapse ? color.new(color.red, 60) : BG2, text_color = TXT, tooltip = L("현재 상태의 점수가 2위 상태에 2봉 이상 계속 밀리고, 최근 8봉 안에 확신 급락까지 겹칠 경우 경고가 표시됩니다. 이 두 조건이 함께 나타나면 실제로 상태가 바뀔 확률이 높습니다. 함께 표시되는 2위 상태는 예측이 아니라, 지금 점수가 두 번째로 높은 상태를 그대로 보여주는 것입니다.", "Strict: incumbent losing 2+ bars AND recent collapse. #2 is current score rank, not a forecast"))
+    table.cell(tb, 1, 4, watchTxt, text_size = txtSz, bgcolor = watchOn or collapse ? color.new(color.red, 60) : BG2, text_color = TXT, tooltip = L("현재 상태의 점수가 2위 상태에 2봉 이상 계속 밀리고, 최근 8봉 안에 판단 확신 급감까지 겹칠 경우 경고가 표시됩니다. 이 두 조건이 함께 나타나면 실제로 상태가 바뀔 확률이 높습니다. 함께 표시되는 2위 상태는 예측이 아니라, 지금 점수가 두 번째로 높은 상태를 그대로 보여주는 것입니다.", "Strict: incumbent losing 2+ bars AND recent collapse. #2 is current score rank, not a forecast"))
     // r5 권장 / r6 금지 — 두 행 분리 (한 행에 몰면 셀이 옆으로 길어져 테이블 폭이 커짐)
     string pbDo   = conflictPB ? L("박스 상·하단 레벨을 믿기 어려운 구간입니다\n역매매는 보류하고, 진입 신호가 확정된 뒤\n평소보다 작은 사이즈로 접근하세요", "Box levels unreliable — hold fades,\nwait for trigger, size down") : cur >= 0 ? doTxt(cur) : "…"
     string pbDont = conflictPB ? L("움직이고 있는 박스 경계에서의\n역매매와 물타기는 위험합니다", "No fading moving box edges,\nno averaging") : cur >= 0 ? dontTxt(cur) : "…"
@@ -523,6 +523,6 @@ if barstate.islast
         table.cell(tb, 1, 8, L("OI 데이터가 준비 중이거나 끊겼습니다\n확신을 20% 낮춘 보수적 판정으로 동작 중", "OI warming/missing → conservative (conf ×0.8)"), text_size = txtSz, bgcolor = color.new(color.maroon, 55), text_color = TXT)
 
 alertcondition(ta.change(cur) != 0, "Regime change", "REGIME v1: 시장 상태가 바뀌었습니다 / regime changed")
-alertcondition(collapse and not collapse[1], "Confidence collapse", "REGIME v1: 확신이 급락했습니다 — 상태가 바뀔 가능성이 있습니다 / confidence collapse onset")
+alertcondition(collapse and not collapse[1], "Confidence collapse", "REGIME v1: 판단 확신이 급감했습니다 — 상태가 바뀔 가능성이 있습니다 / confidence collapse onset")
 alertcondition(setupTrig, "Pullback trigger", "REGIME v1: 눌림목 진입 신호 — DI 재가속이 확인됐습니다 / pullback trigger")
 alertcondition(driftShow and not driftShow[1], "Drift onset", "REGIME v1: 표류가 시작됐습니다 — 박스 레벨을 믿기 어려운 구간입니다 (방향 신호 아님) / drift onset")   // 테이블 태그와 동일 게이트(비추세 라벨+검증 TF)
