@@ -285,37 +285,46 @@ f_regime2(int qw) =>
     if c4 > bv
         b := 4
         bv := c4
+    float agree2 = bv
+    float run2 = 0.0
+    for i2 = 0 to 4
+        float si = i2 == 0 ? c0 : i2 == 1 ? c1 : i2 == 2 ? c2 : i2 == 3 ? c3 : c4
+        if i2 != b and si > run2
+            run2 := si
+    float cf2 = math.max(0.0, math.min(1.0, agree2 * (1.0 - 0.5 * (agree2 > 1e-12 ? run2 / agree2 : 2.0))))
     int bOut = na(vp) or na(mm) or na(ax2) ? -1 : b
-    bOut[1]  // 확정 봉만 (비리페인트)
+    float cOut = na(vp) or na(mm) or na(ax2) ? na : cf2
+    [bOut[1], cOut[1]]  // 확정 봉만 (비리페인트) — [상태, 확신]
 
 string tfLow  = tfSec <= 300 ? "5" : tfSec <= 900 ? "5" : tfSec <= 3600 ? "15" : tfSec <= 14400 ? "60" : tfSec <= 43200 ? "240" : tfSec <= 86400 ? "720" : "D"
 string tfHigh = tfSec < 900 ? "15" : tfSec < 3600 ? "60" : tfSec < 14400 ? "240" : tfSec < 43200 ? "720" : tfSec < 86400 ? "D" : "W"
 bool hasLow = tfSec > 300  // 5m가 사다리 최하단
 qwFor(string tf) =>
     tf == "5" ? 4000 : tf == "15" ? 2880 : tf == "60" ? 720 : 200
-int stLow  = request.security(syminfo.tickerid, tfLow,  f_regime2(qwFor(tfLow)))
-int stHigh = request.security(syminfo.tickerid, tfHigh, f_regime2(qwFor(tfHigh)))
+[stLow, cfLow]   = request.security(syminfo.tickerid, tfLow,  f_regime2(qwFor(tfLow)))
+[stHigh, cfHigh] = request.security(syminfo.tickerid, tfHigh, f_regime2(qwFor(tfHigh)))
 f_stateCol(int i) => na(i) ? color.new(color.gray, 80) : i == 0 ? color.green : i == 1 ? color.red : i == 2 ? color.blue : i == 3 ? color.gray : i == 4 ? color.orange : color.new(color.gray, 80)
-color colLow  = showBands and hasLow and not na(stLow) ? color.new(f_stateCol(stLow), 45) : na
-color colCur  = showBands and ready and cur >= 0 ? color.new(stCol, 40) : na
-color colHigh = showBands and not na(stHigh) ? color.new(f_stateCol(stHigh), 45) : na
-pB1t = plot(showBands ? 1.30 : na, "밴드경계1", color = color.new(color.gray, 100), editable = false)
-pB1b = plot(showBands ? 1.14 : na, "밴드경계2", color = color.new(color.gray, 100), editable = false)
-pB2t = plot(showBands ? 1.12 : na, "밴드경계3", color = color.new(color.gray, 100), editable = false)
-pB2b = plot(showBands ? 0.96 : na, "밴드경계4", color = color.new(color.gray, 100), editable = false)
-pB3t = plot(showBands ? 0.94 : na, "밴드경계5", color = color.new(color.gray, 100), editable = false)
-pB3b = plot(showBands ? 0.78 : na, "밴드경계6", color = color.new(color.gray, 100), editable = false)
-fill(pB1t, pB1b, color = colLow,  title = "하위TF 레짐 밴드")
-fill(pB2t, pB2b, color = colCur,  title = "현재TF 레짐 밴드")
-fill(pB3t, pB3b, color = colHigh, title = "상위TF 레짐 밴드")
+// 확신 → 불투명도 그라데이션 (선이 위에서 읽히도록 밴드는 메인 리본보다 연하게)
+f_bandT(float cf) => na(cf) ? 88 : int(86 - 52 * math.min(cf / 0.6, 1.0))
+color colLow  = showBands and hasLow and not na(stLow) ? color.new(f_stateCol(stLow), f_bandT(cfLow)) : na
+color colCur  = showBands and ready and cur >= 0 ? color.new(stCol, f_bandT(conf)) : na
+color colHigh = showBands and not na(stHigh) ? color.new(f_stateCol(stHigh), f_bandT(cfHigh)) : na
+// 3등분이 패널 전체를 채우고, 확신선이 그 위에 겹쳐 그려짐 (위=하위TF · 중간=현재 · 아래=상위TF)
+pB0 = plot(showBands ? 1.0 : na,    "밴드경계1", color = color.new(color.gray, 100), editable = false)
+pB1 = plot(showBands ? 0.6667 : na, "밴드경계2", color = color.new(#000000, 55), editable = false, linewidth = 1)
+pB2 = plot(showBands ? 0.3333 : na, "밴드경계3", color = color.new(#000000, 55), editable = false, linewidth = 1)
+pB3 = plot(showBands ? 0.0 : na,    "밴드경계4", color = color.new(color.gray, 100), editable = false)
+fill(pB0, pB1, color = colLow,  title = "하위TF 레짐 밴드")
+fill(pB1, pB2, color = colCur,  title = "현재TF 레짐 밴드")
+fill(pB2, pB3, color = colHigh, title = "상위TF 레짐 밴드")
 tfName(string tf) => tf == "5" ? "5m" : tf == "15" ? "15m" : tf == "60" ? "1h" : tf == "240" ? "4h" : tf == "720" ? "12h" : tf == "D" ? "1D" : tf
 var label lbBands = na
 if showBands and barstate.islast
     label.delete(lbBands)
     string lowTxt = hasLow ? tfName(tfLow) : "—"
-    lbBands := label.new(bar_index + 1, 1.04, "▲ " + lowTxt + "\n■ " + tfName(timeframe.period) + "\n▼ " + tfName(tfHigh), style = label.style_label_left, color = color.new(#131722, 30), textcolor = color.new(#c8c8c8, 0), size = size.small, tooltip = L("밴드: 위=하위TF · 중간=현재TF · 아래=상위TF (2축 근사·무FSM·참고용)", "Bands: top=lower TF · mid=current · bottom=higher TF (2-axis approx, no FSM)"))
+    lbBands := label.new(bar_index + 1, 0.5, "▲ " + lowTxt + "\n■ " + tfName(timeframe.period) + "\n▼ " + tfName(tfHigh), style = label.style_label_left, color = color.new(#131722, 30), textcolor = color.new(#c8c8c8, 0), size = size.small, tooltip = L("밴드: 위=하위TF · 중간=현재TF · 아래=상위TF · 진할수록 그 TF 확신 높음 (2축 근사·무FSM·참고용)", "Bands: top=lower TF · mid=current · bottom=higher TF · darker = higher confidence (2-axis approx, no FSM)"))
 
-// 확신도 서브패널 — 선 색 = 현재 레짐 색 (실시간 봉은 직전 확정값: 리페인트 없음)
+// 확신선 — 밴드 위에 겹쳐 표시 (선 색 = 현재 레짐, 실시간 봉은 직전 확정값: 리페인트 없음)
 plot(confShow, "confidence", color = ready and cur >= 0 ? stCol : color.gray, linewidth = 2)
 plot(confQ20Show, "conf rolling q20", color = color.new(color.gray, 40), style = plot.style_line)
 plotshape(collapse, "confidence collapse", style = shape.xcross, location = location.bottom, color = color.new(color.red, 0), size = size.tiny)

@@ -26,7 +26,8 @@ def test_classify2_trend_and_squeeze():
     g = np.random.default_rng(5)
     ctx = _walk(g, 3200, 0.004)
     up = _walk(g, 400, 0.001, drift=0.003, start=ctx[-1])
-    reg, conf = regime.classify2(_bars(np.concatenate([ctx, up])), 15)
+    reg, conf, quad = regime.classify2(_bars(np.concatenate([ctx, up])), 15)
+    assert quad is None  # oi 미제공 = 2축
     tail = reg.iloc[-60:]
     assert (tail == "TREND_UP").mean() > 0.8
     ok = conf[reg.notna()]
@@ -34,9 +35,29 @@ def test_classify2_trend_and_squeeze():
 
     vols = 0.0006 * 0.99 ** np.arange(400)
     sq = ctx[-1] * np.cumprod(1.0 + g.normal(0, 1, 400) * vols)
-    reg2, _ = regime.classify2(_bars(np.concatenate([ctx, sq])), 15)
+    reg2, _, _ = regime.classify2(_bars(np.concatenate([ctx, sq])), 15)
     win = reg2.iloc[3200 + 60:3200 + 128]
     assert (win == "SQUEEZE").mean() > 0.8
+
+
+def test_classify2_fuel_quadrant():
+    """OI 제공 시: 상승+OI증가 구간에서 사분면 1(신규 롱), 라벨 투표로 TREND_UP 유지."""
+    g = np.random.default_rng(7)
+    ctx = _walk(g, 3200, 0.004)
+    up = _walk(g, 400, 0.001, drift=0.003, start=ctx[-1])
+    bars = _bars(np.concatenate([ctx, up]))
+    # 5분 스냅샷 OI: 컨텍스트 평탄, 시나리오 구간 상승
+    snap = pd.date_range(bars.index[0], bars.index[-1], freq="5min", tz="UTC")
+    n_ctx5 = int(len(snap) * 3200 / 3600)
+    rate = np.zeros(len(snap))
+    rate[n_ctx5:] = 0.0008
+    oi = pd.DataFrame({"snap_ts": snap,
+                       "oi": 1e6 * np.cumprod(1 + rate + g.normal(0, 5e-5, len(snap)))})
+    reg, conf, quad = regime.classify2(bars, 15, oi=oi)
+    assert quad is not None
+    tail_q = quad.iloc[-60:]
+    assert (tail_q == 1).mean() > 0.7  # 신규 롱 유입
+    assert (reg.iloc[-60:] == "TREND_UP").mean() > 0.8
 
 
 def test_norm_sym():

@@ -30,8 +30,14 @@ SUPER = {"TREND_UP": "UP", "TREND_DOWN": "DOWN"}
 # 리서치 동결 파라미터 (창은 벽시계 기준, TF별 봉수 환산)
 ADX_N, EMA_F, EMA_S, BB_N, BB_K = 14, 20, 50, 20, 2.0
 ADX_LO, ADX_SCALE = 20.0, 15.0
-W_DIR, W_VOL, NEAR_TIE = 0.5, 0.3, 0.02
+W_DIR, W_VOL, W_FUEL, NEAR_TIE = 0.5, 0.3, 0.2, 0.02
 RAMP_LO, RAMP_HI = (0.15, 0.25), (0.75, 0.85)
+DEAD_Q = 0.25
+QUAD_TEXT = {1: "🟩 신규 롱 유입 — 추세 연료(라벨 투표)",
+             2: "🟥 신규 숏 유입 — 추세 연료(라벨 투표)",
+             3: "↩ 숏 커버 — 라벨 불변·확신 −15%",
+             4: "↩ 롱 청산 — 라벨 불변·확신 −15%",
+             0: "— 데드존(유의미한 ΔOI 없음)"}
 
 _TTL = 300
 _live_cache = {"at": 0.0, "data": None}
@@ -102,6 +108,40 @@ def _fetch_klines(symbol: str, interval: str, start_ms: int | None = None,
     return out[out.index <= now]
 
 
+def _fetch_oi(symbol: str, session=None) -> pd.DataFrame | None:
+    """최근 ~29.5일 5분 OI(공개 REST, endTime 후진 페이지네이션 — 30일 캡 경계 400 회피).
+    라이브 판정 전용 — 과거 성과 라벨에는 30일 한도라 사용 불가(정직 표기)."""
+    s = session or requests
+    now = int(time.time() * 1000)
+    floor = now - int(29.5 * 86400 * 1000)
+    rows, end = [], now
+    try:
+        while end > floor:
+            r = s.get(f"{FAPI}/futures/data/openInterestHist",
+                      params={"symbol": symbol, "period": "5m", "limit": 500, "endTime": end},
+                      timeout=30)
+            if r.status_code in (400, 404):
+                return None
+            r.raise_for_status()
+            chunk = r.json()
+            if not chunk:
+                break
+            rows = chunk + rows
+            first = int(chunk[0]["timestamp"])
+            if first >= end:
+                break
+            end = first - 1
+    except Exception as e:  # noqa: BLE001
+        log.warning("OI 실패 %s: %s", symbol, e)
+        return None
+    if not rows:
+        return None
+    m = pd.DataFrame(rows)
+    m["snap_ts"] = pd.to_datetime(m["timestamp"].astype("int64"), unit="ms", utc=True)
+    m["oi"] = m["sumOpenInterest"].astype("float64")
+    return m.drop_duplicates("snap_ts").sort_values("snap_ts")[["snap_ts", "oi"]]
+
+
 # ── 2축 분류 (리서치 B2와 동일 수식) ─────────────────────────────────────────
 def _wilder(s: pd.Series, n: int) -> pd.Series:
     return s.ewm(alpha=1.0 / n, adjust=False, min_periods=n).mean()
@@ -113,9 +153,13 @@ def _past_pct(s: pd.Series, w: int, mp: int) -> pd.Series:
     return ((r * c - 1) / (c - 1)).where(c > 1)
 
 
-def classify2(bars: pd.DataFrame, tf_min: int):
-    """bars: index=종가시각 DataFrame[open,high,low,close] → (regime Series, conf Series).
-    리서치 분류기에서 연료축만 뺀 동일 수식 + 니어타이 현직 우선."""
+def classify2(bars: pd.DataFrame, tf_min: int, oi: pd.DataFrame | None = None):
+    """bars: index=종가시각 DataFrame[open,high,low,close]
+    → (regime Series, conf Series, quadrant Series|None).
+
+    리서치 분류기와 동일 수식. oi(snap_ts/oi 5분 스냅샷)를 주면 연료축(OI 4사분면)까지
+    3축 판정: ΔOI↑ 사분면(신규 롱/숏)만 라벨에 투표, ΔOI↓(숏커버·롱청산)는 라벨 불변·
+    확신 ×0.85, 데드존 ×0.95, OI 미정의 행은 ×0.8(행 단위 인과 degrade — 연구 규약)."""
     c, h, l = bars["close"], bars["high"], bars["low"]
     up, dn = h.diff(), -l.diff()
     ok = up.notna() & dn.notna()
@@ -156,8 +200,42 @@ def classify2(bars: pd.DataFrame, tf_min: int):
     muM = np.clip(1.0 - muL - muH, 0, 1)
     vol_s = np.zeros((n, 5))
     vol_s[:, 2], vol_s[:, 3], vol_s[:, 4] = muL, muM, muH
-    scores = (W_DIR * dir_s + W_VOL * vol_s) / (W_DIR + W_VOL)
     valid = ~(np.isnan(adx.to_numpy(float)) | np.isnan(mm) | np.isnan(v))
+
+    # ── 연료축(OI 4사분면) — oi 제공 시 3축, 아니면 2축 ──
+    quad = np.zeros(n, dtype=np.int8)
+    fuel_defined = np.zeros(n, dtype=bool)
+    if oi is not None and len(oi):
+        k = max(1, 120 // tf_min)  # ΔOI lookback = 2시간
+        left = pd.DataFrame({"ts": bars.index.astype("datetime64[ns, UTC]")})
+        right = oi.rename(columns={"snap_ts": "ts"}).copy()
+        right["ts"] = right["ts"].astype("datetime64[ns, UTC]")
+        joined = pd.merge_asof(left, right.sort_values("ts"), on="ts",
+                               direction="backward",
+                               tolerance=pd.Timedelta(minutes=25)).set_index("ts")["oi"]
+        joined.index = bars.index
+        fresh = joined.notna()
+        doi = (joined / joined.shift(k) - 1.0).where(fresh & fresh.shift(k, fill_value=False))
+        dpr = c / c.shift(k) - 1.0
+        mp_fuel = max(2, min(20 * bpd, int(qw * 0.95)))
+        dz_doi = doi.abs().rolling(qw, min_periods=mp_fuel).quantile(DEAD_Q).shift(1)
+        dz_dpr = dpr.abs().rolling(qw, min_periods=mp).quantile(DEAD_Q).shift(1)
+        d, p = doi.to_numpy(float), dpr.to_numpy(float)
+        zd, zp = dz_doi.to_numpy(float), dz_dpr.to_numpy(float)
+        on = ~np.isnan(d) & ~np.isnan(zd) & ~np.isnan(zp) & (np.abs(d) >= zd) & (np.abs(p) >= zp)
+        quad = np.select([on & (d > 0) & (p > 0), on & (d > 0) & (p < 0),
+                          on & (d < 0) & (p > 0), on & (d < 0) & (p < 0)], [1, 2, 3, 4], 0)
+        fuel_defined = ~np.isnan(d) & ~np.isnan(zd)
+    fuel_votes = fuel_defined & ((quad == 1) | (quad == 2))
+    fuel_s = np.zeros((n, 5))
+    fuel_s[quad == 1, 0] = 1.0
+    fuel_s[quad == 2, 1] = 1.0
+    w_present = W_DIR + W_VOL + np.where(fuel_votes, W_FUEL, 0.0)
+    scores = (W_DIR * dir_s + W_VOL * vol_s + W_FUEL * fuel_s * fuel_votes[:, None]) \
+        / w_present[:, None]
+    fuel_mod = np.where(fuel_defined & ((quad == 3) | (quad == 4)), 0.85,
+                        np.where(fuel_defined & (quad == 0), 0.95, 1.0))
+    degrade = (oi is not None) & ~fuel_defined  # 연료 요청됐으나 그 행에서 미정의
 
     labels = np.full(n, -1, dtype=np.int8)
     conf = np.full(n, np.nan)
@@ -172,9 +250,13 @@ def classify2(bars: pd.DataFrame, tf_min: int):
         labels[i] = cur
         agree = scores[i, cur]
         runner = max(scores[i, s2] for s2 in range(5) if s2 != cur)
-        conf[i] = max(0.0, min(1.0, agree * (1 - 0.5 * (runner / agree if agree > 1e-12 else 2.0))))
+        cf = agree * (1 - 0.5 * (runner / agree if agree > 1e-12 else 2.0)) * fuel_mod[i]
+        if isinstance(degrade, np.ndarray) and degrade[i]:
+            cf *= 0.8
+        conf[i] = max(0.0, min(1.0, cf))
     reg = pd.Series([REGIMES[i] if i >= 0 else None for i in labels], index=bars.index)
-    return reg, pd.Series(conf, index=bars.index)
+    quad_s = pd.Series(quad, index=bars.index) if oi is not None else None
+    return reg, pd.Series(conf, index=bars.index), quad_s
 
 
 # ── 라이브 스냅샷 ────────────────────────────────────────────────────────────
@@ -184,14 +266,20 @@ def live(symbol: str = "BTCUSDT") -> dict:
         return _live_cache["data"]
     tfs, supers = [], []
     warn = None
+    quad_info = None
+    oi = _fetch_oi(symbol)
     for interval, days in [("15m", 60), ("1h", 80), ("4h", 130)]:
         bars = _fetch_klines(symbol, interval, days=days)
         if bars is None or len(bars) < 300:
             continue
-        reg, conf = classify2(bars, _grid(interval))
+        reg, conf, quad = classify2(bars, _grid(interval), oi=oi)
         okm = reg.notna()
         if not okm.any():
             continue
+        if interval == "15m" and quad is not None:
+            q = int(quad[okm].iloc[-1])
+            quad_info = {"code": q, "text": QUAD_TEXT.get(q, "—"),
+                         "oi": True}
         r, cf = reg[okm].iloc[-1], float(conf[okm].iloc[-1])
         hist = conf[okm].to_numpy(float)
         pct = float((hist < cf).mean()) if len(hist) > 100 else None
@@ -217,8 +305,13 @@ def live(symbol: str = "BTCUSDT") -> dict:
             verdict = "혼조 — TF 간 성격 불일치, 보수적으로"
     else:
         verdict = "일부 TF 데이터 부족"
+    if quad_info is None:
+        quad_info = {"code": None, "text": "OI 미제공 심볼 — 가격 2축으로 판정", "oi": False}
     data = {"available": True, "symbol": symbol, "tfs": tfs, "verdict": verdict, "warn": warn,
-            "basis": "가격 기반 2축(방향·변동성) — 연구상 OI 축은 타이밍 기여 없음(p=1.0)"}
+            "quad": quad_info,
+            "basis": ("라이브 3축(방향·변동성·OI 사분면)" if quad_info["oi"] else
+                      "가격 기반 2축(방향·변동성)")
+                     + " — 사분면은 ΔOI↑만 라벨 투표, ΔOI↓는 확신 삭감(연구 반영)"}
     _live_cache.update(at=now, data=data)
     return data
 
@@ -242,7 +335,8 @@ def _labels_for(symbol: str, since: pd.Timestamp):
     bars = _fetch_klines(symbol, "15m", start_ms=int(start.timestamp() * 1000))
     lab = None
     if bars is not None and len(bars) > 3500:
-        reg, _ = classify2(bars, 15)
+        # 성과 라벨은 가격 2축 — REST 과거 OI가 30일 한도라 불가(연구상 무손실 근사, p=1.0)
+        reg, _, _ = classify2(bars, 15)
         lab = reg
     with _lock:
         _labels_cache[symbol] = {"at": time.time(), "since": start, "s": lab}
