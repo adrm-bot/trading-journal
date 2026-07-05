@@ -28,7 +28,7 @@ load_dotenv(os.path.join(HERE, ".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
-from . import db, engine, crypto, market, analytics, liquidations, liqmap  # noqa: E402
+from . import db, engine, crypto, market, analytics, liquidations, liqmap, regime  # noqa: E402
 
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
               "kingfisher": "KingFisher", "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
@@ -221,6 +221,18 @@ def api_data(request: Request):
 def api_market(request: Request):
     _require(request)
     return JSONResponse(market.get_context())
+
+
+@app.get("/api/regime")
+def api_regime(request: Request):
+    """시장 레짐(15m/1h/4h) + 레짐별 내 성과(진입 시각 기준). 공개 REST·무키.
+    라이브는 5분 캐시, 라벨은 심볼당 1시간 캐시 — 첫 호출만 느릴 수 있음."""
+    uid = _require(request)
+    s = db.get_user_settings(uid)
+    be = (s["be_pct"] / 100.0) if s["be_pct"] is not None else analytics.BE_PCT
+    _, trades = engine.analyze_user(uid, be)
+    enriched = [analytics.enrich(t, s["account_equity"], be) for t in trades]
+    return JSONResponse({"live": regime.live(), "perf": regime.perf(enriched)})
 
 
 @app.on_event("startup")

@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 
 import journal_io
 import behaviors
+import regime_bridge
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 app = FastAPI(title="매매일지")
@@ -57,6 +58,13 @@ async def intent(req: Request):
         "감정": b.get("감정"), "메모": b.get("메모"), "상태": b.get("상태") or "기록완료",
     }
     return {"ok": bool(journal_io.save_intent(b.get("거래ID"), updates))}
+
+
+@app.get("/api/regime")
+def regime():
+    """현재 레짐(15m/1h/4h) + 레짐별 성과. 느릴 수 있어 /api/data와 분리(프런트 비동기)."""
+    rows = journal_io.load_journal()
+    return JSONResponse({"live": regime_bridge.live(), "perf": regime_bridge.perf(rows)})
 
 
 @app.post("/api/pull")

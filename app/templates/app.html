@@ -141,6 +141,7 @@ let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=nul
 let PINTS=[], PEDIT=null, PINT_SAVING=false;  // 보유 포지션 사전 계획
 let LIQ=null, LIQ_LOADING=false;  // 실시간 청산 체결(공개 WS)
 let LIQMAP=null;  // 예측형 청산맵(KingFisher · 유료 스캐폴드)
+let REGIME=null, RG_LOADING=false;  // 시장 레짐(15m/1h/4h)+레짐별 성과 (공개 REST·무키)
 let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
 const EFF_BUCKETS={b0:[-1e9,.25],b1:[.25,.5],b2:[.5,.75],b3:[.75,1],b4:[1,1e9]};  // 청산효율 드릴다운 구간
 const money=n=>n==null?"—":(Number(n)>=0?"+":"")+Number(n).toFixed(2);
@@ -425,6 +426,34 @@ function marketStrip(m){
   if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없습니다</div></div>`;
   return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
 }
+/* 시장 레짐 — 15m/1h/4h 5상태 + 레짐별 내 성과 (연구 검증 분류기 경량 포팅, 진입시각 기준) */
+const RGC={TREND_UP:"#3fb950",TREND_DOWN:"#f85149",SQUEEZE:"#58a6ff",RANGE:"#8b949e",CHOP:"#d29922"};
+function regimePanel(rg){
+  const head=`<div class="section-title">시장 레짐 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 5상태 · 방향은 상위TF 우선</span></div>`;
+  if(!rg)return head+`<div class="mchip skel">레짐 불러오는 중… (첫 로드는 수십 초)</div>`;
+  const lv=rg.live||{};
+  if(lv.available===false)return head+`<p class="empty-inline">${esc(lv.error||"레짐 데이터 없음")}</p>`;
+  const chips=(lv.tfs||[]).map(t=>{const c=RGC[t.regime]||"#8b949e";
+    return mchip(esc(t.tf),`<span style="color:${c}">${t.emoji} ${esc(t.name)}</span>`,
+      `확신 ${esc(t.grade||"—")} (${t.conf})`,"",
+      `${t.tf} 마지막 완결봉 ${t.ts} UTC · 확신은 최근 30일 자기 분위 등급 · 라벨은 시장 '성격'(변동성 구조) — 방향 예측 아님`);}).join("");
+  const warn=lv.warn?`<p class="empty-inline" style="color:var(--red,#f85149)">⚠ ${esc(lv.warn)}</p>`:"";
+  const rows=(rg.perf&&rg.perf.rows)||[];
+  const perf=rows.length?`<div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>레짐(진입 시점)</th><th class="num">거래</th><th class="num">승률</th><th class="num">합손익</th><th class="num">평균R</th></tr></thead><tbody>${
+    rows.map(p=>{const c=RGC[p.regime]||"#8b949e";const nw=p.n<10?' <span class="muted" style="font-size:11px">표본적음</span>':'';
+      return `<tr><td style="color:${c};font-weight:600">${p.emoji} ${esc(p.name)}${nw}</td><td class="num">${p.n}</td><td class="num">${Math.round((p.win_rate||0)*100)}%</td><td class="num ${p.pnl>=0?'pos':'neg'}">${money(p.pnl)}</td><td class="num">${p.avg_r!=null?((p.avg_r>=0?'+':'')+p.avg_r+'R ('+p.n_r+')'):'—'}</td></tr>`;}).join("")
+  }</tbody></table></div>`:`<p class="empty-inline">레짐 매칭된 거래 없음</p>`;
+  const note=`<p class="empty-inline" style="font-size:11.5px">${esc((rg.perf&&rg.perf.note)||"")}${rg.perf&&rg.perf.unmatched?` · 미매칭 ${rg.perf.unmatched}건`:''} · ${esc(lv.basis||"")}</p>`;
+  return head+`<div class="market">${chips}</div><p class="empty-inline" style="color:var(--ice,#e6edf3)">판정: ${esc(lv.verdict||"—")}</p>`+warn+perf+note;
+}
+function ensureRegime(){
+  const h=$("#regimeHost"); if(!h)return;
+  h.innerHTML=regimePanel(REGIME);
+  if(REGIME||RG_LOADING)return;
+  RG_LOADING=true;
+  api("/api/regime").then(r=>r.json()).then(d=>{REGIME=d;}).catch(()=>{REGIME={live:{available:false,error:"레짐 로드 실패 — 새로고침으로 재시도"}};})
+    .finally(()=>{RG_LOADING=false;const h2=$("#regimeHost");if(h2)h2.innerHTML=regimePanel(REGIME);});
+}
 /* 상대강도 — BTC vs 알트 (7일 상대수익률) */
 const RS_REGIME={ btc:["BTC 우위","btc"], alt:["알트 우위","alt"], neutral:["혼조","neutral"] };
 function rsPanel(m){
@@ -661,8 +690,8 @@ function bindDashResizer(){
     if(e.key==='ArrowLeft'){e.preventDefault();setX(cur-24);save();}else if(e.key==='ArrowRight'){e.preventDefault();setX(cur+24);save();}};
 }
 function renderDashboard(el){
-  const market=marketStrip(MARKET)+`<div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div><div id="liqmapHost"></div>`;
-  if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
+  const market=marketStrip(MARKET)+`<div id="regimeHost">${regimePanel(REGIME)}</div><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div><div id="liqmapHost"></div>`;
+  if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
   const mine=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +disciplineCard(DATA.trades)
     +`<div id="posHost"></div>`
@@ -670,7 +699,7 @@ function renderDashboard(el){
     +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
   // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 가운데 리사이저로 폭 조절.
   el.innerHTML=`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="컬럼 너비 조절 (드래그·좌우 화살표)" tabindex="0"></div><div class="dash-mkt">${market}</div></div>`;
-  bindCards();ensureMarket();ensurePositions();ensureLiquidations();ensureLiqmap();bindDashResizer();
+  bindCards();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();bindDashResizer();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}

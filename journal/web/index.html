@@ -54,6 +54,23 @@
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .modal-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:8px}
   .empty{color:var(--muted);text-align:center;padding:40px}
+  .regime-card{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+    padding:14px 16px;margin-bottom:18px}
+  .regime-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .regime-head .title{font-weight:650}
+  .tf-chips{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .tf-chip{display:flex;flex-direction:column;gap:2px;background:var(--panel2);
+    border:1px solid var(--line);border-radius:10px;padding:8px 12px;min-width:118px}
+  .tf-chip .tf{color:var(--muted);font-size:11px}
+  .tf-chip .st{font-weight:700;font-size:14px}
+  .tf-chip .cf{color:var(--muted);font-size:11.5px}
+  .verdict{font-size:13px;color:var(--txt);border-left:3px solid var(--accent);
+    padding:6px 10px;background:var(--panel2);border-radius:6px;margin-top:4px}
+  .regime-warn{border-left-color:var(--red)}
+  .rg-table{margin-top:12px}
+  .rg-table table{border-radius:8px}
+  .rg-note{color:var(--muted);font-size:11.5px;margin-top:8px}
+  .small-n{opacity:.55}
   @media(max-width:680px){.cards{grid-template-columns:repeat(2,1fr)}}
 </style>
 </head>
@@ -68,6 +85,7 @@
 <div class="wrap">
   <div class="cards" id="cards"></div>
   <div class="flags" id="flags"></div>
+  <div class="regime-card" id="regimeWrap"><div class="empty" style="padding:14px">🧭 레짐 불러오는 중…</div></div>
   <div id="tableWrap"></div>
 </div>
 
@@ -169,12 +187,59 @@ async function pull(){
   $("#pullBtn").textContent="↻ 적재"; $("#pullBtn").disabled=false;
 }
 
-$("#refreshBtn").onclick=load;
+const RG_COLOR={TREND_UP:"#3fb950",TREND_DOWN:"#f85149",SQUEEZE:"#58a6ff",RANGE:"#8b949e",CHOP:"#d29922"};
+function fmtR(v,n){ return v==null ? '<span class="small-n">—</span>' : `${v>=0?'+':''}${v.toFixed(2)}R <span class="small-n">(${n})</span>`; }
+
+async function loadRegime(){
+  if(PREVIEW){ $("#regimeWrap").innerHTML='<div class="rg-note">미리보기 모드 — 레짐은 실제 앱에서 표시됩니다.</div>'; return; }
+  try{
+    const d = await (await fetch("/api/regime")).json();
+    const el = $("#regimeWrap");
+    if(d.live && d.live.error){ el.innerHTML=`<div class="rg-note">🧭 ${d.live.error}</div>`; return; }
+    const chips=(d.live.tfs||[]).map(t=>{
+      const c=RG_COLOR[t.regime]||"#8b949e";
+      return `<div class="tf-chip" style="border-left:3px solid ${c}">
+        <span class="tf">${t.tf} · ${t.ts}</span>
+        <span class="st" style="color:${c}">${t.emoji} ${t.name}</span>
+        <span class="cf">확신 ${t.grade||'—'} (${t.conf})</span></div>`;
+    }).join("");
+    const perfRows=(d.perf.rows||[]);
+    const perfHtml = perfRows.length ? `
+      <div class="rg-table"><table><thead><tr>
+        <th>레짐 (청산 시점)</th><th class="num">거래</th><th class="num">승률</th>
+        <th class="num">합손익</th><th class="num">평균R</th></tr></thead><tbody>
+        ${perfRows.map(p=>{
+          const c=RG_COLOR[p.regime]||"#8b949e";
+          const nWarn=p.n<10?' <span class="small-n">표본적음</span>':'';
+          return `<tr><td style="color:${c};font-weight:600">${p.emoji} ${p.name}${nWarn}</td>
+            <td class="num">${p.n}</td>
+            <td class="num">${p.win_rate!=null?Math.round(p.win_rate*100)+'%':'—'}</td>
+            <td class="num ${p.pnl>=0?'pos':'neg'}">${fmtMoney(p.pnl)}</td>
+            <td class="num">${fmtR(p.avg_R,p.n_R)}</td></tr>`;
+        }).join("")}
+      </tbody></table></div>` : `<div class="rg-note">레짐 매칭된 트레이드 없음 (지원: BTC/ETH/SOL/XRP, 2022-01 이후)</div>`;
+    el.innerHTML=`
+      <div class="regime-head">
+        <span class="title">🧭 시장 레짐 — ${d.live.symbol}</span>
+        <span class="rg-note">기준 ${d.live.asof} · 5분 캐시</span>
+      </div>
+      <div class="tf-chips">${chips}</div>
+      <div class="verdict">판정: ${d.live.verdict}</div>
+      ${d.live.warn?`<div class="verdict regime-warn">⚠ ${d.live.warn}</div>`:""}
+      ${perfHtml}
+      <div class="rg-note">${d.perf.note}${d.perf.unmatched?` · 미매칭 ${d.perf.unmatched}건`:''}</div>`;
+  }catch(e){
+    $("#regimeWrap").innerHTML=`<div class="rg-note">🧭 레짐 로드 실패: ${e}</div>`;
+  }
+}
+
+$("#refreshBtn").onclick=()=>{load();loadRegime();};
 $("#pullBtn").onclick=pull;
 $("#saveBtn").onclick=save;
 $("#cancelBtn").onclick=closeModal;
 $("#modalBg").onclick=e=>{ if(e.target===$("#modalBg")) closeModal(); };
 load();
+loadRegime();
 </script>
 </body>
 </html>

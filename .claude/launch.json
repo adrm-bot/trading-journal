@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "journal",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "webapp:app", "--port", "8000", "--app-dir", "C:\\Users\\user\\Desktop\\Auto-trade-system\\journal"],
+      "port": 8000
+    },
+    {
+      "name": "app-dev",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-c", "import os,sys; os.environ.setdefault('DEV_MODE','true'); os.chdir(r'C:\\Users\\user\\Desktop\\Auto-trade-system'); sys.path.insert(0,''); import uvicorn; uvicorn.run('app.main:app', port=8001)"],
+      "port": 8001
+    }
+  ]
+}
