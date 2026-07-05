@@ -656,7 +656,8 @@ function posSection(list){
   const rows=list.map(p=>{
     const dir=p.direction?`<span class="badge ${p.direction==='Long'?'long':'short'}">${dirKo(p.direction)}</span>`:"—";
     const up=p.upnl==null?'<span class="muted">—</span>':`<span class="${p.upnl>=0?'pos':'neg'}">${money(p.upnl)}</span>`;
-    const lev=p.leverage?` <span class="ex">${p.leverage}x</span>`:"";
+    const mm=p.margin_mode==='cross'?` <span class="badge cross" data-tip="교차(Cross) 마진 — 격리 규율 위반. 계좌 전체가 이 포지션의 담보">교차⚠</span>`:'';
+    const lev=(p.leverage?` <span class="ex">${p.leverage}x</span>`:"")+mm;
     const pi=p.direction?pintFor(p):null;
     const plan=p.direction
       ?`<button class="btn sm pplan${pi?' on':''}" data-ex="${esc(p.exchange)}" data-sym="${esc(p.symbol)}" data-dir="${esc(p.direction)}" data-entry="${p.entry??''}" data-qty="${p.qty??''}" data-pv="${p.point_value??''}" data-tip="${pi?'사전 계획 있음 · 청산되면 자동으로 일지에 붙습니다 · 클릭해 수정':'청산 전에 계획을 적어두면 일지에 자동 반영 + 사전 기입 표식'}">${pi?'계획 ✓':'계획 적기'}</button>`
@@ -664,8 +665,10 @@ function posSection(list){
     return `<tr><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td>
       <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td><td>${plan}</td></tr>`;
   }).join("");
+  const crossN=list.filter(p=>p.margin_mode==='cross').length;
+  const crossWarn=crossN?`<div class="cross-warn">⚠ <b>교차(Cross) 모드 포지션 ${crossN}개</b> — 격리(Isolated) 규율 위반. 교차는 계좌 전체가 담보라 한 포지션의 손실이 다른 포지션까지 전염됩니다. 거래소에서 격리로 전환하세요. <span class="muted">(일지는 주문 경로 밖 — 차단은 불가, 감지·경고까지)</span></div>`:"";
   return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
-    <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    ${crossWarn}<div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function bindPosPlan(){$$(".pplan").forEach(b=>b.onclick=()=>openPint({exchange:b.dataset.ex,symbol:b.dataset.sym,direction:b.dataset.dir,entry:parseFloat(b.dataset.entry)||null,qty:parseFloat(b.dataset.qty)||null,point_value:parseFloat(b.dataset.pv)||null}));}
 async function ensurePositions(){

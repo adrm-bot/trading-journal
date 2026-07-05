@@ -250,6 +250,8 @@ td .num,td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .badge.long{background:var(--pos-soft);color:var(--mint)} .badge.short{background:var(--neg-soft);color:var(--ember)}
 .badge.pending{box-shadow:inset 0 0 0 1px rgba(var(--neg-rgb),.4);color:var(--ember)}
 .badge.done{background:var(--info-soft);color:#9db2ff}
+.badge.cross{background:var(--neg-soft);color:var(--ember);box-shadow:inset 0 0 0 1px rgba(var(--neg-rgb),.45)}
+.cross-warn{color:var(--ember);background:var(--neg-soft);border:1px solid rgba(var(--neg-rgb),.35);border-radius:8px;padding:8px 12px;margin-bottom:10px;font-size:var(--fs-sm);line-height:1.5}
 
 /* ---- forms (2px inputs, steel border, canvas bg) ---- */
 .field{margin-bottom:var(--s3)} .field label{display:block;color:var(--muted);font-size:var(--fs-sm);margin-bottom:6px}

@@ -622,6 +622,7 @@ def _nt_open_positions(cred):
         rows.append({"exchange": "ninjatrader", "symbol": (info[0] if info else str(p.get("contractId"))),
                      "direction": "Long" if n > 0 else "Short", "entry": p.get("netPrice"),
                      "qty": abs(n), "leverage": None, "upnl": None, "mark": None,
+                     "margin_mode": None,  # 선물 계좌 — 격리/교차 개념 비적용
                      "point_value": (info[1] if info else None)})
     return rows
 
@@ -748,10 +749,25 @@ def _open_positions(kind, key, secret):
             continue
         side = str(p.get("side") or "").lower()
         sym = (p.get("symbol") or "").split(":")[0].replace("/", "")
+        # 마진 모드(격리/교차) — ccxt 통일 필드 우선, 없으면 거래소 원시 필드 폴백
+        # (binance: info.marginType / info.isolated, bybit v5: info.tradeMode 0=교차 1=격리).
+        # 판별 불가면 None — 모르면서 경고하지 않는다(정직성).
+        mm = str(p.get("marginMode") or "").lower() or None
+        if mm not in ("isolated", "cross"):
+            info = p.get("info") or {}
+            if info.get("marginType"):
+                mm = str(info["marginType"]).lower()
+            elif str(info.get("isolated")).lower() in ("true", "false"):
+                mm = "isolated" if str(info["isolated"]).lower() == "true" else "cross"
+            elif str(info.get("tradeMode")) in ("0", "1"):
+                mm = "isolated" if str(info["tradeMode"]) == "1" else "cross"
+            else:
+                mm = None
         rows.append({"exchange": kind, "symbol": sym,
                      "direction": "Long" if side == "long" else ("Short" if side == "short" else None),
                      "entry": _f(p, "entryPrice"), "qty": contracts, "leverage": _f(p, "leverage") or None,
-                     "upnl": _f(p, "unrealizedPnl"), "mark": _f(p, "markPrice")})
+                     "upnl": _f(p, "unrealizedPnl"), "mark": _f(p, "markPrice"),
+                     "margin_mode": mm})
     return rows
 
 
