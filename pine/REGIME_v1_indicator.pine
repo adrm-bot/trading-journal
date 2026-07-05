@@ -52,7 +52,7 @@ posStr   = input.string("우상단", "테이블 위치", options = ["좌상단",
 ribbonMode = input.string("메인 차트", "리본 표시", options = ["메인 차트", "레짐 패널", "끄기"], group = "표시 / Display", tooltip = "다른 지표 배경과 겹쳐 어지러우면 '레짐 패널'이나 '끄기'로")
 lblDensity = input.string("성김", "전환 마커", options = ["전부", "성김", "끄기"], group = "표시 / Display", tooltip = "성김(기본): 1봉 생존한 전환만 + 최소 8봉 간격 — 빠른 TF에서 마커 홍수 방지")
 showBands = input.bool(true, "MTF 밴드(위 하위TF · 중간 현재 · 아래 상위TF)", group = "표시 / Display", tooltip = "TF 사다리: 5m→15m→1h→4h→12h→1D. 밴드는 연료축 없는 2축 근사(연구상 연료 기여 p=1.0이라 근사 정당) · 무FSM 순간 판정 · 하위TF는 TV security 특성상 참고용")
-tblSize  = input.string("보통", "테이블 글자", options = ["작게", "보통", "크게"], group = "표시 / Display")
+tblSize  = input.string("작게", "테이블 글자", options = ["아주작게", "작게", "보통", "크게"], group = "표시 / Display")
 
 // ── 피처 (전부 인과: 현재 봉 종가까지만) ────────────────────────────────────
 [diP, diM, adx] = ta.dmi(adxLen, adxLen)
@@ -332,7 +332,7 @@ plotshape(collapse, "confidence collapse", style = shape.xcross, location = loca
 // ── 상태 테이블 (메인 차트, 배경 있는 가독 버전) ────────────────────────────
 posOf(string s) =>
     s == "좌상단" ? position.top_left : s == "중앙상단" ? position.top_center : s == "우상단" ? position.top_right : s == "좌중앙" ? position.middle_left : s == "중앙" ? position.middle_center : s == "우중앙" ? position.middle_right : s == "좌하단" ? position.bottom_left : s == "중앙하단" ? position.bottom_center : position.bottom_right
-txtSz = tblSize == "작게" ? size.small : tblSize == "크게" ? size.large : size.normal
+txtSz = tblSize == "아주작게" ? size.tiny : tblSize == "작게" ? size.small : tblSize == "크게" ? size.large : size.normal
 color BG  = color.new(#131722, 10)
 color BG2 = color.new(#1e222d, 10)
 color TXT = color.new(#e8e8e8, 0)
@@ -362,8 +362,8 @@ if barstate.islast
     table.cell(tb, 1, 6, cur >= 0 ? dontTxt(cur) : "…", text_size = txtSz, bgcolor = BG2, text_color = color.new(color.red, 15))
     table.cell(tb, 0, 7, L("데이터", "Data"), text_size = txtSz, bgcolor = BG, text_color = TXT)
     table.cell(tb, 1, 7, dataTxt, text_size = txtSz, bgcolor = BG2, text_color = TXT)
-    table.cell(tb, 0, 8, L("색 안내", "Legend"), text_size = size.small, bgcolor = BG, text_color = TXT)
-    table.cell(tb, 1, 8, "🟢" + nameOf(0) + " 🔴" + nameOf(1) + " 🔵" + nameOf(2) + " ⚪" + nameOf(3) + " 🟠" + nameOf(4), text_size = size.small, bgcolor = BG2, text_color = color.new(#c8c8c8, 0))
+    table.cell(tb, 0, 8, L("색 안내", "Legend"), text_size = size.tiny, bgcolor = BG, text_color = TXT)
+    table.cell(tb, 1, 8, "🟢" + nameOf(0) + " 🔴" + nameOf(1) + " 🔵" + nameOf(2) + " ⚪" + nameOf(3) + " 🟠" + nameOf(4), text_size = size.tiny, bgcolor = BG2, text_color = color.new(#c8c8c8, 0))
 
 alertcondition(ta.change(cur) != 0, "Regime change", "REGIME v1: 레짐 전환 / regime changed")
 alertcondition(collapse, "Confidence collapse", "REGIME v1: 확신 급락 — 전환 가능성 / confidence collapse")

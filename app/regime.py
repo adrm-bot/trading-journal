@@ -153,6 +153,31 @@ def _past_pct(s: pd.Series, w: int, mp: int) -> pd.Series:
     return ((r * c - 1) / (c - 1)).where(c > 1)
 
 
+def _fuel_series(bars: pd.DataFrame, oi: pd.DataFrame, tf_min: int, qw: int, mp: int) -> dict:
+    """ΔOI·Δprice·데드존·사분면 시계열 — classify2와 라이브 사분면 플롯이 같은 수식 공용."""
+    c = bars["close"]
+    k = max(1, 120 // tf_min)  # ΔOI lookback = 2시간
+    left = pd.DataFrame({"ts": bars.index.astype("datetime64[ns, UTC]")})
+    right = oi.rename(columns={"snap_ts": "ts"}).copy()
+    right["ts"] = right["ts"].astype("datetime64[ns, UTC]")
+    joined = pd.merge_asof(left, right.sort_values("ts"), on="ts", direction="backward",
+                           tolerance=pd.Timedelta(minutes=25)).set_index("ts")["oi"]
+    joined.index = bars.index
+    fresh = joined.notna()
+    doi = (joined / joined.shift(k) - 1.0).where(fresh & fresh.shift(k, fill_value=False))
+    dpr = c / c.shift(k) - 1.0
+    mp_fuel = max(2, min(20 * (1440 // tf_min), int(qw * 0.95)))
+    dz_doi = doi.abs().rolling(qw, min_periods=mp_fuel).quantile(DEAD_Q).shift(1)
+    dz_dpr = dpr.abs().rolling(qw, min_periods=mp).quantile(DEAD_Q).shift(1)
+    d, p = doi.to_numpy(float), dpr.to_numpy(float)
+    zd, zp = dz_doi.to_numpy(float), dz_dpr.to_numpy(float)
+    on = ~np.isnan(d) & ~np.isnan(zd) & ~np.isnan(zp) & (np.abs(d) >= zd) & (np.abs(p) >= zp)
+    quad = np.select([on & (d > 0) & (p > 0), on & (d > 0) & (p < 0),
+                      on & (d < 0) & (p > 0), on & (d < 0) & (p < 0)], [1, 2, 3, 4], 0)
+    return {"doi": doi, "dpr": dpr, "dz_doi": dz_doi, "dz_dpr": dz_dpr,
+            "quad": quad, "fuel_defined": ~np.isnan(d) & ~np.isnan(zd)}
+
+
 def classify2(bars: pd.DataFrame, tf_min: int, oi: pd.DataFrame | None = None):
     """bars: index=종가시각 DataFrame[open,high,low,close]
     → (regime Series, conf Series, quadrant Series|None).
@@ -206,26 +231,9 @@ def classify2(bars: pd.DataFrame, tf_min: int, oi: pd.DataFrame | None = None):
     quad = np.zeros(n, dtype=np.int8)
     fuel_defined = np.zeros(n, dtype=bool)
     if oi is not None and len(oi):
-        k = max(1, 120 // tf_min)  # ΔOI lookback = 2시간
-        left = pd.DataFrame({"ts": bars.index.astype("datetime64[ns, UTC]")})
-        right = oi.rename(columns={"snap_ts": "ts"}).copy()
-        right["ts"] = right["ts"].astype("datetime64[ns, UTC]")
-        joined = pd.merge_asof(left, right.sort_values("ts"), on="ts",
-                               direction="backward",
-                               tolerance=pd.Timedelta(minutes=25)).set_index("ts")["oi"]
-        joined.index = bars.index
-        fresh = joined.notna()
-        doi = (joined / joined.shift(k) - 1.0).where(fresh & fresh.shift(k, fill_value=False))
-        dpr = c / c.shift(k) - 1.0
-        mp_fuel = max(2, min(20 * bpd, int(qw * 0.95)))
-        dz_doi = doi.abs().rolling(qw, min_periods=mp_fuel).quantile(DEAD_Q).shift(1)
-        dz_dpr = dpr.abs().rolling(qw, min_periods=mp).quantile(DEAD_Q).shift(1)
-        d, p = doi.to_numpy(float), dpr.to_numpy(float)
-        zd, zp = dz_doi.to_numpy(float), dz_dpr.to_numpy(float)
-        on = ~np.isnan(d) & ~np.isnan(zd) & ~np.isnan(zp) & (np.abs(d) >= zd) & (np.abs(p) >= zp)
-        quad = np.select([on & (d > 0) & (p > 0), on & (d > 0) & (p < 0),
-                          on & (d < 0) & (p > 0), on & (d < 0) & (p < 0)], [1, 2, 3, 4], 0)
-        fuel_defined = ~np.isnan(d) & ~np.isnan(zd)
+        fs = _fuel_series(bars, oi, tf_min, qw, mp)
+        quad = fs["quad"]
+        fuel_defined = fs["fuel_defined"]
     fuel_votes = fuel_defined & ((quad == 1) | (quad == 2))
     fuel_s = np.zeros((n, 5))
     fuel_s[quad == 1, 0] = 1.0
@@ -267,6 +275,7 @@ def live(symbol: str = "BTCUSDT") -> dict:
     tfs, supers = [], []
     warn = None
     quad_info = None
+    ribbon = None
     oi = _fetch_oi(symbol)
     for interval, days in [("15m", 60), ("1h", 80), ("4h", 130)]:
         bars = _fetch_klines(symbol, interval, days=days)
@@ -276,10 +285,29 @@ def live(symbol: str = "BTCUSDT") -> dict:
         okm = reg.notna()
         if not okm.any():
             continue
+        if interval == "15m":
+            # 48시간 미니 리본 (색=상태, 진하기=확신)
+            rr, cc = reg[okm].iloc[-192:], conf[okm].iloc[-192:]
+            idxmap = {r: i for i, r in enumerate(REGIMES)}
+            ribbon = {"cells": [[idxmap.get(a, -1),
+                                 (None if pd.isna(b) else round(float(b), 2))]
+                                for a, b in zip(rr, cc)],
+                      "hours": round(len(rr) * 15 / 60)}
         if interval == "15m" and quad is not None:
             q = int(quad[okm].iloc[-1])
-            quad_info = {"code": q, "text": QUAD_TEXT.get(q, "—"),
-                         "oi": True}
+            quad_info = {"code": q, "text": QUAD_TEXT.get(q, "—"), "oi": True}
+            # 실제 사분면 플롯: x=Δ가격%, y=ΔOI% (최근 6시간 궤적 + 데드존 밴드)
+            fs = _fuel_series(bars, oi, 15, 2880, 2736)
+            pts = []
+            for x, y, qc in zip(fs["dpr"].iloc[-24:], fs["doi"].iloc[-24:], fs["quad"][-24:]):
+                if pd.notna(x) and pd.notna(y):
+                    pts.append({"x": round(float(x) * 100, 3),
+                                "y": round(float(y) * 100, 3), "q": int(qc)})
+            dzx, dzy = fs["dz_dpr"].iloc[-1], fs["dz_doi"].iloc[-1]
+            quad_info["plot"] = {
+                "points": pts,
+                "dz_x": round(float(dzx) * 100, 3) if pd.notna(dzx) else None,
+                "dz_y": round(float(dzy) * 100, 3) if pd.notna(dzy) else None}
         r, cf = reg[okm].iloc[-1], float(conf[okm].iloc[-1])
         hist = conf[okm].to_numpy(float)
         pct = float((hist < cf).mean()) if len(hist) > 100 else None
@@ -308,7 +336,7 @@ def live(symbol: str = "BTCUSDT") -> dict:
     if quad_info is None:
         quad_info = {"code": None, "text": "OI 미제공 심볼 — 가격 2축으로 판정", "oi": False}
     data = {"available": True, "symbol": symbol, "tfs": tfs, "verdict": verdict, "warn": warn,
-            "quad": quad_info,
+            "quad": quad_info, "ribbon": ribbon,
             "basis": ("라이브 3축(방향·변동성·OI 사분면)" if quad_info["oi"] else
                       "가격 기반 2축(방향·변동성)")
                      + " — 사분면은 ΔOI↑만 라벨 투표, ΔOI↓는 확신 삭감(연구 반영)"}
