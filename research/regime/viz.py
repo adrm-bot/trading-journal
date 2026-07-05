@@ -26,7 +26,8 @@ import run_all
 HERE = Path(__file__).resolve().parent
 RESULTS = HERE / "results"
 
-COLORS = {"TREND_UP": "#2ca02c", "TREND_DOWN": "#d62728", "SQUEEZE": "#9467bd",
+# Pine 지표의 리본 색과 동일 (🟢상승 🔴하락 🔵수렴 ⚪박스 🟠난장 — "무슨 색=무슨 시장")
+COLORS = {"TREND_UP": "#2ca02c", "TREND_DOWN": "#d62728", "SQUEEZE": "#2b6cf0",
           "RANGE": "#7f7f7f", "CHOP": "#ff7f0e"}
 
 

@@ -1,0 +1,21 @@
+BTCUSDT: 157920 bars  2022-01-01 00:15:00+00:00 .. 2026-07-04 00:00:00+00:00
+  bar_missing: 0  oi coverage: 99.975%  oi gaps(runs): 1  offgrid snaps dropped: 6  conflicting dup snaps: 0
+  funding events: 4926  first: 2022-01-01 00:00:00+00:00
+  oi gap    40 bars  2024-02-16 14:00:00+00:00 .. 2024-02-16 23:45:00+00:00
+ETHUSDT: 157920 bars  2022-01-01 00:15:00+00:00 .. 2026-07-04 00:00:00+00:00
+  bar_missing: 0  oi coverage: 99.975%  oi gaps(runs): 1  offgrid snaps dropped: 6  conflicting dup snaps: 0
+  funding events: 4926  first: 2022-01-01 00:00:00+00:00
+  oi gap    40 bars  2024-02-16 14:00:00+00:00 .. 2024-02-16 23:45:00+00:00
+SOLUSDT: 157920 bars  2022-01-01 00:15:00+00:00 .. 2026-07-04 00:00:00+00:00
+  bar_missing: 480  oi coverage: 99.670%  oi gaps(runs): 4  offgrid snaps dropped: 8  conflicting dup snaps: 0
+  funding events: 5001  first: 2022-01-01 00:00:00+00:00
+  oi gap   288 bars  2022-02-26 00:15:00+00:00 .. 2022-03-01 00:00:00+00:00
+  oi gap   192 bars  2022-04-01 00:15:00+00:00 .. 2022-04-03 00:00:00+00:00
+  oi gap    40 bars  2024-02-16 14:00:00+00:00 .. 2024-02-16 23:45:00+00:00
+  oi gap     1 bars  2023-12-12 23:45:00+00:00 .. 2023-12-12 23:45:00+00:00
+XRPUSDT: 157920 bars  2022-01-01 00:15:00+00:00 .. 2026-07-04 00:00:00+00:00
+  bar_missing: 480  oi coverage: 99.671%  oi gaps(runs): 3  offgrid snaps dropped: 6  conflicting dup snaps: 0
+  funding events: 4926  first: 2022-01-01 00:00:00+00:00
+  oi gap   288 bars  2022-02-26 00:15:00+00:00 .. 2022-03-01 00:00:00+00:00
+  oi gap   192 bars  2022-04-01 00:15:00+00:00 .. 2022-04-03 00:00:00+00:00
+  oi gap    40 bars  2024-02-16 14:00:00+00:00 .. 2024-02-16 23:45:00+00:00

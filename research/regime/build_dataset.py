@@ -116,17 +116,24 @@ def read_metrics(symbol: str, start: str | None = None, end: str | None = None):
     files = [f for f in sorted((RAW / symbol / "metrics").glob("*.zip")) if _in_range(f, start, end)]
     if not files:
         raise FileNotFoundError(f"no metrics zips for {symbol}")
+    METRIC_COLS = ["create_time", "symbol", "sum_open_interest", "sum_open_interest_value",
+                   "count_toptrader_long_short_ratio", "sum_toptrader_long_short_ratio",
+                   "count_long_short_ratio", "sum_taker_long_short_vol_ratio"]
     parts = []
     for f in files:
         df = _read_zip_csv(f)
         if df.columns.dtype != object or "create_time" not in df.columns:
-            df.columns = ["create_time", "symbol", "sum_open_interest",
-                          "sum_open_interest_value"] + [f"x{i}" for i in range(len(df.columns) - 4)]
-        parts.append(df[["create_time", "sum_open_interest"]])
+            df.columns = METRIC_COLS[: len(df.columns)]
+        parts.append(df[[c for c in METRIC_COLS if c in df.columns and c != "symbol"]])
     m = pd.concat(parts, ignore_index=True)
     # naive datetime strings -> explicit UTC (never local time)
     m["snap_ts"] = _as_ns(pd.to_datetime(m["create_time"], utc=True, format="mixed"))
     m["oi"] = m["sum_open_interest"].astype("float64")
+    # positioning/flow companions riding the same snapshots (free, same causality rules)
+    for src, dst in [("sum_toptrader_long_short_ratio", "lsr_top"),
+                     ("count_long_short_ratio", "lsr_all"),
+                     ("sum_taker_long_short_vol_ratio", "taker_ratio")]:
+        m[dst] = m[src].astype("float64") if src in m.columns else np.nan
     m = m.sort_values("snap_ts")
     # snapshots are creation times with seconds-level jitter off the 5m grid (measured on the
     # real archive); keep RAW times (they are availability times — no snapping) but assert the
@@ -143,7 +150,8 @@ def read_metrics(symbol: str, start: str | None = None, end: str | None = None):
         rel = (g["max"] - g["min"]) / g["max"].replace(0, np.nan)
         n_conflict = int((rel > 0.001).sum())
         m = m.drop_duplicates("snap_ts", keep="first")
-    return m[["snap_ts", "oi"]].reset_index(drop=True), n_offgrid, n_conflict
+    keep = ["snap_ts", "oi", "lsr_top", "lsr_all", "taker_ratio"]
+    return m[keep].reset_index(drop=True), n_offgrid, n_conflict
 
 
 def read_funding(symbol: str, start: str | None = None, end: str | None = None) -> pd.DataFrame:
@@ -203,7 +211,7 @@ def assemble(kraw: pd.DataFrame, m: pd.DataFrame, fu: pd.DataFrame) -> pd.DataFr
     # at-or-before close-5min
     lag = pd.merge_asof(
         k.reset_index()[["ts"]].assign(ts_l=lambda d: d["ts"] - pd.Timedelta(minutes=5)),
-        m.rename(columns={"snap_ts": "ts_l", "oi": "oi_lag1"}),
+        m[["snap_ts", "oi"]].rename(columns={"snap_ts": "ts_l", "oi": "oi_lag1"}),
         on="ts_l", direction="backward", tolerance=OI_TOLERANCE)
     df["oi_lag1"] = lag["oi_lag1"].to_numpy()
     # funding: last event at-or-before close (rate known at event time, applied thereafter)

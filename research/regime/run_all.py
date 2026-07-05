@@ -379,6 +379,52 @@ def collapse_stage(symbol: str, n_shifts=200, seed=43, W=96):
     return out
 
 
+def posthoc(symbol: str, horizons=(4, 16, 96)):
+    """Post-hoc label audit: was each state RIGHT about the market's character?
+    For every candle labeled state S, the realized return over the NEXT h bars.
+    Uses future data BY DESIGN — this is a retrospective audit of past labels
+    (published as diagnostics), never a feature; the classifier contract is untouched."""
+    df, excluded, _ = load(symbol)
+    feat, f, b2, b1 = tracks(df)
+    F = trim(f)["regime"]
+    exc = full_excluded(excluded, trim(f))
+    lab = F.to_numpy(object)
+    c = df["close"].iloc[BURN:].to_numpy(float)
+    out = {"symbol": symbol, "horizons_bars": list(horizons), "states": {}}
+    for state in classifier.REGIMES:
+        base = (~pd.isna(lab)) & (lab == state) & ~exc
+        row = {}
+        for h in horizons:
+            mask = base.copy()
+            mask[-h:] = False
+            r = (np.roll(c, -h) / c - 1.0)[mask]  # wrapped tail rows are masked off
+            row[str(h)] = {
+                "n": int(mask.sum()),
+                "median_ret_pct": round(float(np.median(r)) * 100, 3),
+                "share_up": round(float((r > 0).mean()), 3),
+                "iqr_pct": [round(float(np.percentile(r, 25)) * 100, 3),
+                            round(float(np.percentile(r, 75)) * 100, 3)],
+                "abs_move_med_pct": round(float(np.median(np.abs(r))) * 100, 3),
+            }
+        out["states"][state] = row
+    RESULTS.mkdir(exist_ok=True)
+    (RESULTS / f"{symbol}_posthoc.json").write_text(json.dumps(out, indent=1))
+
+    names = {"TREND_UP": "상승추세", "TREND_DOWN": "하락추세", "SQUEEZE": "수렴",
+             "RANGE": "박스권", "CHOP": "난장판"}
+    hours = {4: "1시간", 16: "4시간", 96: "24시간"}
+    print(f"\n[{symbol}] 상태별 사후 성과 — '라벨이 붙은 뒤 실제로 어떻게 갔나'")
+    print(f"{'상태':12s}" + "".join(f"{hours.get(h, str(h)+'봉'):>26s}" for h in horizons))
+    for state in classifier.REGIMES:
+        cells = []
+        for h in horizons:
+            d = out["states"][state][str(h)]
+            cells.append(f"중앙 {d['median_ret_pct']:+.2f}% ↑비율 {d['share_up']:.0%} "
+                         f"|폭| {d['abs_move_med_pct']:.2f}%")
+        print(f"{names[state]:12s}" + "".join(f"{s:>26s}" for s in cells))
+    return out
+
+
 def sweep(symbol: str):
     df, excluded, _ = load(symbol)
     feat, f, b2, b1 = tracks(df)
@@ -418,7 +464,8 @@ def main():
     args = ap.parse_args()
     if hasattr(sys.stdout, "reconfigure"):
         sys.stdout.reconfigure(encoding="utf-8")
-    stages = ["headline", "null", "collapse", "sweep"] if args.stage == "all" else [args.stage]
+    stages = ["headline", "null", "collapse", "sweep", "posthoc"] if args.stage == "all" \
+        else [args.stage]
     for st in stages:
         print(f"=== {args.symbol} :: {st} ===", flush=True)
         if st == "headline":
@@ -432,6 +479,8 @@ def main():
             print(json.dumps(collapse_stage(args.symbol, args.nulls), indent=1))
         elif st == "sweep":
             print(json.dumps(sweep(args.symbol), indent=1))
+        elif st == "posthoc":
+            posthoc(args.symbol)
 
 
 if __name__ == "__main__":

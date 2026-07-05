@@ -88,8 +88,9 @@ def compute(df: pd.DataFrame, fp: FeatureParams = DEFAULT_FP, oi_col: str = "oi"
     sd = c.rolling(fp.bb_n, min_periods=fp.bb_n).std()
     bbw = (2 * fp.bb_k * sd) / mid.replace(0, np.nan)
     atrp = atr / c
-    out["vol_pct"] = 0.5 * past_pct_rank(bbw, fp.q_window, mp_vol) \
-        + 0.5 * past_pct_rank(atrp, fp.q_window, mp_vol)
+    out["bbw_pct"] = past_pct_rank(bbw, fp.q_window, mp_vol)
+    out["atrp_pct"] = past_pct_rank(atrp, fp.q_window, mp_vol)
+    out["vol_pct"] = 0.5 * out["bbw_pct"] + 0.5 * out["atrp_pct"]
 
     # fuel: relative dOI over k candles, both endpoints fresh
     k = fp.oi_lookback
