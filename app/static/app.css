@@ -598,3 +598,7 @@ kbd,.kbd{font-family:var(--f-mono);font-size:var(--fs-micro);background:var(--ca
 .rgc .rgperf table{width:100%;table-layout:auto}
 .rgc .rgperf th,.rgc .rgperf td{white-space:normal;padding:4px 6px;font-size:var(--fs-xs)}
 .rgc .rgperf td:first-child{word-break:keep-all}
+.rgc .rgtfs{float:right;display:inline-flex;gap:3px}
+.rgc .rgtf{font:inherit;font-size:10px;font-family:var(--f-mono);padding:1px 6px;border-radius:5px;border:1px solid var(--line);background:var(--card);color:var(--fog);cursor:pointer;line-height:1.4}
+.rgc .rgtf:hover{border-color:var(--azure,#7e8af0);color:var(--ice)}
+.rgc .rgtf.on{background:var(--plate,#1d222b);color:var(--ice);border-color:var(--azure,#7e8af0);font-weight:700}

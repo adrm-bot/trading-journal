@@ -47,7 +47,7 @@ _lock = threading.Lock()
 
 # ── 데이터 ───────────────────────────────────────────────────────────────────
 def _grid(interval: str) -> int:
-    return {"15m": 15, "1h": 60, "4h": 240}[interval]
+    return {"15m": 15, "1h": 60, "4h": 240, "12h": 720, "1d": 1440}[interval]
 
 
 def _fetch_klines(symbol: str, interval: str, start_ms: int | None = None,
@@ -275,24 +275,25 @@ def live(symbol: str = "BTCUSDT") -> dict:
     tfs, supers = [], []
     warn = None
     quad_info = None
-    ribbon = None
+    ribbons = {}
+    idxmap = {r: i for i, r in enumerate(REGIMES)}
     oi = _fetch_oi(symbol)
-    for interval, days in [("15m", 60), ("1h", 80), ("4h", 130)]:
+    # 앞 3개 = 칩+리본, 12h/1d = 리본 전용 (레짐 흐름 TF 선택기)
+    for interval, days, chip in [("15m", 60, True), ("1h", 80, True), ("4h", 130, True),
+                                 ("12h", 260, False), ("1d", 400, False)]:
         bars = _fetch_klines(symbol, interval, days=days)
-        if bars is None or len(bars) < 300:
+        if bars is None or len(bars) < 220:
             continue
         reg, conf, quad = classify2(bars, _grid(interval), oi=oi)
         okm = reg.notna()
         if not okm.any():
             continue
-        if interval == "15m":
-            # 48시간 미니 리본 (색=상태, 진하기=확신)
-            rr, cc = reg[okm].iloc[-192:], conf[okm].iloc[-192:]
-            idxmap = {r: i for i, r in enumerate(REGIMES)}
-            ribbon = {"cells": [[idxmap.get(a, -1),
-                                 (None if pd.isna(b) else round(float(b), 2))]
-                                for a, b in zip(rr, cc)],
-                      "hours": round(len(rr) * 15 / 60)}
+        # 미니 리본 192셀 (색=상태, 진하기=확신)
+        rr, cc = reg[okm].iloc[-192:], conf[okm].iloc[-192:]
+        ribbons[interval] = {"cells": [[idxmap.get(a, -1),
+                                        (None if pd.isna(b) else round(float(b), 2))]
+                                       for a, b in zip(rr, cc)],
+                             "hours": round(len(rr) * _grid(interval) / 60)}
         if interval == "15m" and quad is not None:
             q = int(quad[okm].iloc[-1])
             quad_info = {"code": q, "text": QUAD_TEXT.get(q, "—"), "oi": True}
@@ -308,6 +309,8 @@ def live(symbol: str = "BTCUSDT") -> dict:
                 "points": pts,
                 "dz_x": round(float(dzx) * 100, 3) if pd.notna(dzx) else None,
                 "dz_y": round(float(dzy) * 100, 3) if pd.notna(dzy) else None}
+        if not chip:
+            continue  # 12h/1d는 리본 전용
         r, cf = reg[okm].iloc[-1], float(conf[okm].iloc[-1])
         hist = conf[okm].to_numpy(float)
         pct = float((hist < cf).mean()) if len(hist) > 100 else None
@@ -336,7 +339,7 @@ def live(symbol: str = "BTCUSDT") -> dict:
     if quad_info is None:
         quad_info = {"code": None, "text": "OI 미제공 심볼 — 가격 2축으로 판정", "oi": False}
     data = {"available": True, "symbol": symbol, "tfs": tfs, "verdict": verdict, "warn": warn,
-            "quad": quad_info, "ribbon": ribbon,
+            "quad": quad_info, "ribbons": ribbons, "ribbon": ribbons.get("15m"),
             "basis": ("라이브 3축(방향·변동성·OI 사분면)" if quad_info["oi"] else
                       "가격 기반 2축(방향·변동성)")
                      + " — 사분면은 ΔOI↑만 라벨 투표, ΔOI↓는 확신 삭감(연구 반영)"}
