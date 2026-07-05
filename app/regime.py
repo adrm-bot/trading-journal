@@ -40,7 +40,7 @@ QUAD_TEXT = {1: "🟩 신규 롱 유입 — 추세 연료(라벨 투표)",
              0: "— 데드존(유의미한 ΔOI 없음)"}
 
 _TTL = 300
-_live_cache = {"at": 0.0, "data": None}
+_live_cache: dict = {}  # {symbol: {"at": ts, "data": payload}}
 _labels_cache: dict = {}   # sym -> {"at": ts, "since": Timestamp, "s": Series|None}
 _lock = threading.Lock()
 
@@ -178,6 +178,32 @@ def _fuel_series(bars: pd.DataFrame, oi: pd.DataFrame, tf_min: int, qw: int, mp:
             "quad": quad, "fuel_defined": ~np.isnan(d) & ~np.isnan(zd)}
 
 
+def _drift_state(close: pd.Series, bars_per_day: int) -> tuple[bool, float]:
+    """표류(드리프트) 태그 — 표시층 전용, 분류기 출력 불변 (Pine v1.6·current.py 동일 수식).
+
+    게이트(4년 BTC 15m 캘리브, research/regime/results/display_calib.json):
+    on |24h 순이동|≥2% AND ER(24h)≥0.10 / off <1.5% or <0.08.
+    정직성: '지난 24h' 과거 기술 — 표류-on 코호트 실측 전방지속 0.46~0.47(엣지 없음).
+    의미: 박스 경계가 이동 중 → 레인지 페이드의 전제(레벨 정상성)가 깨졌다는 경고."""
+    net = close / close.shift(bars_per_day) - 1.0
+    er = (close - close.shift(bars_per_day)).abs() \
+        / close.diff().abs().rolling(bars_per_day).sum().replace(0, np.nan)
+    on = False
+    nv, ev = net.to_numpy(float), er.to_numpy(float)
+    for i in range(len(nv)):
+        if np.isnan(nv[i]) or np.isnan(ev[i]):
+            on = False
+        elif not on and abs(nv[i]) >= 0.02 and ev[i] >= 0.10:
+            on = True
+        elif on and (abs(nv[i]) < 0.015 or ev[i] < 0.08):
+            on = False
+    # 갭 가드: '지난 24h' 표기가 참이려면 마지막 창이 정확히 24시간이어야 함 (REST 갭 방어)
+    if len(close) > bars_per_day and \
+            close.index[-1] - close.index[-1 - bars_per_day] != pd.Timedelta(days=1):
+        return False, float("nan")
+    return on, (float(nv[-1]) if len(nv) and not np.isnan(nv[-1]) else float("nan"))
+
+
 def classify2(bars: pd.DataFrame, tf_min: int, oi: pd.DataFrame | None = None):
     """bars: index=종가시각 DataFrame[open,high,low,close]
     → (regime Series, conf Series, quadrant Series|None).
@@ -270,8 +296,9 @@ def classify2(bars: pd.DataFrame, tf_min: int, oi: pd.DataFrame | None = None):
 # ── 라이브 스냅샷 ────────────────────────────────────────────────────────────
 def live(symbol: str = "BTCUSDT") -> dict:
     now = time.time()
-    if _live_cache["data"] is not None and now - _live_cache["at"] < _TTL:
-        return _live_cache["data"]
+    hit = _live_cache.get(symbol)  # 심볼별 키잉 — 단일 캐시면 타 심볼 호출 시 이전 페이로드 반환
+    if hit is not None and now - hit["at"] < _TTL:
+        return hit["data"]
     tfs, supers = [], []
     warn = None
     quad_info = None
@@ -313,14 +340,28 @@ def live(symbol: str = "BTCUSDT") -> dict:
             continue  # 12h/1d는 리본 전용
         r, cf = reg[okm].iloc[-1], float(conf[okm].iloc[-1])
         hist = conf[okm].to_numpy(float)
-        pct = float((hist < cf).mean()) if len(hist) > 100 else None
+        # 분위 창 = 최근 30일 — 문구('최근 30일 자기 분위')와 일치시킴. 페치 전체를 쓰면
+        # TF마다 창이 31~98일로 달라져 '상위 x%'의 기준 모집단이 표기와 어긋남
+        hist30 = hist[-30 * (1440 // _grid(interval)):]
+        pct = float((hist30 < cf).mean()) if len(hist30) > 100 else None
         grade = None if pct is None else ("높음" if pct >= 0.7 else "보통" if pct >= 0.3 else "낮음")
+        # 표류 태그 — 캘리브 검증 TF(15m·1h)만, 비추세 라벨에서만 표시
+        d_on, d_val = (False, float("nan"))
+        if interval in ("15m", "1h"):
+            d_on, d_val = _drift_state(bars["close"], 1440 // _grid(interval))
+            d_on = d_on and r in ("RANGE", "SQUEEZE")
         supers.append(SUPER.get(r, "NT"))
         tfs.append({"tf": interval, "regime": r, "name": NAME[r], "emoji": EMOJI[r],
                     "conf": round(cf, 2), "grade": grade,
+                    "top_pct": None if pct is None else max(1, round((1 - pct) * 100)),
+                    "drift_on": bool(d_on),
+                    "drift_pct": None if pd.isna(d_val) else round(d_val * 100, 1),
                     "ts": reg[okm].index[-1].strftime("%m-%d %H:%M")})
+        if interval == "15m" and d_on and not pd.isna(d_val):
+            warn = f"지난 24h {d_val * 100:+.1f}% 표류 — 박스 레벨 신뢰 낮음, 페이드 보류 (과거 기술일 뿐 방향 엣지 없음)"
         if interval == "15m" and len(hist) > 500 and cf < float(np.quantile(hist[-2880:], 0.2)):
-            warn = "확신이 최근 30일 하위 20% — 성격 전환 가능성, 사이즈 축소"
+            clps = "확신이 최근 30일 하위 20% — 성격 전환 가능성, 사이즈 축소"
+            warn = f"{warn} · {clps}" if warn else clps
     if not tfs:
         return {"available": False, "error": "레짐 데이터 조회 실패 (Binance 공개 API)"}
     if len(supers) == 3:
@@ -343,7 +384,7 @@ def live(symbol: str = "BTCUSDT") -> dict:
             "basis": ("라이브 3축(방향·변동성·OI 사분면)" if quad_info["oi"] else
                       "가격 기반 2축(방향·변동성)")
                      + " — 사분면은 ΔOI↑만 라벨 투표, ΔOI↓는 확신 삭감(연구 반영)"}
-    _live_cache.update(at=now, data=data)
+    _live_cache[symbol] = {"at": now, "data": data}
     return data
 
 

@@ -441,7 +441,7 @@ function rgRibbonSvg(rbs){
   const t=avail.includes(RGTF)?RGTF:avail[0];
   const rb=rbs[t], n=rb.cells.length, w=100/n, H=rb.hours||48;
   const rects=rb.cells.map((c,i)=>{const col=c[0]>=0?RGIDX[c[0]]:"#333";
-    const op=c[1]==null?0.25:Math.max(0.18,Math.min(1,c[1]/0.6));
+    const op=c[1]==null?0.08:Math.max(0.18,Math.min(1,c[1]/0.6));  // 결측 확신은 저확신보다 연하게 (인코딩 역전 방지)
     return `<rect x="${(i*w).toFixed(3)}%" y="0" width="${(w+0.05).toFixed(3)}%" height="100%" fill="${col}" fill-opacity="${op.toFixed(2)}"/>`;}).join("");
   // 25% 간격 눈금 — '슬라이더'가 아니라 타임라인임을 명확히
   const ticks=[1,2,3].map(k=>`<line x1="${(k*25)}%" y1="0" x2="${(k*25)}%" y2="100%" stroke="#0e1116" stroke-opacity="0.7" stroke-width="1"/>`).join("");
@@ -509,9 +509,10 @@ function regimePanel(rg){
   const lv=rg.live||{};
   if(lv.available===false)return head+`<p class="empty-inline">${esc(lv.error||"레짐 데이터 없음")}</p>`;
   const chips=(lv.tfs||[]).map(t=>{const c=RGC[t.regime]||"#8b949e";
+    const drift=t.drift_on&&t.drift_pct!=null?` · <span style="color:#d29922">표류${t.drift_pct>0?'+':''}${t.drift_pct}%</span>`:'';
     return mchip(esc(t.tf),`<span style="color:${c}">${t.emoji} ${esc(t.name)}</span>`,
-      `확신 ${esc(t.grade||"—")} (${t.conf})`,"",
-      `${t.tf} 마지막 완결봉 ${t.ts} UTC · 확신은 최근 30일 자기 분위 등급 · 라벨은 시장 '성격'(변동성 구조) — 방향 예측 아님`);}).join("");
+      `확신 ${esc(t.grade||"—")}${t.top_pct!=null?` · 상위 ${t.top_pct}%`:` (${t.conf})`}${drift}`,"",
+      `${t.tf} 마지막 완결봉 ${t.ts} UTC · 확신 절대값 ${t.conf} — 최근 30일 자기 분위 등급${t.drift_on?` · 표류=지난 24h 순이동(과거 기술 — 방향 지속 엣지 없음, 박스 레벨 신뢰 낮음 경고)`:''} · 라벨은 시장 '성격'(변동성 구조) — 방향 예측 아님`);}).join("");
   const warn=lv.warn?`<p class="empty-inline" style="color:var(--red,#f85149)">⚠ ${esc(lv.warn)}</p>`:"";
   const rows=(rg.perf&&rg.perf.rows)||[];
   const perf=rows.length?`<div class="table-wrap rgperf" style="margin-top:8px"><table><thead><tr><th data-tip="진입 시각 기준으로 그 시점 레짐에 매칭">레짐</th><th class="num">거래</th><th class="num">승률</th><th class="num">합손익</th><th class="num">평균R</th></tr></thead><tbody>${

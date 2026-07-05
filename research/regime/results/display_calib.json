@@ -1,0 +1,124 @@
+{
+ "symbol": "BTCUSDT",
+ "tf": "15m",
+ "data_range": [
+  "2022-02-05 00:15:00+00:00",
+  "2026-07-04 00:00:00+00:00"
+ ],
+ "note": "표시층 캘리브 정본 — NOTES.md R7 인용 수치의 재현 소스",
+ "grind": {
+  "definition": "|24h move|>=3% AND ADX<20",
+  "n": 4943,
+  "share_of_scored": 0.032,
+  "label_dist": {
+   "RANGE": 0.674,
+   "CHOP": 0.192,
+   "SQUEEZE": 0.134
+  },
+  "forward": {
+   "h16": {
+    "n": 4943,
+    "continuation": 0.457,
+    "aligned_fwd_med_pct": -0.075
+   },
+   "h96": {
+    "n": 4943,
+    "continuation": 0.427,
+    "aligned_fwd_med_pct": -0.327
+   }
+  },
+  "control_strong_adx_forward": {
+   "h16": {
+    "n": 24238,
+    "continuation": 0.461,
+    "aligned_fwd_med_pct": -0.074
+   },
+   "h96": {
+    "n": 24238,
+    "continuation": 0.46,
+    "aligned_fwd_med_pct": -0.236
+   }
+  },
+  "control_flat_forward": {
+   "h16": {
+    "n": 66631,
+    "continuation": 0.475,
+    "aligned_fwd_med_pct": -0.028
+   },
+   "h96": {
+    "n": 66597,
+    "continuation": 0.487,
+    "aligned_fwd_med_pct": -0.037
+   }
+  }
+ },
+ "er": {
+  "grind_q25_50_75": [
+   0.142,
+   0.179,
+   0.219
+  ],
+  "flat_q25_50_75": [
+   0.017,
+   0.034,
+   0.056
+  ],
+  "scan_tune_era": {
+   "0.08": {
+    "grind_capture": 0.962,
+    "flat_fp": 0.105,
+    "chop_fire": 0.508
+   },
+   "0.1": {
+    "grind_capture": 0.911,
+    "flat_fp": 0.045,
+    "chop_fire": 0.416
+   },
+   "0.12": {
+    "grind_capture": 0.837,
+    "flat_fp": 0.02,
+    "chop_fire": 0.331
+   },
+   "0.14": {
+    "grind_capture": 0.736,
+    "flat_fp": 0.008,
+    "chop_fire": 0.264
+   }
+  }
+ },
+ "drift_gate": {
+  "definition": "on |24h|>=2% AND ER>=0.10 / off <1.5% or <0.08 (hysteresis)",
+  "fire_rate_nontrend": 0.235,
+  "transitions": 2709,
+  "drift_on_forward": {
+   "h16": {
+    "n": 24159,
+    "continuation": 0.473,
+    "aligned_fwd_med_pct": -0.039
+   },
+   "h96": {
+    "n": 24133,
+    "continuation": 0.461,
+    "aligned_fwd_med_pct": -0.148
+   }
+  }
+ },
+ "near_second": {
+  "definition": "runnerUp/agreement >= 0.85 (확정봉 스냅샷)",
+  "base_switch_within8": 0.347,
+  "thresholds": {
+   "0.8": {
+    "fire_rate": 0.112,
+    "switch_within8": 0.681
+   },
+   "0.85": {
+    "fire_rate": 0.081,
+    "switch_within8": 0.711
+   },
+   "0.9": {
+    "fire_rate": 0.053,
+    "switch_within8": 0.75
+   }
+  }
+ }
+}
