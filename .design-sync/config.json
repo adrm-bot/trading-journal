@@ -1,0 +1,4 @@
+{
+  "shape": "manual-styleguide",
+  "note": "정식 design-sync 대상 아님 — 리포는 FastAPI+Jinja+바닐라CSS(컴포넌트 번들 없음). 사용자 선택(2026-07-06): 스타일 가이드 수동 제작. ds-bundle/은 app/static/app.css 사본 + 검증된 클래스만 쓰는 프리뷰 8장. projectId는 DesignSync 인증 후 생성 시 기록할 것."
+}
