@@ -213,7 +213,8 @@ const VIEWS={
   insights:{eyebrow:"ANALYTICS",title:"인사이트",desc:"행동 패턴과 종목별 성과",actions:()=>"",render:renderInsights},
   settings:{eyebrow:"SETTINGS",title:"설정",desc:"거래소·연동·트레이딩 설정",actions:()=>"",render:renderSettings},
 };
-function pullActions(){return `<button class="btn" id="pullBtn">↻ 불러오기</button> <button class="btn primary" id="refreshBtn" style="margin-left:8px">새로고침</button>`;}
+/* 라임은 화면당 하나의 주요 CTA에만 — 상단 버튼은 중립으로 (대시보드의 라임 = '복기 시작하기') */
+function pullActions(){return `<button class="btn" id="pullBtn">↻ 불러오기</button> <button class="btn" id="refreshBtn" style="margin-left:8px">새로고침</button>`;}
 
 async function loadAll(){
   const [me,data,conn]=await Promise.all([
@@ -229,6 +230,7 @@ function route(){
   $$(".view").forEach(s=>s.hidden=true); $("#view-"+view).hidden=false;
   VIEWS[view].render($("#view-"+view));
   if($("#pullBtn"))$("#pullBtn").onclick=pull; if($("#refreshBtn"))$("#refreshBtn").onclick=refresh;
+  updateNavBadge();
 }
 async function refresh(){const v=curView(),host=$("#view-"+v);if(host)host.innerHTML=v==='journal'?skelRows(8):skelCards(4)+skelRows(6);
   try{await loadAll();route();}catch(e){toast("불러오지 못했습니다. 잠시 후 다시 시도해 주세요");}}
@@ -240,10 +242,19 @@ function statCards(s){
   const avg=n?(s.total_pnl||0)/n:0;
   const losses=(s.losses!=null)?s.losses:(n-(s.wins||0)), scratch=s.scratch||0;
   const wlSub=n?`${s.wins||0}승 ${losses}패${scratch>0?` ${scratch}무`:''}`:"";
+  // 평균 R(30일)·프로핏 팩터 — 이미 있는 거래 데이터에서 그대로 계산 (없는 지표를 지어내지 않음)
+  const cut30=iso(new Date(Date.now()-30*86400000));
+  const r30=DATA.trades.filter(t=>t.r!=null&&trDate(t)>=cut30).map(t=>Number(t.r));
+  const avgR=r30.length?r30.reduce((a,b)=>a+b,0)/r30.length:null;
+  const gw=DATA.trades.reduce((s2,t)=>s2+((t.pnl||0)>0?t.pnl:0),0);
+  const gl=Math.abs(DATA.trades.reduce((s2,t)=>s2+((t.pnl||0)<0?t.pnl:0),0));
+  const pf=(gl>0&&gw>0)?gw/gl:null;
   const c=[
     ["총 거래",n+"건","",range],
     ["실현손익",money(s.total_pnl)+`<span class="unit">USDT</span>`,(s.total_pnl||0)>=0?"pos":"neg","거래당 "+money(avg)],
     ["승률",n?Math.round((s.win_rate||0)*100)+"%":"—","",wlSub],
+    ["평균 R (30일)",avgR==null?"—":(avgR>=0?'+':'')+avgR.toFixed(2)+"R",avgR==null?"":(avgR>=0?"pos":"neg"),avgR==null?"무효선 기입 거래가 없습니다":r30.length+"건 기준"],
+    ["프로핏 팩터",pf==null?"—":pf.toFixed(2),pf!=null&&pf>=1?"pos":(pf!=null?"neg":""),"총수익을 총손실로 나눈 값"],
     ["계획 미기입",(s.unplanned||0)+"건",(s.unplanned||0)>0?"neg":"",n?Math.round((s.unplanned||0)/n*100)+"% 미기입":""]];
   return `<div class="cards">`+c.map(x=>`<div class="card stat${x[0]==='실현손익'?' hero':''}"><div class="label">${x[0]}</div><div class="val ${x[2]}">${x[1]}</div>${x[3]?`<div class="msub">${esc(x[3])}</div>`:""}</div>`).join("")+`</div>`;
 }
@@ -503,9 +514,15 @@ function rgQuadSvg(qp,code){
       ${line}${dots}${arrow}
     </svg><div class="rgquad-cap">x=Δ가격 · y=ΔOI (2h, %)${moveGlyph?` · 이동 <b>${moveGlyph}</b>`:''}</div></div>`;
 }
+/* 레짐 카드 — UX 우선순위 3: 요약(3TF 칩+판정)을 기본으로 보여주고, 리본·사분면·성과표는 열어서 본다 */
+let RG_OPEN=(function(){try{return localStorage.getItem('rgOpen')==='1';}catch(e){return false;}})();
+window.rgToggle=function(){
+  RG_OPEN=!RG_OPEN;try{localStorage.setItem('rgOpen',RG_OPEN?'1':'0');}catch(e){}
+  const h=$("#regimeHost");if(h)h.innerHTML=regimePanel(REGIME);
+};
 function regimePanel(rg){
-  const head=`<div class="section-title">시장 레짐 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 5상태 · 방향은 상위TF 우선</span></div>`;
-  if(!rg)return head+`<div class="mchip skel">레짐 불러오는 중… (첫 로드는 수십 초)</div>`;
+  const head=`<div class="section-title" style="display:flex;align-items:center;gap:10px">시장 레짐 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 5상태 · 방향은 상위TF 우선</span><span style="flex:1"></span><button class="btn sm" onclick="rgToggle()">${RG_OPEN?'상세 접기 ↑':'상세 보기 ↓'}</button></div>`;
+  if(!rg)return head+`<div class="mchip skel">레짐을 불러오는 중입니다… (첫 로드는 수십 초 걸립니다)</div>`;
   const lv=rg.live||{};
   if(lv.available===false)return head+`<p class="empty-inline">${esc(lv.error||"레짐 데이터 없음")}</p>`;
   const chips=(lv.tfs||[]).map(t=>{const c=RGC[t.regime]||"#8b949e";
@@ -514,27 +531,29 @@ function regimePanel(rg){
       `확신 ${esc(t.grade||"—")}${t.top_pct!=null?` · 상위 ${t.top_pct}%`:` (${t.conf})`}${drift}`,"",
       `${t.tf} 기준, 마지막 완결봉 ${t.ts} UTC의 판정입니다. 확신 점수는 ${t.conf}이고, 등급은 최근 30일 동안의 자기 자신과 비교한 상대 수준입니다.${t.drift_on?` '표류'는 지난 24시간 동안 가격이 한쪽으로 밀렸다는 과거 사실 표시로, 박스 레벨을 믿기 어렵다는 경고일 뿐 그 방향으로 계속 간다는 뜻은 아닙니다.`:''} 이 라벨은 시장의 성격(변동성 구조)을 설명하는 것이지 방향 예측이 아닙니다.`);}).join("");
   const warn=lv.warn?`<p class="empty-inline" style="color:var(--red,#f85149)">⚠ ${esc(lv.warn)}</p>`:"";
+  const disclaimer=`<p class="rg-note" style="margin:6px 0 0">레짐 라벨은 시장 성격에 대한 기술이며, 방향 예측이 아닙니다. 확신 백분위는 최근 30일의 자기 분포 기준입니다.</p>`;
+  const summary=head+`<div class="rgc"><div class="market">${chips}</div>`
+    +`<p class="empty-inline" style="color:var(--ice,#e6edf3)">판정: ${esc(lv.verdict||"—")}</p>`+warn+disclaimer;
+  if(!RG_OPEN)return summary+`</div>`;
   const rows=(rg.perf&&rg.perf.rows)||[];
   const perf=rows.length?`<div class="table-wrap rgperf" style="margin-top:8px"><table><thead><tr><th data-tip="진입 시각 기준으로 그 시점 레짐에 매칭">레짐</th><th class="num">거래</th><th class="num">승률</th><th class="num">합손익</th><th class="num">평균R</th></tr></thead><tbody>${
     rows.map(p=>{const c=RGC[p.regime]||"#8b949e";const nw=p.n<10?'<span class="muted">*</span>':'';
       return `<tr><td style="color:${c};font-weight:600" data-tip="${p.n<10?'표본 '+p.n+'건 — 10건 미만은 통계 신뢰 낮음':'표본 '+p.n+'건'}">${p.emoji} ${esc(p.name)}${nw}</td><td class="num">${p.n}</td><td class="num">${Math.round((p.win_rate||0)*100)}%</td><td class="num ${p.pnl>=0?'pos':'neg'}">${money(p.pnl)}</td><td class="num">${p.avg_r!=null?((p.avg_r>=0?'+':'')+p.avg_r+'R ('+p.n_r+')'):'—'}</td></tr>`;}).join("")
-  }</tbody></table></div>`:`<p class="empty-inline">레짐 매칭된 거래 없음</p>`;
+  }</tbody></table></div>`:`<p class="empty-inline">레짐에 매칭된 거래가 아직 없습니다.</p>`;
   const note=`<p class="empty-inline" style="font-size:11.5px">${esc((rg.perf&&rg.perf.note)||"")}${rg.perf&&rg.perf.unmatched?` · 미매칭 ${rg.perf.unmatched}건`:''} · ${esc(lv.basis||"")}</p>`;
   const ribbon=rgRibbonSvg(lv.ribbons||(lv.ribbon?{"15m":lv.ribbon}:null));
   const quadSvg=lv.quad?rgQuadSvg(lv.quad.plot,lv.quad.code):"";
   const quadTxt=lv.quad?`<div class="rgquad-now" style="color:${QCOL[lv.quad.code]||'#8b949e'}">${esc(lv.quad.text)}</div>`:"";
   const right=quadSvg?`<div class="rgq-wrap">${quadSvg}${quadTxt}</div>`:(lv.quad?`<p class="empty-inline">OI 사분면: ${esc(lv.quad.text)}</p>`:"");
-  return head+`<div class="rgc"><div class="market">${chips}</div>`+ribbon
-    +`<p class="empty-inline" style="color:var(--ice,#e6edf3)">판정: ${esc(lv.verdict||"—")}</p>`+warn
-    +`<div class="rgrow">${right}<div class="rgrow-perf">${perf}</div></div>`+note+`</div>`;
+  return summary+ribbon+`<div class="rgrow">${right}<div class="rgrow-perf">${perf}</div></div>`+note+`</div>`;
 }
 function ensureRegime(){
   const h=$("#regimeHost"); if(!h)return;
   h.innerHTML=regimePanel(REGIME);
   if(REGIME||RG_LOADING)return;
   RG_LOADING=true;
-  api("/api/regime").then(r=>r.json()).then(d=>{REGIME=d;}).catch(()=>{REGIME={live:{available:false,error:"레짐 로드 실패 — 새로고침으로 재시도"}};})
-    .finally(()=>{RG_LOADING=false;const h2=$("#regimeHost");if(h2)h2.innerHTML=regimePanel(REGIME);});
+  api("/api/regime").then(r=>r.json()).then(d=>{REGIME=d;}).catch(()=>{REGIME={live:{available:false,error:"레짐을 불러오지 못했습니다. 새로고침으로 다시 시도해 주세요."}};})
+    .finally(()=>{RG_LOADING=false;const h2=$("#regimeHost");if(h2)h2.innerHTML=regimePanel(REGIME);updateWarnStrip();});
 }
 /* 상대강도 — BTC vs 알트 (7일 상대수익률) */
 const RS_REGIME={ btc:["BTC 우위","btc"], alt:["알트 우위","alt"], neutral:["혼조","neutral"] };
@@ -656,19 +675,20 @@ function posSection(list){
   const rows=list.map(p=>{
     const dir=p.direction?`<span class="badge ${p.direction==='Long'?'long':'short'}">${dirKo(p.direction)}</span>`:"—";
     const up=p.upnl==null?'<span class="muted">—</span>':`<span class="${p.upnl>=0?'pos':'neg'}">${money(p.upnl)}</span>`;
-    const mm=p.margin_mode==='cross'?` <span class="badge cross" data-tip="교차(Cross) 마진 — 격리 규율 위반. 계좌 전체가 이 포지션의 담보">교차⚠</span>`:'';
-    const lev=(p.leverage?` <span class="ex">${p.leverage}x</span>`:"")+mm;
+    const mg=p.margin_mode==='cross'?'<span class="mgx-cross" data-tip="교차 마진은 계좌 전체가 이 포지션의 담보가 됩니다 — 격리 규율 위반">교차 (위반)</span>'
+      :p.margin_mode==='isolated'?'<span class="mgx-iso">격리</span>':'<span class="muted">—</span>';
+    const lev=p.leverage?` <span class="ex">${p.leverage}x</span>`:"";
     const pi=p.direction?pintFor(p):null;
     const plan=p.direction
       ?`<button class="btn sm pplan${pi?' on':''}" data-ex="${esc(p.exchange)}" data-sym="${esc(p.symbol)}" data-dir="${esc(p.direction)}" data-entry="${p.entry??''}" data-qty="${p.qty??''}" data-pv="${p.point_value??''}" data-tip="${pi?'사전 계획 있음 · 청산되면 자동으로 일지에 붙습니다 · 클릭해 수정':'청산 전에 계획을 적어두면 일지에 자동 반영 + 사전 기입 표식'}">${pi?'계획 ✓':'계획 적기'}</button>`
       :'<span class="muted">—</span>';
-    return `<tr><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td>
+    return `<tr${p.margin_mode==='cross'?' class="viol"':''}><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td><td>${mg}</td>
       <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td><td>${plan}</td></tr>`;
   }).join("");
   const crossN=list.filter(p=>p.margin_mode==='cross').length;
-  const crossWarn=crossN?`<div class="cross-warn">⚠ <b>교차(Cross) 모드 포지션 ${crossN}개</b> — 격리(Isolated) 규율 위반. 교차는 계좌 전체가 담보라 한 포지션의 손실이 다른 포지션까지 전염됩니다. 거래소에서 격리로 전환하세요. <span class="muted">(일지는 주문 경로 밖 — 차단은 불가, 감지·경고까지)</span></div>`:"";
+  const crossWarn=crossN?`<div class="cross-warn" style="margin-top:8px;margin-bottom:0">${crossN===1?'교차 마진으로 열린 포지션이 1건 있습니다':'교차 마진으로 열린 포지션이 '+crossN+'건 있습니다'}. 교차는 계좌 전체가 담보라 한 포지션의 손실이 다른 포지션까지 번집니다. 거래소에서 격리로 전환해 주세요. <span class="muted">(일지는 주문 경로 밖이라 차단은 할 수 없고, 감지와 경고까지만 가능합니다)</span></div>`:"";
   return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
-    ${crossWarn}<div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    <div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th>마진</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div>${crossWarn}</div>`;
 }
 function bindPosPlan(){$$(".pplan").forEach(b=>b.onclick=()=>openPint({exchange:b.dataset.ex,symbol:b.dataset.sym,direction:b.dataset.dir,entry:parseFloat(b.dataset.entry)||null,qty:parseFloat(b.dataset.qty)||null,point_value:parseFloat(b.dataset.pv)||null}));}
 async function ensurePositions(){
@@ -680,6 +700,7 @@ async function ensurePositions(){
     OPENPOS=j.positions||[];POS_ERR=j.error||null;PINTS=pj.intents||[];}
   catch(e){OPENPOS=[];POS_ERR="보유 포지션을 불러오지 못했습니다";}
   POS_LOADING=false; const h2=$("#posHost"); if(h2){h2.outerHTML=posSection(OPENPOS);bindPosPlan();}
+  updateWarnStrip();  // 교차 마진 위반은 규율 경고 스트립에도 집계됨
 }
 async function reloadPints(){
   try{PINTS=(await(await api("/api/position-intents")).json()).intents||[];}catch(e){}
@@ -774,17 +795,94 @@ function bindDashResizer(){
   rz.onkeydown=e=>{if(innerWidth<=1080)return;const me=$(".dash-me");if(!me)return;const cur=me.getBoundingClientRect().width;
     if(e.key==='ArrowLeft'){e.preventDefault();setX(cur-24);save();}else if(e.key==='ArrowRight'){e.preventDefault();setX(cur+24);save();}};
 }
+/* ---------- 리디자인 R4 (핸드오프 2026-07-06): 경고 스트립 · 오늘 할 일 · 점진 공개 ---------- */
+/* 규율 경고 스트립 — UX 우선순위 1: 위반은 어떤 화면 구성에서도 최상단에서 보인다 */
+function warnData(){
+  const cut=iso(new Date(Date.now()-7*86400000));
+  const rec=(DATA.trades||[]).filter(t=>{const d=trDate(t);return d&&d>=cut;});
+  const qrIds=(DATA.summary&&DATA.summary.quick_reentry_ids)||[];
+  const sv=rec.filter(t=>t.stop_violated===true).length;
+  const qr=rec.filter(t=>qrIds.includes(t.trade_id)).length;
+  const lq=rec.filter(t=>t.liquidated).length;
+  const cross=(OPENPOS||[]).filter(p=>p.margin_mode==='cross').length;
+  return {sv,qr,lq,cross,total:sv+qr+lq+cross};
+}
+function warnStrip(){
+  const w=warnData(), items=[];
+  if(w.total>0){
+    const parts=[];
+    if(w.sv)parts.push(`손절 미준수 ${w.sv}건`);
+    if(w.qr)parts.push(`30분 재진입 ${w.qr}건`);
+    if(w.lq)parts.push(`강제청산 ${w.lq}건`);
+    if(w.cross)parts.push(`교차 마진 위반 ${w.cross}건`);
+    const tradeViol=w.sv+w.qr+w.lq>0;
+    const advice=tradeViol?'규칙을 어긴 거래는 미루지 말고 복기해 주세요.':'거래소에서 해당 포지션을 격리 마진으로 전환해 주세요.';
+    const act=tradeViol?`<button class="btn sm" onclick="gotoViolations()">위반 거래 보기 →</button>`
+      :`<button class="btn sm" onclick="(function(){var p=document.querySelector('#posHost');if(p)p.scrollIntoView({behavior:'smooth',block:'start'});})()">포지션 확인 →</button>`;
+    items.push(`<div class="wstrip-item"><span class="livedot red"></span><span class="wk">규율 경고 ${w.total}건</span><span class="wtxt">최근 7일 사이 ${parts.join(', ')}이 있습니다. ${advice}</span><span class="sp"></span>${act}</div>`);
+  }
+  const lv=(REGIME&&REGIME.live)||{};
+  const dr=(lv.tfs||[]).find(t=>t.drift_on&&t.drift_pct!=null);
+  if(dr){
+    items.push(`<div class="wstrip-item amber"><span class="livedot amber"></span><span class="wk">표류 경고</span><span class="wtxt">${esc(String(dr.tf).toUpperCase())} ${esc(dr.name)} 구간에서 가격이 지난 24시간 동안 ${dr.drift_pct>0?'+':''}${dr.drift_pct}% 밀렸습니다. 박스 레벨을 믿기 어렵다는 경고이며, 방향 예측이 아닙니다.</span><span class="sp"></span><button class="btn sm" onclick="gotoRegimeDetail()">레짐 상세 보기 →</button></div>`);
+  }
+  return items.length?`<div class="wstrip">${items.join('')}</div>`:'';
+}
+function updateWarnStrip(){const h=$("#warnHost");if(h)h.innerHTML=warnStrip();}
+/* 딥링크 — 경고/CTA에서 저널 필터·레짐 상세로 한 번에 */
+function gotoViolations(){JT.stop='violated';JT.status='all';JT.page=1;if(curView()==='journal')route();else location.hash='journal';}
+function gotoUnreviewed(){JT.status='unreviewed';JT.stop='all';JT.page=1;if(curView()==='journal')route();else location.hash='journal';}
+function gotoRegimeDetail(){
+  RG_OPEN=true;try{localStorage.setItem('rgOpen','1');}catch(e){}
+  const h=$("#regimeHost");if(h){h.innerHTML=regimePanel(REGIME);h.scrollIntoView({behavior:'smooth',block:'start'});}
+}
+/* 오늘 할 일 — UX 우선순위 2: 미복기 거래가 한눈에, 클릭 한 번으로 복기 에디터(모달) */
+function todayCard(){
+  const un=(DATA.trades||[]).filter(t=>t.status!=='복기완료');
+  const n=un.length;
+  const rows=un.slice(0,3).map(t=>{
+    const k=toKST(t.closed_at)||{};
+    return `<div class="today-row" data-tid="${esc(t.trade_id)}" role="button" tabindex="0" aria-label="${esc(t.symbol)} 복기 열기">
+      <span class="sym">${esc(t.symbol)}</span>
+      ${t.direction?`<span class="badge ${t.direction==='Long'?'long':'short'}">${dirKo(t.direction)}</span>`:''}
+      <span style="flex:1"></span>
+      <span class="tpnl ${(t.pnl||0)>=0?'pos':'neg'}">${money(t.pnl)}</span>
+      <span class="tt">${esc(k.str||'')}</span></div>`;}).join('');
+  const head=n?`복기하지 않은 청산 거래가 ${n}건 있습니다.`:`모든 청산 거래의 복기가 끝났습니다.`;
+  return `<div class="today-card"><span class="eyebrow">TODAY · 복기 대기</span><span class="today-head">${head}</span>
+    ${n?`<div class="today-rows">${rows}</div><button class="btn cta" onclick="gotoUnreviewed()">복기 시작하기 (${n}건)</button>`
+       :`<span class="rg-note">새 거래가 청산되면 이 자리에 복기할 거래가 표시됩니다.</span>`}</div>`;
+}
+function bindToday(){$$(".today-row").forEach(r=>{const f=()=>openModal(r.dataset.tid);r.onclick=f;
+  r.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();f();}};});}
+/* 사이드바 저널 항목의 미복기 카운트 뱃지 */
+function updateNavBadge(){
+  const a=$('.nav a[data-view="journal"]');if(!a)return;
+  const n=(DATA&&DATA.trades)?DATA.trades.filter(t=>t.status!=='복기완료').length:0;
+  let b=a.querySelector('.navbadge');
+  if(!b){b=document.createElement('span');b.className='navbadge';b.setAttribute('data-tip','복기하지 않은 거래 수');a.appendChild(b);}
+  b.textContent=n;b.style.display=n?'':'none';
+}
+
 function renderDashboard(el){
-  const market=marketStrip(MARKET)+`<div id="regimeHost">${regimePanel(REGIME)}</div><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div><div id="liqmapHost"></div>`;
-  if(!DATA.trades.length){el.innerHTML=market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
-  const mine=`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
+  const strip=`<div id="warnHost">${warnStrip()}</div>`;
+  if(!DATA.trades.length){
+    el.innerHTML=strip+marketStrip(MARKET)+`<div class="dgrid2"><div id="regimeHost">${regimePanel(REGIME)}</div><div id="posHost"></div></div>`+onboarding()
+      +`<div class="dgrid2"><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div></div><div id="liqHost"></div><div id="liqmapHost"></div>`;
+    const ep=$("#emptyPull");if(ep)ep.onclick=pull;
+    ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;
+  }
+  // 위계(핸드오프 불변): 경고 → 시장 컨텍스트 → [오늘 할 일 | 레짐 요약] → [포지션 | 청산] → 누적 통계 → 인사이트 → 최근 일지 → 시장 보조
+  el.innerHTML=strip
+    +marketStrip(MARKET)
+    +`<div class="dgrid2"><div id="todayHost">${todayCard()}</div><div id="regimeHost">${regimePanel(REGIME)}</div></div>`
+    +`<div class="dgrid2"><div id="posHost"></div><div id="liqHost"></div></div>`
+    +`<div class="section-title">누적 통계</div>`+statCards(DATA.summary)
     +disciplineCard(DATA.trades)
-    +`<div id="posHost"></div>`
-    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음. 깔끔합니다.</p>`)
-    +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
-  // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 가운데 리사이저로 폭 조절.
-  el.innerHTML=`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="컬럼 너비 조절 (드래그·좌우 화살표)" tabindex="0"></div><div class="dash-mkt">${market}</div></div>`;
-  bindCards();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();bindDashResizer();
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">지금은 눈에 띄는 위험 신호가 없습니다.</p>`)
+    +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,6))
+    +`<div class="dgrid2" style="margin-top:var(--s5)"><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div></div><div id="liqmapHost"></div>`;
+  bindToday();bindCards();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}
