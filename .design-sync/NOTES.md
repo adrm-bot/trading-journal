@@ -1,5 +1,10 @@
 # design-sync 노트 — 트레이딩 저널
 
+- **대기 중(2026-07-06)**: Claude Design에 대시보드/저널/인사이트 리디자인 프롬프트 전달됨(레포 밖).
+  시안이 돌아오면 한 사이클로 처리하기로 함 — ① 시안을 app.html/app.css 토큰 체계로 구현(규약 위반은 필터링)
+  ② adrm-natural-writing 스킬로 사용자 대면 문구 전면 패스(확정 용어 맵·완결 문장 규칙은 메모리 ui-wording-preference 참조)
+  ③ pytest + DEV E2E + Render 배포.
+
 - 2026-07-06 첫 시도: 저장소에 package.json/Storybook/노드 빌드 없음(전수 Glob 확인) — 정식 sync 불가.
   사용자 선택 = "스타일 가이드만 수동 제작".
 - `ds-bundle/` 구성: `styles.css` → `_ds_journal.css`(= `app/static/app.css` 사본) @import,
