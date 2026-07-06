@@ -407,13 +407,18 @@ function spark(vals){
   const w=72,h=16,n=vals.length,mn=Math.min(...vals),mx=Math.max(...vals),rg=(mx-mn)||1;
   const pts=vals.slice().reverse().map((v,i)=>`${(i/(n-1)*w).toFixed(1)},${(h-(v-mn)/rg*(h-2)-1).toFixed(1)}`).join(" ");
   return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-hidden="true"><polyline points="${pts}" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>`;}
+/* 가격 추이 스파크 래퍼 — newest-first 배열, 30일 방향으로 색(상승=pos/하락=neg) */
+function pxspark(arr){
+  if(!arr||arr.length<2)return '';
+  const up=arr[0]>=arr[arr.length-1];
+  return ` <span class="pxsp ${up?'pos':'neg'}" data-tip="최근 ${arr.length}일 추이 (일봉 종가)">${spark(arr)}</span>`;}
 function marketStrip(m){
   if(!m)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 불러오는 중…</div></div>`;
   const chips=[];
   if(m.btc){const tf=m.btc.tf;
     const tfTxt=tf?TFL.map(([k,lab])=>`${lab} ${(TREND[(tf[k]||{}).trend]||["","미판정"])[1]}`).join(" · "):`일봉 ${trendBasis(m.btc)}`;
     const tip=`판단: EMA50/EMA200 정·역배열 · ${tfTxt} · 세 봉 같은 방향=추세 강함, 엇갈리면 전환·횡보 · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
-    chips.push(mchip("비트코인 추세",tfRow(m.btc),`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}`,"",tip));}
+    chips.push(mchip("비트코인 추세",tfRow(m.btc),`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}${pxspark(m.btc.spark)}`,"",tip));}
   if(m.dom){const d=m.dom;
     const main=`<div class="domr"><span class="dl">BTC.D</span><span class="dv">${d.btc}%</span>${tfArrows(d.btcd_tf)}</div>`
       +`<div class="domr"><span class="dl">USDT.D</span><span class="dv">${d.usdt}%</span>${tfArrows(d.usdtd_tf)}</div>`;
@@ -568,7 +573,7 @@ function rsPanel(m){
       +`<span class="rsbarwrap"><span class="rsbar ${strong?'pos':'neg'}" style="width:${w}%"></span></span>`
       +`<span class="num ${strong?'pos':'neg'}">${fmtv(b.vs_btc_7d)}</span></div>`;
   }).join("");
-  const ethsnap=eth?`<span class="rseth">ETH ${usd(eth.price)} · 24h ${chgTxt(eth.chg24)} · 7d ${chgTxt(eth.chg7)}</span>`:'';
+  const ethsnap=eth?`<span class="rseth">ETH ${usd(eth.price)} · 24h ${chgTxt(eth.chg24)} · 7d ${chgTxt(eth.chg7)}${pxspark(eth.spark)}</span>`:'';
   return `<div class="section-title">상대강도 · BTC vs 알트 (7일)</div>
     <div class="card rscard">
       <div class="rsspec ${reg[1]}">
@@ -633,8 +638,8 @@ function flowPanel(m){
   if(!d&&!(s&&s.top&&s.top.length))return "";
   let html=`<div class="section-title">자금 흐름 · 섹터</div><div class="card flowcard">`;
   if(d&&d.total)html+=`<div class="flowrow">`
-    +flowm("TOTAL",fmtBig(d.total),"전체 시총",d.total_vol?fmtBig(d.total_vol):null)
-    +flowm("TOTAL2",fmtBig(d.total2),"BTC 제외",null)
+    +flowm("TOTAL",fmtBig(d.total),`전체 시총${pxspark(d.total_spark)}`,d.total_vol?fmtBig(d.total_vol):null)
+    +flowm("TOTAL2",fmtBig(d.total2),`BTC 제외${pxspark(d.total2_spark)}`,null)
     +flowm("TOTAL3",fmtBig(d.total3),"BTC+ETH 제외",null)
     +flowm("OTHERS",fmtBig(d.others_usd),`상위 제외 · ${d.others}%`,null)
     +`</div>`;

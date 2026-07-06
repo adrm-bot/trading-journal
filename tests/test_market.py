@@ -46,6 +46,14 @@ def test_alt_board_no_btc_chg7_yields_no_rows():
     assert board == []
 
 
+def test_coin_includes_price_spark_newest_first():
+    # 가격 추이 스파크: 이미 받은 일봉 재사용, newest-first(F&G·알트시즌 규약), 30개
+    c = market._coin(_FakeEx(), "BTC/USDT")
+    assert len(c["spark"]) == 30
+    assert c["spark"][0] == c["price"]           # 첫 원소 = 최신 종가
+    assert c["spark"][0] > c["spark"][-1]        # 오름세 캔들이므로 최신 > 과거
+
+
 def test_alts_are_unique_and_include_requested_sectors():
     assert len(market.ALTS) == len(set(market.ALTS))       # 중복 없음
     assert market.ALTS[0] == "ETH"                          # 대장 스냅샷용 첫 항목

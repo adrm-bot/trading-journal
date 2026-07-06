@@ -66,7 +66,9 @@ def _coin(ex, symbol, mtf=False):
            "chg7": round(chg7, 2) if chg7 is not None else None,
            "chg90": round(chg90, 2) if chg90 is not None else None,
            "ema50": round(e50, 2) if e50 is not None else None,
-           "ema200": round(e200, 2) if e200 is not None else None}
+           "ema200": round(e200, 2) if e200 is not None else None,
+           # 최근 30일 종가 스파크(newest-first: F&G·알트시즌과 동일 규약) — 이미 받은 캔들 재사용(추가 호출 0)
+           "spark": [round(c, 8) for c in closes[-30:]][::-1] if len(closes) >= 10 else None}
     if mtf:  # 1h·4h·1d 각각 EMA50/200 추세 (1d는 이미 받은 캔들 재사용)
         tf = {}
         for t in _TFS:
@@ -144,6 +146,9 @@ def _tv_market():
     if n >= 30:  # 알트 점유율 = TOTAL2/TOTAL × 100, 최근 90일(newest-first: spark 규약)
         share = [round(t2[-n + i] / tt[-n + i] * 100, 2) for i in range(n)]
         out["altshare"] = share[-90:][::-1]
+        # TOTAL/TOTAL2 30일 가격 추이 — 이미 받은 시계열 재사용(실데이터, 키 없으면 미제공=정직)
+        out["total_spark"] = [round(v) for v in tt[-30:]][::-1]
+        out["total2_spark"] = [round(v) for v in t2[-30:]][::-1]
     return out
 
 
@@ -306,5 +311,8 @@ def get_context(force=False):
         data["dom"]["trend_real"] = bool(real)
     if data.get("altseason") and real and real.get("altshare"):  # 알트 점유율 실시계열
         data["altseason"]["spark"] = real["altshare"]
+    if data.get("dom") and real:  # TOTAL/TOTAL2 30일 추이(실시계열만 — 프록시로 지어내지 않음)
+        data["dom"]["total_spark"] = real.get("total_spark")
+        data["dom"]["total2_spark"] = real.get("total2_spark")
     _CACHE["data"], _CACHE["at"] = data, now
     return data

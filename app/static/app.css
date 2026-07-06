@@ -445,6 +445,7 @@ input.err:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(var(--neg-rg
 .domr .tfrow{gap:7px}
 /* 공포·탐욕 흐름 스파크라인 */
 .spark{width:72px;height:16px;vertical-align:middle}
+.pxsp{white-space:nowrap;cursor:help} .pxsp .spark{width:56px;height:13px}
 .fngflow{display:inline-block} .fngd{color:var(--dim);font-size:var(--fs-micro);margin-left:6px}
 /* 알트시즌 게이지 */
 .asg{display:block;position:relative;height:6px;border-radius:3px;margin-top:7px;background:linear-gradient(90deg,rgba(var(--neg-rgb),.55),var(--card-2) 50%,rgba(var(--pos-rgb),.55))}
