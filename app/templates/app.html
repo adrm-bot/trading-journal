@@ -707,22 +707,28 @@ async function reloadPints(){
 
 /* ---------- 실시간 청산 체결(공개 WS · 예측형 히트맵 아님) ---------- */
 function liqCard(d){
-  if(!d||!d.available)return `<div id="liqHost"><div class="section-title">실시간 청산</div><div class="card"><p class="muted" style="margin:0;font-size:var(--fs-sm)">${esc((d&&d.reason)||'청산 스트림 연결 대기')} · 공개 스트림에서 실제 청산 체결이 들어오면 표시됩니다(예측 아님).</p></div></div>`;
-  const src=d.source?EXN(d.source)||d.source:'', tot=(d.longs_usd||0)+(d.shorts_usd||0);
-  const lp=tot>0?Math.round(d.longs_usd/tot*100):50;
-  const split=`<div class="liqsplit"><span class="liqseg neg" style="width:${lp}%"></span><span class="liqseg pos" style="width:${100-lp}%"></span></div>
-    <div class="liqleg"><span class="neg">롱 청산 ${fmtBig(d.longs_usd)}</span><span class="pos">숏 청산 ${fmtBig(d.shorts_usd)}</span></div>`;
-  // 가격대별 미니 맵(실제 체결) — 상위 밴드만, 롱=빨강/숏=초록
-  const bins=(d.map&&d.map.bins||[]).slice().sort((a,b)=>(b.long+b.short)-(a.long+a.short)).slice(0,10)
-    .sort((a,b)=>b.lo-a.lo);
-  const mx=Math.max(1,...bins.map(b=>b.long+b.short));
-  const mapRows=bins.map(b=>{const lw=b.long/mx*100,sw=b.short/mx*100;
-    return `<div class="liqrow"><span class="liqpx num">${fmtP(Math.round((b.lo+b.hi)/2))}</span><span class="liqbar"><span class="neg" style="width:${lw}%"></span><span class="pos" style="width:${sw}%"></span></span><span class="num muted">${fmtBig(b.long+b.short)}</span></div>`;}).join('');
-  const mapBlock=bins.length?`<div class="liqmaphdr">${esc(d.map.symbol)} 가격대별 청산 <span class="muted">· 실제 체결 누적</span></div><div class="liqmap">${mapRows}</div>`:'';
-  const tape=(d.tape||[]).map(t=>`<div class="srow"><span class="snm">${esc(t.sym)} <span class="${t.side==='long'?'neg':'pos'}">${t.side==='long'?'롱':'숏'}</span></span><span class="num muted">${fmtP(t.price)}</span><span class="num ${t.side==='long'?'neg':'pos'}">${fmtBig(t.notional)}</span></div>`).join('');
-  const cap=`최근 ${d.since_min||0}분 · ${d.n||0}건 · ${esc(src)} 공개 스트림 · 실제 청산 체결(예측 아님) · 베타`;
-  const fills=`${split}${mapBlock}${tape?`<div class="liqtapehdr">최근 대형 청산</div><div class="sess">${tape}</div>`:''}<div class="ccap muted">${cap}</div>`;
-  const defPane=d.oi?'oi':'fills';  // OI 실데이터 있으면 OI 먼저, 없으면 실데이터 있는 청산 체결 먼저(정직한 기본 탭)
+  d=d||{};
+  // 청산 체결 pane — 스트림 있으면 실데이터, 없으면 연결 대기 안내. 미결제약정 탭은 스트림 가용성과 무관하게 항상 표시.
+  let fills;
+  if(d.available){
+    const src=d.source?EXN(d.source)||d.source:'', tot=(d.longs_usd||0)+(d.shorts_usd||0);
+    const lp=tot>0?Math.round(d.longs_usd/tot*100):50;
+    const split=`<div class="liqsplit"><span class="liqseg neg" style="width:${lp}%"></span><span class="liqseg pos" style="width:${100-lp}%"></span></div>
+      <div class="liqleg"><span class="neg">롱 청산 ${fmtBig(d.longs_usd)}</span><span class="pos">숏 청산 ${fmtBig(d.shorts_usd)}</span></div>`;
+    // 가격대별 미니 맵(실제 체결) — 상위 밴드만, 롱=빨강/숏=초록
+    const bins=(d.map&&d.map.bins||[]).slice().sort((a,b)=>(b.long+b.short)-(a.long+a.short)).slice(0,10)
+      .sort((a,b)=>b.lo-a.lo);
+    const mx=Math.max(1,...bins.map(b=>b.long+b.short));
+    const mapRows=bins.map(b=>{const lw=b.long/mx*100,sw=b.short/mx*100;
+      return `<div class="liqrow"><span class="liqpx num">${fmtP(Math.round((b.lo+b.hi)/2))}</span><span class="liqbar"><span class="neg" style="width:${lw}%"></span><span class="pos" style="width:${sw}%"></span></span><span class="num muted">${fmtBig(b.long+b.short)}</span></div>`;}).join('');
+    const mapBlock=bins.length?`<div class="liqmaphdr">${esc(d.map.symbol)} 가격대별 청산 <span class="muted">· 실제 체결 누적</span></div><div class="liqmap">${mapRows}</div>`:'';
+    const tape=(d.tape||[]).map(t=>`<div class="srow"><span class="snm">${esc(t.sym)} <span class="${t.side==='long'?'neg':'pos'}">${t.side==='long'?'롱':'숏'}</span></span><span class="num muted">${fmtP(t.price)}</span><span class="num ${t.side==='long'?'neg':'pos'}">${fmtBig(t.notional)}</span></div>`).join('');
+    const cap=`최근 ${d.since_min||0}분 · ${d.n||0}건 · ${esc(src)} 공개 스트림 · 실제 청산 체결(예측 아님) · 베타`;
+    fills=`${split}${mapBlock}${tape?`<div class="liqtapehdr">최근 대형 청산</div><div class="sess">${tape}</div>`:''}<div class="ccap muted">${cap}</div>`;
+  }else{
+    fills=`<p class="muted" style="margin:0;font-size:var(--fs-sm)">${esc(d.reason||'청산 스트림 연결 대기')} · 공개 스트림에서 실제 청산 체결이 들어오면 표시됩니다(예측 아님).</p>`;
+  }
+  const defPane=d.oi?'oi':(d.available?'fills':'oi');  // OI 데이터 있으면 OI · 없고 청산 스트림 있으면 청산 · 둘 다 없으면 미결제약정을 기본 탭으로
   return `<div id="liqHost"><div class="section-title">미결제약정 · 실시간 청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 공개 스트림</span></div>
     <div class="card liqcard"><div class="liqtabs"><button class="liqtab${defPane==='oi'?' on':''}" onclick="liqTab(this,'oi')">미결제약정</button><button class="liqtab${defPane==='fills'?' on':''}" onclick="liqTab(this,'fills')">청산 체결</button></div><div class="liqpane" data-pane="oi"${defPane==='oi'?'':' hidden'}>${oiBlock(d.oi,'24h')}</div><div class="liqpane" data-pane="fills"${defPane==='fills'?'':' hidden'}>${fills}</div></div></div>`;
 }
