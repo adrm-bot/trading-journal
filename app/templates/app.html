@@ -471,7 +471,7 @@ function rgRibbonSvg(rbs){
 }
 function rgQuadSvg(qp,code){
   if(!qp||!qp.points||!qp.points.length)return "";
-  const S=190,C=S/2,PAD=16;
+  const S=168,C=S/2,PAD=16;
   const mx=Math.max(...qp.points.map(p=>Math.abs(p.x)),(qp.dz_x||0)*2.2,0.03)*1.15;
   const my=Math.max(...qp.points.map(p=>Math.abs(p.y)),(qp.dz_y||0)*2.2,0.03)*1.15;
   const X=v=>C+(v/mx)*(C-PAD), Y=v=>C-(v/my)*(C-PAD);
@@ -851,7 +851,7 @@ function econStrip(ev){if(!ev||!ev.length)return"";return `<div class="econ" rol
 function renderDashboard(el){
   const gripSVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
   const mp=(key,html,pin)=>`<section class="mkt-panel${pin?' pin':''}" data-panel="${key}"${pin?'':' draggable="true"'}>${pin?'':`<button class="drag-h" tabindex="-1" aria-hidden="true" title="드래그해서 순서 변경">${gripSVG}</button>`}${html}</section>`;
-  const market=mp('econ',econStrip(ECON_EVENTS)||'<div class="econ"><span class="ek">경제 이벤트</span><span class="eitem"><span class="et">실데이터 연동 예정</span></span></div>',true)+mp('strip',marketStrip(MARKET),true)+mp('regime',`<div id="regimeHost">${regimePanel(REGIME)}</div>`)+mp('rsflow',`<div class="mkt-half"><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div></div>`)+mp('liq',`<div id="liqHost"></div>`)+mp('liqmap',`<div id="liqmapHost"></div>`);
+  const market=mp('econ',econStrip(ECON_EVENTS)||'<div class="econ"><span class="ek">경제 이벤트</span><span class="eitem"><span class="et">실데이터 연동 예정</span></span></div>',true)+mp('strip',marketStrip(MARKET),true)+mp('regime',`<div id="regimeHost">${regimePanel(REGIME)}</div>`)+mp('liq',`<div id="liqHost"></div>`)+mp('rsflow',`<div class="mkt-half"><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div></div>`)+mp('liqmap',`<div id="liqmapHost"></div>`);
   if(!DATA.trades.length){el.innerHTML=`<div id="warnHost">${warnStrip()}</div>`+market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
   const mine=todayCard()
     +`<div id="posHost"></div>`
