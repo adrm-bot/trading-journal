@@ -39,7 +39,6 @@
     </div>
   </main>
 </div>
-<div class="jdock" id="jdock" hidden aria-label="매매일지 도크"></div>
 
 <div class="modal-bg" id="modalBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMeta">
   <button type="button" class="mclose" id="closeBtn" aria-label="닫기">×</button>
@@ -142,6 +141,7 @@ let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAV
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
 let PINTS=[], PEDIT=null, PINT_SAVING=false;  // 보유 포지션 사전 계획
 let LIQ=null, LIQ_LOADING=false;  // 실시간 청산 체결(공개 WS)
+const ECON_EVENTS=[];  // 경제 이벤트: 실데이터는 Phase 3(TVRemix 캘린더) — 지금은 빈 배열(가짜 날짜 금지)
 let LIQMAP=null;  // 예측형 청산맵(KingFisher · 유료 스캐폴드)
 let REGIME=null, RG_LOADING=false;  // 시장 레짐(15m/1h/4h)+레짐별 성과 (공개 REST·무키)
 let JT={from:'',to:'',q:'',exchange:'all',dir:'all',status:'all',strategy:'all',emotion:'all',outcome:'all',mistake:'all',stop:'all',eff:'all',setupg:'all',execg:'all',conv:'all',exitr:'all',qr:'all',sortKey:'closed_at',sortDir:'desc',page:1,size:25,view:'cards'}, jtDebounce;
@@ -230,7 +230,6 @@ function route(){
   $("#actions").innerHTML=VIEWS[view].actions();
   $$(".view").forEach(s=>s.hidden=true); $("#view-"+view).hidden=false;
   VIEWS[view].render($("#view-"+view));
-  renderDock();  // 매매일지 도크는 대시보드에서만 — 뷰 전환 시 표시/숨김 갱신
   if($("#pullBtn"))$("#pullBtn").onclick=pull; if($("#refreshBtn"))$("#refreshBtn").onclick=refresh;
   updateNavBadge();
 }
@@ -379,7 +378,7 @@ function tradeCard(r){
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl">${dir} <b>${esc(r.symbol)}</b>${xr}${svb}${qrb}${r.preplanned?' <span class="badge pp" data-tip="청산 전에 적어둔 계획이 자동으로 붙은 거래 — 사후 기입과 구분되는 진짜 사전 계획">사전 기입</span>':''}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
       <div class="jhr"><span class="${(r.pnl||0)>=0?'pos':'neg'}">${money(r.pnl)}</span>${rcell}${eff}${rx}</div></div>
-    <div class="jmeta">${meta}</div>${stats}${legsLine(r)}${planLevels(r)}${body}</div>`;
+    <div class="jmid"><div class="jmeta">${meta}</div>${stats}${legsLine(r)}${planLevels(r)}</div><div class="jbody">${body}</div></div>`;
 }
 function journalCards(rows){return `<div class="jfeed">`+rows.map(tradeCard).join("")+`</div>`;}
 function bindCards(){$$(".jcard").forEach(c=>{c.onclick=()=>openModal(c.dataset.id);
@@ -674,20 +673,20 @@ function posSection(list){
   const rows=list.map(p=>{
     const dir=p.direction?`<span class="badge ${p.direction==='Long'?'long':'short'}">${dirKo(p.direction)}</span>`:"—";
     const up=p.upnl==null?'<span class="muted">—</span>':`<span class="${p.upnl>=0?'pos':'neg'}">${money(p.upnl)}</span>`;
-    const mg=p.margin_mode==='cross'?'<span class="mgx-cross" data-tip="교차 마진은 계좌 전체가 이 포지션의 담보가 됩니다 — 격리 규율 위반">교차 (위반)</span>'
-      :p.margin_mode==='isolated'?'<span class="mgx-iso">격리</span>':'<span class="muted">—</span>';
     const lev=p.leverage?` <span class="ex">${p.leverage}x</span>`:"";
     const pi=p.direction?pintFor(p):null;
+    const _sl=p.sl??(pi&&pi.sl),_tp=p.tp??(pi&&pi.tp),_tp2=p.tp2??(pi&&pi.tp2);
+    const lvls=(_sl!=null||_tp!=null)?`<div class="poslv">${_sl!=null?`<span class="lv lvsl">SL ${fmtP(_sl)}</span>`:''}${_tp!=null?`<span class="lv lvtp">TP ${fmtP(_tp)}</span>`:''}${_tp2!=null?`<span class="lv lvtp">TP2 ${fmtP(_tp2)}</span>`:''}</div>`:'<span class="muted">미설정</span>';
     const plan=p.direction
       ?`<button class="btn sm pplan${pi?' on':''}" data-ex="${esc(p.exchange)}" data-sym="${esc(p.symbol)}" data-dir="${esc(p.direction)}" data-entry="${p.entry??''}" data-qty="${p.qty??''}" data-pv="${p.point_value??''}" data-tip="${pi?'사전 계획 있음 · 청산되면 자동으로 일지에 붙습니다 · 클릭해 수정':'청산 전에 계획을 적어두면 일지에 자동 반영 + 사전 기입 표식'}">${pi?'계획 ✓':'계획 적기'}</button>`
       :'<span class="muted">—</span>';
-    return `<tr${p.margin_mode==='cross'?' class="viol"':''}><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}</td><td>${dir}</td><td>${mg}</td>
-      <td class="num">${fmtP(p.entry)}</td><td class="num">${fmtP(p.mark)}</td><td class="num">${up}</td><td>${plan}</td></tr>`;
+    return `<tr${p.margin_mode==='cross'?' class="viol"':''}><td>${esc(p.symbol)} <span class="ex">${esc(EXN(p.exchange))}</span>${lev}${p.margin_mode==='cross'?' <span class="mgx-cross" data-tip="교차 마진 · 격리 규율 위반">교차</span>':''}</td><td>${dir}</td>
+      <td class="num">${fmtP(p.entry)} <span class="muted">→</span> ${fmtP(p.mark)}</td><td class="num">${up}</td><td>${lvls}</td><td>${plan}</td></tr>`;
   }).join("");
   const crossN=list.filter(p=>p.margin_mode==='cross').length;
   const crossWarn=crossN?`<div class="cross-warn">⚠ <b>교차(Cross) 모드 포지션 ${crossN}개</b> — 격리(Isolated) 규율 위반. 교차는 계좌 전체가 담보라 한 포지션의 손실이 다른 포지션까지 전염됩니다. 거래소에서 격리로 전환하세요. <span class="muted">(일지는 주문 경로 밖 — 차단은 불가, 감지·경고까지)</span></div>`:"";
   return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
-    ${crossWarn}<div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th>마진</th><th class="num">진입가</th><th class="num">현재가</th><th class="num">미실현손익</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    ${crossWarn}<div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입 → 현재</th><th class="num">미실현손익</th><th>손절 / 익절</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
 function bindPosPlan(){$$(".pplan").forEach(b=>b.onclick=()=>openPint({exchange:b.dataset.ex,symbol:b.dataset.sym,direction:b.dataset.dir,entry:parseFloat(b.dataset.entry)||null,qty:parseFloat(b.dataset.qty)||null,point_value:parseFloat(b.dataset.pv)||null}));}
 async function ensurePositions(){
@@ -722,8 +721,10 @@ function liqCard(d){
   const mapBlock=bins.length?`<div class="liqmaphdr">${esc(d.map.symbol)} 가격대별 청산 <span class="muted">· 실제 체결 누적</span></div><div class="liqmap">${mapRows}</div>`:'';
   const tape=(d.tape||[]).map(t=>`<div class="srow"><span class="snm">${esc(t.sym)} <span class="${t.side==='long'?'neg':'pos'}">${t.side==='long'?'롱':'숏'}</span></span><span class="num muted">${fmtP(t.price)}</span><span class="num ${t.side==='long'?'neg':'pos'}">${fmtBig(t.notional)}</span></div>`).join('');
   const cap=`최근 ${d.since_min||0}분 · ${d.n||0}건 · ${esc(src)} 공개 스트림 · 실제 청산 체결(예측 아님) · 베타`;
-  return `<div id="liqHost"><div class="section-title">실시간 청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 실제 체결</span></div>
-    <div class="card liqcard">${split}${mapBlock}${tape?`<div class="liqtapehdr">최근 대형 청산</div><div class="sess">${tape}</div>`:''}<div class="ccap muted">${cap}</div></div></div>`;
+  const fills=`${split}${mapBlock}${tape?`<div class="liqtapehdr">최근 대형 청산</div><div class="sess">${tape}</div>`:''}<div class="ccap muted">${cap}</div>`;
+  const defPane=d.oi?'oi':'fills';  // OI 실데이터 있으면 OI 먼저, 없으면 실데이터 있는 청산 체결 먼저(정직한 기본 탭)
+  return `<div id="liqHost"><div class="section-title">미결제약정 · 실시간 청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· 공개 스트림</span></div>
+    <div class="card liqcard"><div class="liqtabs"><button class="liqtab${defPane==='oi'?' on':''}" onclick="liqTab(this,'oi')">미결제약정</button><button class="liqtab${defPane==='fills'?' on':''}" onclick="liqTab(this,'fills')">청산 체결</button></div><div class="liqpane" data-pane="oi"${defPane==='oi'?'':' hidden'}>${oiBlock(d.oi,'24h')}</div><div class="liqpane" data-pane="fills"${defPane==='fills'?'':' hidden'}>${fills}</div></div></div>`;
 }
 async function ensureLiquidations(){
   const h=$("#liqHost"); if(!h)return;
@@ -781,60 +782,6 @@ function disciplineCard(ts){
   }
   return `<div class="section-title">일일 규율 · 습관 비용</div><div class="mgrid">${c.join('')}</div>`+svTbl;
 }
-/* 대시보드 컬럼 너비 드래그 조절 — 리사이저로 --meW 설정, localStorage 기억. 데스크탑(>1080)만 */
-/* ---------- 매매일지 하단 도크(독립 스크롤·열 토글·정렬·펼침) ---------- */
-const DOCK={cols:2,sort:'recent',mode:'peek'};  // mode: peek(기본)·expanded·collapsed
-try{const c=+localStorage.getItem('dockCols');if([1,2,4].includes(c))DOCK.cols=c;
-    const s=localStorage.getItem('dockSort');if(s)DOCK.sort=s;
-    const m=localStorage.getItem('dockMode');if(m)DOCK.mode=m;}catch(e){}
-function dockSort(rows){const a=rows.slice();
-  if(DOCK.sort==='pnl')a.sort((x,y)=>(y.pnl||0)-(x.pnl||0));
-  else if(DOCK.sort==='unrev')a.sort((x,y)=>((x.status!=='복기완료')?0:1)-((y.status!=='복기완료')?0:1));
-  else a.sort((x,y)=>String(trDate(y)||'').localeCompare(String(trDate(x)||'')));  // 최신순
-  return a;}
-function renderDock(){
-  const dock=$("#jdock");if(!dock)return;
-  const onDash=curView()==='dashboard', trades=(DATA&&DATA.trades)?DATA.trades:[];
-  if(!onDash||!trades.length){dock.hidden=true;dock.innerHTML='';document.body.style.paddingBottom='';return;}
-  const cols=DOCK.cols, cap=cols===4?12:cols===2?8:5, un=trades.filter(t=>t.status!=='복기완료').length;
-  const seg=[[1,'1열'],[2,'2열'],[4,'4열']].map(([c,l])=>`<button data-cols="${c}" aria-pressed="${cols===c?'true':'false'}">${l}</button>`).join('');
-  const cards=journalCards(dockSort(trades).slice(0,cap));  // journalCards가 .jfeed로 래핑
-  dock.hidden=false;
-  dock.className='jdock'+(DOCK.mode==='expanded'?' expanded':DOCK.mode==='collapsed'?' collapsed':'');
-  dock.innerHTML=`<div class="jdock-head">
-      <span class="jdock-grip" role="button" tabindex="0" aria-label="도크 펼치기·접기">${DOCK.mode==='expanded'?'▾':'▴'}</span>
-      <span class="jdock-title">매매일지<span class="n">${trades.length}건${un?` · 미복기 ${un}`:''}</span></span>
-      <div class="dock-seg" role="group" aria-label="열 수">${seg}</div>
-      <select class="jdock-sort" aria-label="정렬 기준">
-        <option value="recent"${DOCK.sort==='recent'?' selected':''}>최신순</option>
-        <option value="pnl"${DOCK.sort==='pnl'?' selected':''}>손익순</option>
-        <option value="unrev"${DOCK.sort==='unrev'?' selected':''}>미복기 먼저</option></select>
-      <div class="jdock-more"><a href="#journal">전체 거래 →</a>
-        <button class="jdock-collapse" aria-label="도크 ${DOCK.mode==='collapsed'?'펼치기':'접기'}">${DOCK.mode==='collapsed'?'▴':'▾'}</button></div>
-    </div>
-    <div class="jdock-body"><div class="jband c${cols}">${cards}</div></div>`;
-  bindDock();bindCards();sizeDash();
-}
-function bindDock(){
-  const dock=$("#jdock");if(!dock)return;
-  const setMode=m=>{DOCK.mode=m;try{localStorage.setItem('dockMode',m);}catch(e){}renderDock();};
-  dock.querySelectorAll('.dock-seg button').forEach(b=>b.onclick=()=>{DOCK.cols=+b.dataset.cols;try{localStorage.setItem('dockCols',DOCK.cols);}catch(e){}renderDock();});
-  const sel=dock.querySelector('.jdock-sort');if(sel)sel.onchange=()=>{DOCK.sort=sel.value;try{localStorage.setItem('dockSort',DOCK.sort);}catch(e){}renderDock();};
-  const grip=dock.querySelector('.jdock-grip');if(grip){const t=()=>setMode(DOCK.mode==='expanded'?'peek':'expanded');grip.onclick=t;grip.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();t();}};}
-  const col=dock.querySelector('.jdock-collapse');if(col)col.onclick=()=>setMode(DOCK.mode==='collapsed'?'peek':'collapsed');
-}
-function sizeDash(){
-  const dash3=$(".dash3");if(!dash3)return;
-  const dock=$("#jdock"), wide=innerWidth>1080;
-  const dh=(dock&&!dock.hidden)?dock.offsetHeight:0;
-  if(!wide){dash3.classList.remove('scrolls');dash3.style.removeProperty('--dashH');document.body.style.paddingBottom=dh?dh+'px':'';return;}
-  dash3.classList.add('scrolls');
-  const top=dash3.getBoundingClientRect().top;
-  const dockTop=(dock&&!dock.hidden)?dock.getBoundingClientRect().top:innerHeight;
-  dash3.style.setProperty('--dashH',Math.max(240,Math.round(dockTop-top-12))+'px');
-  document.body.style.paddingBottom='';
-}
-addEventListener('resize',()=>{if(curView()==='dashboard')sizeDash();});
 /* ---------- R4 선별 채택 (레이아웃 불변): 규율 경고 스트립 · 오늘 할 일 · 딥링크 · 내비 뱃지 ---------- */
 function warnData(){
   const cut=iso(new Date(Date.now()-7*86400000));
@@ -899,21 +846,81 @@ function updateNavBadge(){
   b.textContent=n;b.style.display=n?'':'none';
 }
 
+function econImpKo(i){return {high:'높음',med:'중간',low:'낮음'}[i]||'낮음';}
+function econStrip(ev){if(!ev||!ev.length)return"";return `<div class="econ" role="list" aria-label="경제 이벤트 일정"><span class="ek">경제 이벤트</span>`+ev.map(e=>`<span class="eitem imp-${e.imp||'low'}${e.dd<=3?' soon':''}" role="listitem" data-tip="중요도 ${econImpKo(e.imp)} · ${esc(e.t)} ${e.d}"><span class="eimp"></span><span class="ed">D-${e.dd}</span>${esc(e.t)}<span class="et">${e.d}</span></span>`).join("")+`<span class="econ-leg"><i class="ei-high"></i>높음<i class="ei-med"></i>중간<i class="ei-low"></i>낮음</span></div>`;}
 function renderDashboard(el){
-  const market=marketStrip(MARKET)+`<div id="regimeHost">${regimePanel(REGIME)}</div><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div><div id="liqmapHost"></div>`;
-  if(!DATA.trades.length){
-    el.innerHTML=`<div id="warnHost">${warnStrip()}</div><div class="dash3"><div class="dash-mkt">${market}</div><div class="dash-hair" aria-hidden="true"></div><div class="dash-me"><div id="posHost"></div>${onboarding()}</div></div>`;
-    const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
-  // 우 컬럼 = 매매 브리프(오늘 할 일·핵심지표·규율·포지션·행동 인사이트). 매매일지는 하단 도크로 분리(독립 스크롤).
-  const brief=todayCard()
+  const gripSVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
+  const mp=(key,html,pin)=>`<section class="mkt-panel${pin?' pin':''}" data-panel="${key}"${pin?'':' draggable="true"'}>${pin?'':`<button class="drag-h" tabindex="-1" aria-hidden="true" title="드래그해서 순서 변경">${gripSVG}</button>`}${html}</section>`;
+  const market=mp('econ',econStrip(ECON_EVENTS)||'<div class="econ"><span class="ek">경제 이벤트</span><span class="eitem"><span class="et">실데이터 연동 예정</span></span></div>',true)+mp('strip',marketStrip(MARKET),true)+mp('regime',`<div id="regimeHost">${regimePanel(REGIME)}</div>`)+mp('rsflow',`<div class="mkt-half"><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div></div>`)+mp('liq',`<div id="liqHost"></div>`)+mp('liqmap',`<div id="liqmapHost"></div>`);
+  if(!DATA.trades.length){el.innerHTML=`<div id="warnHost">${warnStrip()}</div>`+market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
+  const mine=todayCard()
+    +`<div id="posHost"></div>`
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음. 깔끔합니다.</p>`)
     +`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +disciplineCard(DATA.trades)
-    +`<div id="posHost"></div>`
-    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음. 깔끔합니다.</p>`);
-  // 중앙=시장 맥락(주) · 얇은 하이라인 · 우=매매 브리프(620). 아침 동선: 시장 확인 → 내 상태 → 하단 일지 복기.
-  el.innerHTML=`<div id="warnHost">${warnStrip()}</div><div class="dash3"><div class="dash-mkt">${market}</div><div class="dash-hair" aria-hidden="true"></div><div class="dash-me">${brief}</div></div>`;
-  bindToday();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();
+  ;
+  // R2 B안: 중앙=시장(아침 루틴 기점) · 우=내 브리프 620px 고정 · 하단=일지 밴드(독립 스크롤)
+  el.innerHTML=`<div id="warnHost">${warnStrip()}</div>`+`<div class="dash3"><div class="dash-mkt" id="mktCol">${market}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-hidden="true"></div><div class="dash-me">${mine}</div></div>`+`<div class="jdock" id="jdock"><button class="jdock-grip" onclick="toggleDockExpand()" aria-label="일지 크게·작게 보기" data-tip="일지 크게 보기 · 다시 누르면 작게"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15l6-6 6 6"/></svg></button><div class="jdock-inner"><div class="jdock-head"><span class="jdock-title">매매일지 <span class="jdock-count">${DATA.trades.length}건</span></span><div class="jdock-cols" role="group" aria-label="카드 열 수"><button class="jdcol" onclick="setDockCols(1)" data-cols="1">1</button><button class="jdcol" onclick="setDockCols(2)" data-cols="2">2</button><button class="jdcol" onclick="setDockCols(4)" data-cols="4">4</button></div><label class="jdock-sortl">정렬 <select class="jdock-sort" id="jdockSort" onchange="sortDock(this.value)"><option value="recent">최신순</option><option value="old">오래된순</option><option value="pnl">손익 높은순</option><option value="pnlAsc">손익 낮은순</option><option value="r">R 높은순</option></select></label><a class="jdock-all" href="#journal">전체 거래 보기</a><button class="jdock-toggle" id="jdockToggle" aria-label="일지 도크 접기·펴기" aria-expanded="true">▾</button></div><div class="jdock-body" id="jdockBody">${journalCards(dockSorted())}</div></div></div>`;
+  bindToday();bindCards();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();bindMktDnD();applyMktOrder();bindJdock();requestAnimationFrame(sizeDash);if(!window.__dashRz){window.__dashRz=1;addEventListener('resize',()=>requestAnimationFrame(sizeDash));}
 }
+/* R2b: 시장 패널 드래그 재정렬 */
+function mktAfter(col,y){const els=[...col.querySelectorAll('.mkt-panel:not(.pin):not(.dragging)')];let best=null,bo=-Infinity;els.forEach(ch=>{const b=ch.getBoundingClientRect();const off=y-b.top-b.height/2;if(off<0&&off>bo){bo=off;best=ch;}});return best;}
+function bindMktDnD(){const col=document.getElementById('mktCol');if(!col)return;let drag=null;
+  col.querySelectorAll('.drag-h').forEach(h=>h.addEventListener('mousedown',()=>{window.__mktGrab=true;}));
+  if(!window.__mktUp){window.__mktUp=1;document.addEventListener('mouseup',()=>{window.__mktGrab=false;});}
+  col.querySelectorAll('.mkt-panel:not(.pin)').forEach(p=>{
+    p.addEventListener('dragstart',e=>{if(!window.__mktGrab){e.preventDefault();return;}drag=p;p.classList.add('dragging');col.classList.add('drag-live');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','p');}catch(_){}});
+    p.addEventListener('dragend',()=>{col.classList.remove('drag-live');if(drag)drag.classList.remove('dragging');drag=null;saveMktOrder();});});
+  col.addEventListener('dragover',e=>{if(!drag)return;e.preventDefault();const a=mktAfter(col,e.clientY);if(a==null)col.appendChild(drag);else col.insertBefore(drag,a);});}
+function saveMktOrder(){const col=document.getElementById('mktCol');if(!col)return;const order=[...col.querySelectorAll('.mkt-panel:not(.pin)')].map(p=>p.dataset.panel);try{localStorage.setItem('mktOrder',JSON.stringify(order));}catch(e){}}
+function applyMktOrder(){const col=document.getElementById('mktCol');if(!col)return;let order;try{order=JSON.parse(localStorage.getItem('mktOrder')||'null');}catch(e){}if(!order||!order.length)return;order.forEach(k=>{const el=col.querySelector('.mkt-panel[data-panel="'+k+'"]');if(el&&!el.classList.contains('pin'))col.appendChild(el);});}
+/* R2b: 일지 도크 접기/펴기 */
+let DOCK_SORT=(function(){try{return localStorage.getItem('dockSort')||'recent';}catch(e){return 'recent';}})();
+function dockSorted(){const t=(DATA.trades||[]).slice();const k=DOCK_SORT,dt=x=>(x.closed_at||'');
+  if(k==='pnl')t.sort((a,b)=>(b.pnl||0)-(a.pnl||0));
+  else if(k==='pnlAsc')t.sort((a,b)=>(a.pnl||0)-(b.pnl||0));
+  else if(k==='r')t.sort((a,b)=>((b.r==null?-1e9:b.r)-(a.r==null?-1e9:a.r)));
+  else if(k==='old')t.sort((a,b)=>dt(a)<dt(b)?-1:1);
+  else t.sort((a,b)=>dt(a)<dt(b)?1:-1);
+  return t;}
+function sortDock(v){DOCK_SORT=v;try{localStorage.setItem('dockSort',v);}catch(e){}const b=document.getElementById('jdockBody');if(b){b.innerHTML=journalCards(dockSorted());bindCards();}}
+let DOCK_COLS=(function(){try{return +localStorage.getItem('dockCols')||2;}catch(e){return 2;}})();
+function applyDockCols(){const b=document.getElementById('jdockBody');if(b){b.classList.remove('cols-1','cols-2','cols-4');b.classList.add('cols-'+DOCK_COLS);}const g=document.querySelector('.jdock-cols');if(g)g.querySelectorAll('.jdcol').forEach(x=>x.classList.toggle('on',+x.dataset.cols===DOCK_COLS));}
+function setDockCols(nn){DOCK_COLS=nn;try{localStorage.setItem('dockCols',nn);}catch(e){}applyDockCols();}
+function toggleDockExpand(){const d=document.getElementById('jdock');const host=document.getElementById('view-dashboard');if(!d)return;const ex=d.classList.toggle('expanded');if(ex&&host)host.classList.remove('dock-collapsed');try{localStorage.setItem('dockExpanded',ex?'1':'');}catch(e){}requestAnimationFrame(sizeDash);}
+function sizeDash(){const dash=document.querySelector('#view-dashboard .dash3');if(!dash)return;
+  if(innerWidth<=1080){dash.classList.remove('scrolls');dash.style.height='';return;}
+  const dock=document.getElementById('jdock');
+  const dashTop=dash.getBoundingClientRect().top;
+  const dockTop=dock?dock.getBoundingClientRect().top:innerHeight;
+  dash.classList.add('scrolls');
+  dash.style.height=Math.max(260,Math.round(dockTop-dashTop-12))+'px';}
+function bindJdock(){const t=document.getElementById('jdockToggle');const host=document.getElementById('view-dashboard');if(!t||!host)return;
+  const ss=document.getElementById('jdockSort');if(ss)ss.value=DOCK_SORT;
+  try{if(localStorage.getItem('dockExpanded')==='1')document.getElementById('jdock').classList.add('expanded');}catch(e){}
+  applyDockCols();
+  try{if(localStorage.getItem('jdockCollapsed')==='1'){host.classList.add('dock-collapsed');t.setAttribute('aria-expanded','false');}}catch(e){}
+  t.onclick=()=>{const c=host.classList.toggle('dock-collapsed');if(c){const d=document.getElementById('jdock');if(d)d.classList.remove('expanded');}t.setAttribute('aria-expanded',String(!c));try{localStorage.setItem('jdockCollapsed',c?'1':'');}catch(e){}requestAnimationFrame(sizeDash);};}
+/* R2b: 청산/미결제약정 탭 + OI 블록 */
+function liqTab(btn,which){const card=btn.closest('.liqcard');if(!card)return;card.querySelectorAll('.liqtab').forEach(b=>b.classList.toggle('on',b===btn));card.querySelectorAll('.liqpane').forEach(p=>{p.hidden=(p.dataset.pane!==which);});}
+function oiLevel(p){if(p==null)return['보통','lv-normal'];if(p>=90)return['과열 · 위험','lv-risk'];if(p>=70)return['높음','lv-high'];if(p<30)return['낮음','lv-low'];return['보통','lv-normal'];}
+function oiInsight(oc,pc,tfl){const oUp=oc>=0,pUp=pc>=0;
+  if(oUp&&pUp)return `${tfl} 미결제약정 ↑ · 가격 ↑ → 신규 롱 유입, 추세에 힘이 실림`;
+  if(oUp&&!pUp)return `${tfl} 미결제약정 ↑ · 가격 ↓ → 신규 숏 유입, 하방 압력 우세`;
+  if(!oUp&&pUp)return `${tfl} 미결제약정 ↓ · 가격 ↑ → 숏 커버링 반등, 추세 지속력 약함`;
+  return `${tfl} 미결제약정 ↓ · 가격 ↓ → 롱 정리(디레버리징), 과열 해소`;}
+function oiBlock(oi,tf){if(!oi)return '<p class="muted" style="margin:0;font-size:var(--fs-sm)">미결제약정 데이터 없음</p>';
+  tf=tf||'24h';const TFS=[['1h','1H'],['4h','4H'],['24h','24H'],['7d','7D']];
+  const chg=(oi.tf&&oi.tf[tf]!=null)?oi.tf[tf]:(oi.chg24||0);
+  const tfl={'1h':'1시간','4h':'4시간','24h':'24시간','7d':'7일'}[tf]||tf;
+  const lv=oiLevel(oi.pct_rank), pc=(typeof MARKET!=='undefined'&&MARKET&&MARKET.btc)?(MARKET.btc.chg24||0):0;
+  const arr=(oi.by_symbol||[]),mx=Math.max(1,...arr.map(x=>x.usd||0));
+  const rows=arr.map(x=>{const w=Math.round((x.usd||0)/mx*100),c=(x.chg24>=0?'pos':'neg');
+    return `<div class="oirow"><span class="oisym">${esc(x.sym)}</span><span class="oitrack"><span class="oifill" style="width:${w}%"></span></span><span class="oiu"><span class="num">${fmtBig(x.usd)}</span><span class="num ${c}">${(x.chg24>=0?'+':'')+x.chg24}%</span></span></div>`;}).join('');
+  const seg=TFS.map(([k,lab])=>`<button class="oitfb${k===tf?' on':''}" onclick="oiTf(this,'${k}')">${lab}</button>`).join('');
+  const lsr=oi.ls_ratio!=null?oi.ls_ratio.toFixed(2):'—';
+  return `<div class="oitop"><div class="oitf">${seg}</div><span class="oilevel ${lv[1]}" data-tip="현재 미결제약정이 최근 90일 대비 상위 ${oi.pct_rank!=null?oi.pct_rank+'%':'—'} 수준">미결제약정 ${lv[0]}</span></div><div class="oihead"><div class="oim"><div class="oil">총 미결제약정</div><div class="oiv">${fmtBig(oi.total_usd)}</div></div><div class="oim"><div class="oil">${tfl} 변화</div><div class="oiv ${chg>=0?'pos':'neg'}">${(chg>=0?'+':'')+chg}%</div></div><div class="oim"><div class="oil">롱/숏 계정비</div><div class="oiv ${oi.ls_ratio>=1?'pos':'neg'}">${lsr}</div></div></div><div class="oi-insight"><span class="oi-il">해석</span>${oiInsight(chg,pc,tfl)}</div><div class="oibars">${rows}</div><div class="ccap muted">미결제약정(OI) · 전 거래소 합산 · 롱/숏은 계정 기준 · 타임프레임 전환 가능 · 베타</div>`;}
+function oiTf(btn,tf){const pane=btn.closest('.liqpane');if(!pane||!(LIQ&&LIQ.oi))return;pane.innerHTML=oiBlock(LIQ.oi,tf);}
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}
 function jtMatch(t){
