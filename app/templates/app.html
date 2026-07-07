@@ -3,34 +3,35 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>매매일지</title>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300..600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css" rel="stylesheet">
 <link rel="stylesheet" href="/static/app.css">
 </head><body>
 <a class="sr-only" href="#main">본문 바로가기</a>
 <div class="shell" id="shell">
-  <aside class="side">
-    <div class="side-top">
-      <div class="brand"><svg class="brand-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3h11a1 1 0 0 1 1 1v16a1 1 0 0 1-1 1H6a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M9 3v18"/></svg><span class="brand-lbl">매매일지</span></div>
-      <button class="navtoggle" id="navToggle" aria-label="메뉴 접기·펼치기" aria-pressed="false" data-tip="메뉴 접기·펼치기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg></button>
+  <header class="topnav" id="topnav">
+    <div class="tn-left">
+      <div class="brand"><span class="logo-tile" aria-hidden="true">TJ</span><span class="brand-lbl">TradingJournal</span></div>
+      <nav class="nav" aria-label="주 메뉴">
+        <a href="#dashboard" data-view="dashboard">대시보드</a>
+        <a href="#journal" data-view="journal">거래<span class="navbadge" id="navBadge" hidden></span></a>
+        <a href="#insights" data-view="insights">인사이트</a>
+        <a href="#settings" data-view="settings">설정</a>
+      </nav>
     </div>
-    <nav class="nav" aria-label="주 메뉴">
-      <a href="#dashboard" data-view="dashboard"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 20h18"/><path d="M7 20v-6M12 20v-11M17 20v-9"/></svg></span><span class="lbl">대시보드</span></a>
-      <a href="#journal" data-view="journal"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg></span><span class="lbl">거래</span></a>
-      <a href="#insights" data-view="insights"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h3l2.5 7 4-14 2.5 7h6"/></svg></span><span class="lbl">인사이트</span></a>
-      <a href="#settings" data-view="settings"><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="9" cy="6" r="2.2"/><circle cx="15" cy="12" r="2.2"/><circle cx="8" cy="18" r="2.2"/></svg></span><span class="lbl">설정</span></a>
-    </nav>
-    <div class="foot"><div class="email" id="email">—</div><a href="/logout">로그아웃</a></div>
-  </aside>
+    <div class="tn-right"><span class="email" id="email">—</span><a class="tn-logout" href="/logout">로그아웃</a></div>
+  </header>
   <main class="main" id="main">
-    <div class="topbar">
-      <div><div class="eyebrow tb-eyebrow" id="eyebrow">OVERVIEW</div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
-      <div class="tbar-right">
-        <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-3.8-3.8"/></svg>검색 <span class="kbd">⌘K</span></button>
-        <div id="actions"></div>
-      </div>
-    </div>
     <div id="pullbanner"></div>
     <div class="content">
+      <div class="pagehead">
+        <div><div class="eyebrow" id="eyebrow">OVERVIEW</div><h1 id="title">대시보드</h1><div class="desc" id="desc"></div></div>
+        <div class="tbar-right">
+          <button class="btn sm cmdk-trigger" id="cmdkBtn" aria-keyshortcuts="Control+K Meta+K" aria-label="검색 및 명령 (단축키 Ctrl 또는 Cmd K)"><svg class="btn-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m21 21-3.8-3.8"/></svg>검색 <span class="kbd">⌘K</span></button>
+          <div id="actions"></div>
+        </div>
+      </div>
       <section id="view-dashboard" class="view" aria-live="polite"></section>
       <section id="view-journal" class="view" hidden></section>
       <section id="view-insights" class="view" hidden></section>
@@ -38,6 +39,7 @@
     </div>
   </main>
 </div>
+<div class="jdock" id="jdock" hidden aria-label="매매일지 도크"></div>
 
 <div class="modal-bg" id="modalBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="modalTitle" aria-describedby="modalMeta">
   <button type="button" class="mclose" id="closeBtn" aria-label="닫기">×</button>
@@ -228,6 +230,7 @@ function route(){
   $("#actions").innerHTML=VIEWS[view].actions();
   $$(".view").forEach(s=>s.hidden=true); $("#view-"+view).hidden=false;
   VIEWS[view].render($("#view-"+view));
+  renderDock();  // 매매일지 도크는 대시보드에서만 — 뷰 전환 시 표시/숨김 갱신
   if($("#pullBtn"))$("#pullBtn").onclick=pull; if($("#refreshBtn"))$("#refreshBtn").onclick=refresh;
   updateNavBadge();
 }
@@ -779,18 +782,59 @@ function disciplineCard(ts){
   return `<div class="section-title">일일 규율 · 습관 비용</div><div class="mgrid">${c.join('')}</div>`+svTbl;
 }
 /* 대시보드 컬럼 너비 드래그 조절 — 리사이저로 --meW 설정, localStorage 기억. 데스크탑(>1080)만 */
-function bindDashResizer(){
-  const dash3=$(".dash3"), rz=$(".dash-resizer"); if(!dash3||!rz)return;
-  try{const w=localStorage.getItem('dashMeW'); if(w)dash3.style.setProperty('--meW',w);}catch(e){}
-  const MIN=300, save=()=>{try{localStorage.setItem('dashMeW',dash3.style.getPropertyValue('--meW'));}catch(e){}};
-  const setX=x=>{const r=dash3.getBoundingClientRect();const v=Math.max(MIN,Math.min(r.width-12-MIN,x));dash3.style.setProperty('--meW',Math.round(v)+'px');};
-  rz.onmousedown=e=>{if(innerWidth<=1080)return;e.preventDefault();rz.classList.add('dragging');document.body.style.userSelect='none';
-    const mv=ev=>setX(ev.clientX-dash3.getBoundingClientRect().left);
-    const up=()=>{document.removeEventListener('mousemove',mv);document.removeEventListener('mouseup',up);rz.classList.remove('dragging');document.body.style.userSelect='';save();};
-    document.addEventListener('mousemove',mv);document.addEventListener('mouseup',up);};
-  rz.onkeydown=e=>{if(innerWidth<=1080)return;const me=$(".dash-me");if(!me)return;const cur=me.getBoundingClientRect().width;
-    if(e.key==='ArrowLeft'){e.preventDefault();setX(cur-24);save();}else if(e.key==='ArrowRight'){e.preventDefault();setX(cur+24);save();}};
+/* ---------- 매매일지 하단 도크(독립 스크롤·열 토글·정렬·펼침) ---------- */
+const DOCK={cols:2,sort:'recent',mode:'peek'};  // mode: peek(기본)·expanded·collapsed
+try{const c=+localStorage.getItem('dockCols');if([1,2,4].includes(c))DOCK.cols=c;
+    const s=localStorage.getItem('dockSort');if(s)DOCK.sort=s;
+    const m=localStorage.getItem('dockMode');if(m)DOCK.mode=m;}catch(e){}
+function dockSort(rows){const a=rows.slice();
+  if(DOCK.sort==='pnl')a.sort((x,y)=>(y.pnl||0)-(x.pnl||0));
+  else if(DOCK.sort==='unrev')a.sort((x,y)=>((x.status!=='복기완료')?0:1)-((y.status!=='복기완료')?0:1));
+  else a.sort((x,y)=>String(trDate(y)||'').localeCompare(String(trDate(x)||'')));  // 최신순
+  return a;}
+function renderDock(){
+  const dock=$("#jdock");if(!dock)return;
+  const onDash=curView()==='dashboard', trades=(DATA&&DATA.trades)?DATA.trades:[];
+  if(!onDash||!trades.length){dock.hidden=true;dock.innerHTML='';document.body.style.paddingBottom='';return;}
+  const cols=DOCK.cols, cap=cols===4?12:cols===2?8:5, un=trades.filter(t=>t.status!=='복기완료').length;
+  const seg=[[1,'1열'],[2,'2열'],[4,'4열']].map(([c,l])=>`<button data-cols="${c}" aria-pressed="${cols===c?'true':'false'}">${l}</button>`).join('');
+  const cards=journalCards(dockSort(trades).slice(0,cap));  // journalCards가 .jfeed로 래핑
+  dock.hidden=false;
+  dock.className='jdock'+(DOCK.mode==='expanded'?' expanded':DOCK.mode==='collapsed'?' collapsed':'');
+  dock.innerHTML=`<div class="jdock-head">
+      <span class="jdock-grip" role="button" tabindex="0" aria-label="도크 펼치기·접기">${DOCK.mode==='expanded'?'▾':'▴'}</span>
+      <span class="jdock-title">매매일지<span class="n">${trades.length}건${un?` · 미복기 ${un}`:''}</span></span>
+      <div class="dock-seg" role="group" aria-label="열 수">${seg}</div>
+      <select class="jdock-sort" aria-label="정렬 기준">
+        <option value="recent"${DOCK.sort==='recent'?' selected':''}>최신순</option>
+        <option value="pnl"${DOCK.sort==='pnl'?' selected':''}>손익순</option>
+        <option value="unrev"${DOCK.sort==='unrev'?' selected':''}>미복기 먼저</option></select>
+      <div class="jdock-more"><a href="#journal">전체 거래 →</a>
+        <button class="jdock-collapse" aria-label="도크 ${DOCK.mode==='collapsed'?'펼치기':'접기'}">${DOCK.mode==='collapsed'?'▴':'▾'}</button></div>
+    </div>
+    <div class="jdock-body"><div class="jband c${cols}">${cards}</div></div>`;
+  bindDock();bindCards();sizeDash();
 }
+function bindDock(){
+  const dock=$("#jdock");if(!dock)return;
+  const setMode=m=>{DOCK.mode=m;try{localStorage.setItem('dockMode',m);}catch(e){}renderDock();};
+  dock.querySelectorAll('.dock-seg button').forEach(b=>b.onclick=()=>{DOCK.cols=+b.dataset.cols;try{localStorage.setItem('dockCols',DOCK.cols);}catch(e){}renderDock();});
+  const sel=dock.querySelector('.jdock-sort');if(sel)sel.onchange=()=>{DOCK.sort=sel.value;try{localStorage.setItem('dockSort',DOCK.sort);}catch(e){}renderDock();};
+  const grip=dock.querySelector('.jdock-grip');if(grip){const t=()=>setMode(DOCK.mode==='expanded'?'peek':'expanded');grip.onclick=t;grip.onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();t();}};}
+  const col=dock.querySelector('.jdock-collapse');if(col)col.onclick=()=>setMode(DOCK.mode==='collapsed'?'peek':'collapsed');
+}
+function sizeDash(){
+  const dash3=$(".dash3");if(!dash3)return;
+  const dock=$("#jdock"), wide=innerWidth>1080;
+  const dh=(dock&&!dock.hidden)?dock.offsetHeight:0;
+  if(!wide){dash3.classList.remove('scrolls');dash3.style.removeProperty('--dashH');document.body.style.paddingBottom=dh?dh+'px':'';return;}
+  dash3.classList.add('scrolls');
+  const top=dash3.getBoundingClientRect().top;
+  const dockTop=(dock&&!dock.hidden)?dock.getBoundingClientRect().top:innerHeight;
+  dash3.style.setProperty('--dashH',Math.max(240,Math.round(dockTop-top-12))+'px');
+  document.body.style.paddingBottom='';
+}
+addEventListener('resize',()=>{if(curView()==='dashboard')sizeDash();});
 /* ---------- R4 선별 채택 (레이아웃 불변): 규율 경고 스트립 · 오늘 할 일 · 딥링크 · 내비 뱃지 ---------- */
 function warnData(){
   const cut=iso(new Date(Date.now()-7*86400000));
@@ -857,16 +901,18 @@ function updateNavBadge(){
 
 function renderDashboard(el){
   const market=marketStrip(MARKET)+`<div id="regimeHost">${regimePanel(REGIME)}</div><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div><div id="liqHost"></div><div id="liqmapHost"></div>`;
-  if(!DATA.trades.length){el.innerHTML=`<div id="warnHost">${warnStrip()}</div>`+market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
-  const mine=todayCard()
+  if(!DATA.trades.length){
+    el.innerHTML=`<div id="warnHost">${warnStrip()}</div><div class="dash3"><div class="dash-mkt">${market}</div><div class="dash-hair" aria-hidden="true"></div><div class="dash-me"><div id="posHost"></div>${onboarding()}</div></div>`;
+    const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
+  // 우 컬럼 = 매매 브리프(오늘 할 일·핵심지표·규율·포지션·행동 인사이트). 매매일지는 하단 도크로 분리(독립 스크롤).
+  const brief=todayCard()
     +`<div class="section-title">핵심 지표</div>`+statCards(DATA.summary)
     +disciplineCard(DATA.trades)
     +`<div id="posHost"></div>`
-    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음. 깔끔합니다.</p>`)
-    +`<div class="section-title">최근 일지</div>`+journalCards(DATA.trades.slice(0,8));
-  // 좌=내 트레이딩(KPI·포지션·인사이트·매매일지, 주) · 우=시장 맥락(보조). 가운데 리사이저로 폭 조절.
-  el.innerHTML=`<div id="warnHost">${warnStrip()}</div>`+`<div class="dash3"><div class="dash-me">${mine}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="컬럼 너비 조절 (드래그·좌우 화살표)" tabindex="0"></div><div class="dash-mkt">${market}</div></div>`;
-  bindToday();bindCards();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();bindDashResizer();
+    +`<div class="section-title">행동 인사이트</div>`+(flagsBlock(DATA.summary)||`<p class="empty-inline">위험 신호 없음. 깔끔합니다.</p>`);
+  // 중앙=시장 맥락(주) · 얇은 하이라인 · 우=매매 브리프(620). 아침 동선: 시장 확인 → 내 상태 → 하단 일지 복기.
+  el.innerHTML=`<div id="warnHost">${warnStrip()}</div><div class="dash3"><div class="dash-mkt">${market}</div><div class="dash-hair" aria-hidden="true"></div><div class="dash-me">${brief}</div></div>`;
+  bindToday();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();
 }
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}
@@ -1924,10 +1970,5 @@ document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;c
 /* 규율 미니테이블 등 → 해당 거래 모달(행에 data-tid) */
 document.addEventListener('click',e=>{const g=e.target.closest&&e.target.closest('.grow[data-tid]');if(g)openModal(g.dataset.tid);});
 document.addEventListener('keydown',e=>{if(e.key!=='Enter'&&e.key!==' ')return;const g=e.target.closest&&e.target.closest('.grow[data-tid]');if(g){e.preventDefault();openModal(g.dataset.tid);}});
-(function(){const sh=$("#shell"),b=$("#navToggle");if(!sh||!b)return;  /* 사이드바 토글(데스크탑) — 상태 기억 */
-  const set=off=>{sh.classList.toggle('nav-off',off);b.setAttribute('aria-pressed',String(off));try{localStorage.setItem('navOff',off?'1':'');}catch(e){}};
-  b.onclick=()=>set(!sh.classList.contains('nav-off'));
-  try{if(localStorage.getItem('navOff'))set(true);}catch(e){}
-})();
 (async()=>{paintBootSkeleton();try{await loadAll();route();nudgeUnplanned();streakWarn();autoSync();}catch(e){$("#view-dashboard").innerHTML='<div class="empty"><div class="em" style="color:var(--neg)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 2 20h20z"/><path d="M12 10v4M12 17h.01"/></svg></div><h2>불러오기 실패</h2><p>새로고침 해주세요.</p><button class="btn primary" onclick="location.reload()">↻ 다시 시도</button></div>';}})();
 </script></body></html>
