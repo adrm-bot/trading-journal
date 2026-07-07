@@ -50,6 +50,29 @@ def test_scale_out_vwap_exit():
     assert _json.loads(out[0]["exit_legs"]) == [[120.0, 1.0], [140.0, 1.0]]
 
 
+def test_exit_legs_merged_by_order():
+    """한 청산 주문이 수십 체결로 쪼개져 들어와도 레그는 주문 단위로 1개(vwap). P&L·수량 불변."""
+    trades = [fill(1, "BUY", 100, 4, T0, order="o1")] + [
+        fill(10 + i, "SELL", 120 + i, 1, T0 + 60_000 + i, pnl=20.0 + i, order="o2") for i in range(4)]
+    out = engine.reconstruct_walk("binance", "ETHUSDT", trades)
+    assert len(out) == 1
+    r = out[0]
+    assert r["qty"] == 4.0
+    assert r["exit_count"] == 1        # 4체결 → 1주문 → 1레그
+    assert r["exit_legs"] is None      # 단일 레그는 분할 상세 미저장(설계)
+    assert r["exit"] == 121.5          # vwap((120+121+122+123)/4)
+    assert abs(r["pnl"] - (20 + 21 + 22 + 23)) < ROUND   # P&L=realizedPnl 합(병합 무관)
+
+
+def test_exit_legs_distinct_orders_kept():
+    """서로 다른 청산 주문은 별도 레그로 유지(진짜 분할청산)."""
+    trades = [fill(1, "BUY", 100, 2, T0),
+              fill(2, "SELL", 120, 1, T0 + 60_000, pnl=20.0, order="oA"),
+              fill(3, "SELL", 140, 1, T0 + 120_000, pnl=40.0, order="oB")]
+    out = engine.reconstruct_walk("binance", "ETHUSDT", trades)
+    assert out[0]["exit_count"] == 2
+
+
 def test_flip_long_to_short():
     trades = [fill(1, "BUY", 100, 2, T0),
               fill(2, "SELL", 110, 3, T0 + 60_000, pnl=20.0),

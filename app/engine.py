@@ -283,7 +283,15 @@ def reconstruct_walk(exchange, symbol, trades, funding_events=None):
                 close_q = min(q, abs(net))
                 frac = close_q / q if q else 1.0
                 pos["xn"] += price * close_q; pos["xq"] += close_q
-                pos["legs"].append((round(price, 10), round(close_q, 10)))  # 청산 레그 보존
+                # 청산 레그: 같은 청산 주문의 분할 체결(거래소가 한 주문을 수십 체결로 쪼갬)은 한 레그로
+                # 병합(vwap). orderId 없으면(주문 정보 미제공) 체결별 레그로 폴백. P&L·vwap엔 영향 없음.
+                oid = str(t.get("orderId") or t.get("order") or "")
+                if oid and pos["legs"] and pos.get("_loid") == oid:
+                    pl, pq = pos["legs"][-1]; nq = pq + close_q
+                    pos["legs"][-1] = (round((pl * pq + price * close_q) / nq, 10), round(nq, 10))
+                else:
+                    pos["legs"].append((round(price, 10), round(close_q, 10)))
+                pos["_loid"] = oid
                 pos["fee"] += fee * frac; pos["rp"] += realized
                 net += (-close_q if net > 0 else close_q)  # net을 0쪽으로
                 leftover = q - close_q
@@ -360,6 +368,7 @@ def _ccxt_to_fill(t):
     info = t.get("info") or {}
     realized = info.get("pnl") or info.get("realised_pnl") or info.get("realizedPnl") or 0
     return {"time": int(t.get("timestamp") or 0), "id": str(t.get("id") or t.get("order") or ""),
+            "order": str(t.get("order") or info.get("order_id") or info.get("orderId") or ""),  # 레그 병합용
             "side": str(t.get("side") or "").upper(), "price": float(t.get("price") or 0),
             "qty": abs(float(t.get("amount") or 0)), "commission": float((t.get("fee") or {}).get("cost") or 0),
             "realizedPnl": float(realized or 0), "positionSide": "BOTH"}

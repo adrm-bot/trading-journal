@@ -5,11 +5,14 @@ DAY = 86_400_000
 T0 = 1_700_000_000_000  # 고정 기준 ms (UTC)
 
 
-def fill(tid, side, price, qty, t, *, pnl=0.0, fee=0.0, pos_side="BOTH"):
-    """Binance/Gate userTrades fill (reconstruct_walk 입력 스키마)."""
-    return {"id": str(tid), "time": int(t), "side": side, "price": float(price),
-            "qty": float(qty), "commission": float(fee), "realizedPnl": float(pnl),
-            "positionSide": pos_side}
+def fill(tid, side, price, qty, t, *, pnl=0.0, fee=0.0, pos_side="BOTH", order=None):
+    """Binance/Gate userTrades fill (reconstruct_walk 입력 스키마). order=청산 주문ID(레그 병합용)."""
+    d = {"id": str(tid), "time": int(t), "side": side, "price": float(price),
+         "qty": float(qty), "commission": float(fee), "realizedPnl": float(pnl),
+         "positionSide": pos_side}
+    if order is not None:
+        d["orderId"] = str(order)
+    return d
 
 
 def cpnl(order_id, symbol, side, entry, exit_, size, pnl, created, updated=None, *,
