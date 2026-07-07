@@ -226,12 +226,14 @@ tr.grow:focus-visible td{background:var(--card-2)}
 #view-dashboard.dock-collapsed .jdock-body{display:none}
 #view-dashboard.dock-collapsed{padding-bottom:64px}
 #view-dashboard.dock-collapsed .jdock-toggle{transform:rotate(180deg)}
-/* R2b: 시장 패널 드래그 재정렬 */
-.mkt-panel{position:relative}
-.mkt-panel.dragging{opacity:.45}
-.mkt-panel>.drag-h{position:absolute;top:8px;right:8px;width:26px;height:22px;display:none;align-items:center;justify-content:center;cursor:grab;color:var(--slate);background:var(--card-2);border:1px solid var(--line-2);border-radius:var(--r-badge);z-index:3;padding:0}
+/* R2b: 시장 패널 드래그 재정렬 (드롭 표시선·리프트) */
+.mkt-panel{position:relative;transition:opacity .12s ease}
+.mkt-panel.dragging{opacity:.35}
+.mkt-panel>.drag-h{position:absolute;top:8px;right:8px;width:28px;height:24px;display:none;align-items:center;justify-content:center;cursor:grab;color:var(--slate);background:var(--card-2);border:1px solid var(--line-2);border-radius:var(--r-badge);z-index:3;padding:0;transition:color .12s,background .12s,box-shadow .12s}
 .mkt-panel:not(.pin):hover>.drag-h{display:flex}
-.mkt-panel>.drag-h:hover{color:var(--moonlight)} .mkt-panel>.drag-h:active{cursor:grabbing}
+.mkt-panel>.drag-h:hover{color:var(--moonlight);background:var(--panel);box-shadow:var(--inset)} .mkt-panel>.drag-h:active{cursor:grabbing;color:var(--glacier)}
+/* 드롭 위치 표시선 — 실제 패널을 옮기지 않고 여기로 떨어질 것임을 표시(안 튐) */
+.mkt-drop{height:2px;margin:4px 2px;border-radius:2px;background:var(--indigo);box-shadow:0 0 8px 1px rgba(94,106,210,.55);pointer-events:none}
 .mkt-panel>.drag-h svg{width:13px;height:13px;display:block}
 .dash-mkt.drag-live .mkt-panel:not(.pin){outline:1px dashed var(--line-2);outline-offset:3px;border-radius:var(--r-card)}
 /* R2b: 상대강도 · 자금흐름 반반 한 줄 */

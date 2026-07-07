@@ -871,13 +871,19 @@ function renderDashboard(el){
 }
 /* R2b: 시장 패널 드래그 재정렬 */
 function mktAfter(col,y){const els=[...col.querySelectorAll('.mkt-panel:not(.pin):not(.dragging)')];let best=null,bo=-Infinity;els.forEach(ch=>{const b=ch.getBoundingClientRect();const off=y-b.top-b.height/2;if(off<0&&off>bo){bo=off;best=ch;}});return best;}
-function bindMktDnD(){const col=document.getElementById('mktCol');if(!col)return;let drag=null;
+function bindMktDnD(){const col=document.getElementById('mktCol');if(!col)return;let drag=null,ind=null;
+  const dropLine=()=>{if(!ind){ind=document.createElement('div');ind.className='mkt-drop';ind.setAttribute('aria-hidden','true');}return ind;};
+  const clear=()=>{if(ind&&ind.parentNode)ind.remove();};
   col.querySelectorAll('.drag-h').forEach(h=>h.addEventListener('mousedown',()=>{window.__mktGrab=true;}));
   if(!window.__mktUp){window.__mktUp=1;document.addEventListener('mouseup',()=>{window.__mktGrab=false;});}
   col.querySelectorAll('.mkt-panel:not(.pin)').forEach(p=>{
-    p.addEventListener('dragstart',e=>{if(!window.__mktGrab){e.preventDefault();return;}drag=p;p.classList.add('dragging');col.classList.add('drag-live');try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','p');}catch(_){}});
-    p.addEventListener('dragend',()=>{col.classList.remove('drag-live');if(drag)drag.classList.remove('dragging');drag=null;saveMktOrder();});});
-  col.addEventListener('dragover',e=>{if(!drag)return;e.preventDefault();const a=mktAfter(col,e.clientY);if(a==null)col.appendChild(drag);else col.insertBefore(drag,a);});}
+    p.addEventListener('dragstart',e=>{if(!window.__mktGrab){e.preventDefault();return;}drag=p;col.classList.add('drag-live');
+      try{e.dataTransfer.effectAllowed='move';e.dataTransfer.setData('text/plain','p');}catch(_){}
+      requestAnimationFrame(()=>{if(drag)drag.classList.add('dragging');});});  // 고스트 스냅샷 후 원본만 흐리게(리프트 느낌)
+    p.addEventListener('dragend',()=>{col.classList.remove('drag-live');if(drag)drag.classList.remove('dragging');clear();drag=null;saveMktOrder();});});
+  col.addEventListener('dragover',e=>{if(!drag)return;e.preventDefault();e.dataTransfer.dropEffect='move';
+    const a=mktAfter(col,e.clientY),i=dropLine();if(a==null)col.appendChild(i);else col.insertBefore(i,a);});  // 실제 패널은 안 움직이고 표시선만 이동(안 튐)
+  col.addEventListener('drop',e=>{if(!drag||!ind||!ind.parentNode)return;e.preventDefault();col.insertBefore(drag,ind);});}
 function saveMktOrder(){const col=document.getElementById('mktCol');if(!col)return;const order=[...col.querySelectorAll('.mkt-panel:not(.pin)')].map(p=>p.dataset.panel);try{localStorage.setItem('mktOrder',JSON.stringify(order));}catch(e){}}
 function applyMktOrder(){const col=document.getElementById('mktCol');if(!col)return;let order;try{order=JSON.parse(localStorage.getItem('mktOrder')||'null');}catch(e){}if(!order||!order.length)return;order.forEach(k=>{const el=col.querySelector('.mkt-panel[data-panel="'+k+'"]');if(el&&!el.classList.contains('pin'))col.appendChild(el);});}
 /* R2b: 일지 도크 접기/펴기 */
