@@ -47,6 +47,13 @@ def _trend(closes):
     return t, e50, e200
 
 
+def _trailing_change(closes, bars):
+    """마지막 값 기준 bars개 전 대비 변화율. 표본이 모자라면 추정하지 않는다."""
+    if not closes or len(closes) <= bars or not closes[-1 - bars]:
+        return None
+    return round((closes[-1] / closes[-1 - bars] - 1) * 100, 2)
+
+
 # 멀티 타임프레임(BTC): 단기 1h · 중기 4h · 주추세 1d 정렬을 한눈에
 _TFS = ("1h", "4h", "1d")
 
@@ -71,10 +78,13 @@ def _coin(ex, symbol, mtf=False):
            "spark": [round(c, 8) for c in closes[-30:]][::-1] if len(closes) >= 10 else None}
     if mtf:  # 1h·4h·1d 각각 EMA50/200 추세 (1d는 이미 받은 캔들 재사용)
         tf = {}
+        hourly = None
         for t in _TFS:
             try:
                 cl = closes if t == "1d" else [
                     x[4] for x in ex.fetch_ohlcv(symbol, t, limit=300) if x and x[4]]
+                if t == "1h":
+                    hourly = cl
                 tr, a, b = _trend(cl)
                 tf[t] = {"trend": tr,
                          "ema50": round(a, 2) if a is not None else None,
@@ -82,6 +92,14 @@ def _coin(ex, symbol, mtf=False):
             except Exception:  # noqa: BLE001
                 tf[t] = {"trend": None, "ema50": None, "ema200": None}
         out["tf"] = tf
+        # OI 카드의 기간 선택과 가격축을 정확히 맞추기 위한 후행 변화율.
+        # 이미 추세 판정용으로 받은 1시간봉을 재사용하므로 외부 호출은 늘지 않는다.
+        out["chg_tf"] = {
+            "1h": _trailing_change(hourly, 1),
+            "4h": _trailing_change(hourly, 4),
+            "24h": _trailing_change(hourly, 24) if hourly else out.get("chg24"),
+            "7d": _trailing_change(hourly, 24 * 7) if hourly else out.get("chg7"),
+        }
     return out
 
 

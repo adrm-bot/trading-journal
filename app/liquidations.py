@@ -135,6 +135,22 @@ def _aggregate(events, now_ms, window_min=60, map_symbol=MAP_SYMBOL, nbins=22):
     tape = sorted(recent, key=lambda e: e["notional"], reverse=True)[:6]
     tape = [{"sym": e["sym"], "side": e["side"], "notional": e["notional"],
              "price": e["price"], "t": e["t"]} for e in tape]
+    # 건별 테이프보다 시장 충격 규모를 빠르게 읽도록 고정 명목가 구간으로 집계한다.
+    # 임계값을 데이터에 맞춰 움직이면 같은 금액의 의미가 시점마다 달라지므로 고정한다.
+    specs = (("small", "소형", 0, 100_000),
+             ("medium", "중형", 100_000, 1_000_000),
+             ("large", "대형", 1_000_000, float("inf")))
+    size_bands = []
+    for key, label, lo_n, hi_n in specs:
+        group = [e for e in recent if lo_n <= e["notional"] < hi_n]
+        size_bands.append({
+            "key": key, "label": label, "n": len(group),
+            "usd": round(sum(e["notional"] for e in group), 2),
+            "long_usd": round(sum(e["notional"] for e in group if e["side"] == "long"), 2),
+            "short_usd": round(sum(e["notional"] for e in group if e["side"] == "short"), 2),
+            "range": ("$10만 미만" if key == "small" else
+                      "$10만–$100만" if key == "medium" else "$100만 이상"),
+        })
     # 가격대별 청산 $ (map_symbol) — 실제 체결로 만든 미니 맵(예측 아님)
     mp = [e for e in recent if e["sym"] == map_symbol]
     bins, price = [], (mp[-1]["price"] if mp else None)
@@ -150,6 +166,7 @@ def _aggregate(events, now_ms, window_min=60, map_symbol=MAP_SYMBOL, nbins=22):
                      "long": round(b["long"], 2), "short": round(b["short"], 2)}
                     for b in agg if b["long"] or b["short"]]
     return {"longs_usd": longs, "shorts_usd": shorts, "n": len(recent), "tape": tape,
+            "size_bands": size_bands,
             "map": {"symbol": map_symbol, "price": price, "bins": bins}}
 
 

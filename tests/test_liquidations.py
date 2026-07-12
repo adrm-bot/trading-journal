@@ -41,6 +41,21 @@ def test_aggregate_window_and_totals():
     assert {t["sym"] for t in a["tape"]} == {"BTCUSDT"}
 
 
+def test_aggregate_size_bands_are_fixed_and_preserve_totals():
+    now = 10_000_000
+    events = [
+        _ev(now, "BTCUSDT", "long", 50_000, 1),       # 소형 $50k
+        _ev(now, "BTCUSDT", "short", 50_000, 4),      # 중형 $200k
+        _ev(now, "BTCUSDT", "long", 50_000, 30),      # 대형 $1.5m
+    ]
+    out = liq._aggregate(events, now)
+    bands = {b["key"]: b for b in out["size_bands"]}
+    assert bands["small"]["n"] == 1 and bands["small"]["usd"] == 50_000
+    assert bands["medium"]["n"] == 1 and bands["medium"]["short_usd"] == 200_000
+    assert bands["large"]["n"] == 1 and bands["large"]["long_usd"] == 1_500_000
+    assert sum(b["usd"] for b in bands.values()) == out["longs_usd"] + out["shorts_usd"]
+
+
 def test_aggregate_price_buckets_split_sides():
     now = 1_000_000
     ev = [_ev(now, "BTCUSDT", "long", 44000 + i * 100, 1) for i in range(4)]

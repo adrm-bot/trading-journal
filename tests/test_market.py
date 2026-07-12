@@ -54,6 +54,12 @@ def test_coin_includes_price_spark_newest_first():
     assert c["spark"][0] > c["spark"][-1]        # 오름세 캔들이므로 최신 > 과거
 
 
+def test_coin_mtf_includes_horizon_matched_price_changes_without_extra_series():
+    c = market._coin(_FakeEx(), "BTC/USDT", mtf=True)
+    assert set(c["chg_tf"]) == {"1h", "4h", "24h", "7d"}
+    assert c["chg_tf"]["1h"] < c["chg_tf"]["4h"] < c["chg_tf"]["24h"] < c["chg_tf"]["7d"]
+
+
 def test_alts_are_unique_and_include_requested_sectors():
     assert len(market.ALTS) == len(set(market.ALTS))       # 중복 없음
     assert market.ALTS[0] == "ETH"                          # 대장 스냅샷용 첫 항목

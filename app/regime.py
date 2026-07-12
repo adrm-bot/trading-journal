@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
-"""regime.py — 시장 레짐 카드 + '레짐별 내 성과' (research/regime 검증 분류기의 경량 포팅).
+"""regime.py — 시장 레짐·OI 사분면·포지셔닝 + '레짐별 내 성과'.
 
-같은 레포 research/regime의 5-상태 분류기에서 **가격 기반 2축(방향·변동성)** 만 포팅했다.
-근거: 리서치에서 OI 연료축의 타이밍 기여가 순환 시간이동 널과 구별 불가(p=1.0)로 판정돼,
-클라우드(Render)에 OI 파이프라인 없이도 결과 손실이 없는 근사다. 파라미터는 리서치 동결값
-(재튜닝 금지). 데이터: Binance USDT-M 공개 REST(무키·유저 크리덴셜 불필요).
+같은 레포 research/regime의 5상태 분류기에서 방향·변동성 축과 검증된 표시 규칙을 포팅했다.
+라이브 판정에는 Binance 공개 OI를 연료축으로 더하되, OI 증가 사분면만 라벨에 투표하고
+OI 감소는 확신만 낮춘다. 가격·OI·계정 비중·테이커 체결은 모두 공개 REST 실측이며,
+서로 다른 지표를 방향 예측처럼 합성하지 않는다. 파라미터는 리서치 동결값(재튜닝 금지).
 
 레짐별 성과는 **진입 시각(opened_at) 기준** 매칭(없으면 청산 시각 폴백) — 바이낸스 무기한에
 없는 심볼의 거래는 '미매칭'으로 정직하게 따로 센다. 모든 실패는 available:false류로 강등되고
@@ -235,9 +235,9 @@ def _brief_oi(symbol: str) -> dict | None:
 
 def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = None,
                       taker_rows: list[dict] | None = None, by_symbol: list[dict] | None = None,
-                      symbol: str = "BTCUSDT") -> dict:
+                      symbol: str = "BTCUSDT", ratio_week_rows: list[dict] | None = None) -> dict:
     """OI·계정 비중·테이커 체결을 한 스냅샷으로 정규화하는 순수 조립 함수."""
-    ratio_rows, taker_rows = ratio_rows or [], taker_rows or []
+    ratio_rows, taker_rows, ratio_week_rows = ratio_rows or [], taker_rows or [], ratio_week_rows or []
     out = {"available": False, "symbol": symbol, "source": "Binance USDⓈ-M",
            "window_days": 30, "tf": {}, "by_symbol": by_symbol or []}
 
@@ -261,8 +261,9 @@ def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = N
     else:
         out["oi_available"] = False
 
-    if ratio_rows:
-        last = ratio_rows[-1]
+    current_ratio_rows = ratio_rows or ratio_week_rows
+    if current_ratio_rows:
+        last = current_ratio_rows[-1]
         lp, sp = _fnum(last.get("longAccount")), _fnum(last.get("shortAccount"))
         ratio = _fnum(last.get("longShortRatio"))
         if lp is not None and sp is not None:
@@ -271,10 +272,19 @@ def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = N
             deltas = {}
             for key, delta in (("1h", pd.Timedelta(hours=1)), ("4h", pd.Timedelta(hours=4)),
                                ("24h", pd.Timedelta(days=1))):
-                old = _row_at(ratio_rows, delta)
+                old = _row_at(ratio_rows or current_ratio_rows, delta)
                 old_lp = _fnum((old or {}).get("longAccount"))
                 deltas[key] = None if old_lp is None else round((lp - old_lp) * 100, 2)
+            old7 = _row_at(ratio_week_rows, pd.Timedelta(days=7))
+            old7_lp = _fnum((old7 or {}).get("longAccount"))
+            deltas["7d"] = None if old7_lp is None else round((lp - old7_lp) * 100, 2)
             out["long_delta_pp"] = deltas
+            try:
+                out["ratio_asof"] = pd.to_datetime(
+                    int(last.get("timestamp") or 0), unit="ms", utc=True
+                ).isoformat()
+            except (TypeError, ValueError, OverflowError):
+                pass
             d1 = deltas.get("1h")
             out["crowd_trend"] = ("long_increasing" if d1 is not None and d1 >= 0.2 else
                                   "short_increasing" if d1 is not None and d1 <= -0.2 else "stable")
@@ -301,6 +311,9 @@ def positioning(symbol: str = "BTCUSDT") -> dict:
         return hit["data"]
     oi = _cached_oi(symbol)
     ratios = _fetch_public_series("/futures/data/globalLongShortAccountRatio", symbol)
+    ratios_week = _fetch_public_series(
+        "/futures/data/globalLongShortAccountRatio", symbol, "1h", 169
+    )
     taker = _fetch_public_series("/futures/data/takerlongshortRatio", symbol)
     rows = []
     for sym in POSITIONING_SYMBOLS:
@@ -313,7 +326,7 @@ def positioning(symbol: str = "BTCUSDT") -> dict:
             row = _brief_oi(sym)
             if row:
                 rows.append(row)
-    data = build_positioning(oi, ratios, taker, rows, symbol)
+    data = build_positioning(oi, ratios, taker, rows, symbol, ratios_week)
     if not data["available"]:
         data["error"] = "Binance 공개 포지셔닝 데이터를 받지 못했습니다"
     _positioning_cache[symbol] = {"at": time.time(), "data": data}

@@ -115,15 +115,25 @@ def test_build_positioning_tracks_oi_crowd_and_taker_flow():
         taker_rows.append({"timestamp": int(ts.timestamp() * 1000),
                            "buyVol": "60", "sellVol": "40"})
 
+    week_idx = pd.date_range("2026-06-01", periods=24 * 8, freq="1h", tz="UTC")
+    week_rows = []
+    for i, ts in enumerate(week_idx):
+        long = 0.50 + i / (len(week_idx) - 1) * 0.15
+        week_rows.append({"timestamp": int(ts.timestamp() * 1000),
+                          "longAccount": str(long), "shortAccount": str(1 - long),
+                          "longShortRatio": str(long / (1 - long))})
+
     out = regime.build_positioning(
         oi, ratio_rows, taker_rows,
-        [{"sym": "BTC", "usd": 33e9, "chg24": 1.2}], "BTCUSDT")
+        [{"sym": "BTC", "usd": 33e9, "chg24": 1.2}], "BTCUSDT", week_rows)
 
     assert out["available"] is True and out["oi_available"] is True
     assert out["total_usd"] == 33e9
     assert out["tf"]["24h"] is not None and out["tf"]["7d"] is not None
     assert out["long_pct"] == 65.0 and out["short_pct"] == 35.0
     assert out["long_delta_pp"]["1h"] > 0 and out["crowd_trend"] == "long_increasing"
+    assert out["long_delta_pp"]["7d"] > 0
+    assert out["ratio_asof"].startswith("2026-")
     assert out["taker_buy_pct_1h"] == 60.0 and out["taker_sell_pct_1h"] == 40.0
 
 

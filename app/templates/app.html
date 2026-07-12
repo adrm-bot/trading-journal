@@ -140,7 +140,7 @@ const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
 let DATA={summary:{},trades:[]}, CONN=[], ME={}, EDIT=null, LAST_FOCUS=null, SAVING=false;
 let MARKET=null, MKT_LOADING=false, OPENPOS=null, POS_LOADING=false, POS_ERR=null;
 let PINTS=[], PEDIT=null, PINT_SAVING=false;  // 보유 포지션 사전 계획
-let LIQ=null, LIQ_LOADING=false;  // 실시간 청산 체결(공개 WS)
+let LIQ=null, LIQ_LOADING=false, OI_TF='24h', LIQ_PANE=null;  // 실시간 청산 체결 + 포지셔닝 보기 상태
 let ECON_EVENTS=null, ECON_META=null, ECON_LOADING=false;  // 미국 주요 경제 일정(공식 발표 일정 집계)
 let LIQMAP=null;  // 예측형 청산맵(KingFisher · 유료 스캐폴드)
 let REGIME=null, RG_LOADING=false;  // 시장 레짐(15m/1h/4h)+레짐별 성과 (공개 REST·무키)
@@ -418,34 +418,41 @@ function pxspark(arr){
   if(!arr||arr.length<2)return '';
   const up=arr[0]>=arr[arr.length-1];
   return ` <span class="pxsp ${up?'pos':'neg'}" data-tip="최근 ${arr.length}일 추이 (일봉 종가)">${spark(arr)}</span>`;}
+function marketStamp(m){
+  if(!m||!m.ts)return '';
+  const d=new Date(Number(m.ts)*1000), when=isNaN(d)?'':d.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+  return `<span class="market-meta">BTC·ETH 시세 ${esc(EXN(m.src)||m.src||'공개 시장 데이터')} · 외부 공개 지표${when?` · ${when} KST`:''} · 최대 5분 캐시</span>`;
+}
 function marketStrip(m){
-  if(!m)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터 불러오는 중…</div></div>`;
+  const head=`<div class="market-head"><div class="section-title">시장 컨텍스트</div>${marketStamp(m)}</div>`;
+  if(!m)return `<div id="marketStrip">${head}<div class="market"><div class="mchip skel">시장 데이터 불러오는 중…</div></div></div>`;
   const chips=[];
   if(m.btc){const tf=m.btc.tf;
+    const btc24=(m.btc.chg_tf&&m.btc.chg_tf['24h']!=null)?m.btc.chg_tf['24h']:m.btc.chg24;
     const tfTxt=tf?TFL.map(([k,lab])=>`${lab} ${(TREND[(tf[k]||{}).trend]||["","미판정"])[1]}`).join(" · "):`일봉 ${trendBasis(m.btc)}`;
-    const tip=`판단: EMA50/EMA200 정·역배열 · ${tfTxt} · 세 봉 같은 방향=추세 강함, 엇갈리면 전환·횡보 · 현재 ${usd(m.btc.price)} · 24h ${m.btc.chg24}% · 7d ${m.btc.chg7}%`;
-    chips.push(mchip("비트코인 추세",tfRow(m.btc),`${usd(m.btc.price)} · 24h ${chgTxt(m.btc.chg24)}${pxspark(m.btc.spark)}`,"",tip));}
+    const tip=`판단: EMA50/EMA200 정·역배열 · ${tfTxt} · 세 봉 같은 방향=추세 강함, 엇갈리면 전환·횡보 · 현재 ${usd(m.btc.price)} · 최근 24h ${btc24}% · 7d ${m.btc.chg7}%`;
+    chips.push(mchip("비트코인 추세",tfRow(m.btc),`${usd(m.btc.price)} · 최근 24h ${chgTxt(btc24)}${pxspark(m.btc.spark)}`,"",tip));}
   if(m.dom){const d=m.dom;
     const main=`<div class="domr"><span class="dl">BTC.D</span><span class="dv">${d.btc}%</span>${tfArrows(d.btcd_tf)}</div>`
       +`<div class="domr"><span class="dl">USDT.D</span><span class="dv">${d.usdt}%</span>${tfArrows(d.usdtd_tf)}</div>`;
     const tip=d.trend_real
       ? `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세 = 실제 도미넌스 시계열(CRYPTOCAP) EMA50/200 · % 현재값 스냅샷`
       : `BTC.D ${d.btc}% = 알트 대비 BTC 점유율 · USDT.D ${d.usdt}% = 현금(스테이블)·리스크오프 · USDC.D ${d.usdc}% · 1H·4H·1D 추세는 가격기반 추정(도미넌스 시계열 미가용: BTC.D≈BTC/ETH, USDT.D≈시장 역) · % 현재값 스냅샷`;
-    chips.push(mchip("도미넌스 · 추세",main,`기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)}`,"dom",tip));}
+    chips.push(mchip("도미넌스 · 추세",main,`기타 ${d.others}% · 시총24h ${chgTxt(d.mcap_chg)} · ${d.trend_real?'실시계열':'추세 프록시'}`,"dom",tip));}
   if(m.fng){const f=fngKo(m.fng.value),h=m.fng.history||[];
     const sub=h.length>=8?`<span class="fngflow ${f[1]}">${spark(h)}</span><span class="fngd">어제 ${h[1]} · 저번주 ${h[7]}</span>`:"시장 심리 (alt.me)";
     const tip=`공포·탐욕 ${m.fng.value}/100${h.length>=8?` · 오늘 ${h[0]} · 어제 ${h[1]} · 그제 ${h[2]} · 저번주 ${h[7]}`:''} · 구간 0-24 극단공포/25-44 공포/45-55 중립/56-75 탐욕/76-100 극단탐욕 · 산정요소 변동성25%·모멘텀거래량25%·소셜15%·설문15%·도미넌스10%·트렌드10%(공개 가중치, 일별만)`;
     chips.push(mchip("공포·탐욕 지수",`<span class="${f[1]}">${m.fng.value} · ${f[0]}</span>`,sub,"",tip));}
-  if(m.altseason){const as=m.altseason,v=as.value,lbl=v>=75?'알트시즌':v<=25?'비트시즌':'중립',cls=v>=75?'pos':v<=25?'neg':'muted';
+  if(m.altseason){const as=m.altseason,v=as.value,lbl=v>=75?'알트 우위':v<=25?'비트 우위':'중립',cls=v>=75?'pos':v<=25?'neg':'muted';
     const gauge=`<span class="asg"><span class="asgmark" style="left:${v}%"></span></span>`;
     const hasSp=as.spark&&as.spark.length>=2;
     const sub=hasSp?`${gauge}<span class="asflow ${cls}">${spark(as.spark)}<i>점유율 90일</i></span>`:gauge;
     const tip=hasSp
-      ? `알트시즌 지수 ${v}/100 · 표본 ${as.n}개 알트의 90일 BTC 초과 비율(방향 참고) · 75+ 알트시즌 / 25- 비트시즌 · 그래프=알트 점유율(TOTAL2/TOTAL) 90일 실시계열`
-      : `알트시즌 지수 ${v}/100 · 최근 90일 BTC를 이긴 알트 비율(표본 ${as.n}개, 방향 참고용) · 75+ 알트시즌 / 25- 비트시즌 · 현재값 스냅샷`;
-    chips.push(mchip("알트시즌 지수",`<span class="${cls}">${v} · ${lbl}</span>`,sub,"",tip));}
-  if(!chips.length)return `<div class="market" id="marketStrip"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없습니다</div></div>`;
-  return `<div class="market" id="marketStrip">${chips.join("")}</div>`;
+      ? `알트 표본 지수 ${v}/100 · 표본 ${as.n}개 알트의 90일 BTC 초과 비율(공식 Altcoin Season Index 아님) · 75+ 알트 우위 / 25- 비트 우위 · 그래프=알트 점유율(TOTAL2/TOTAL) 90일 실시계열`
+      : `알트 표본 지수 ${v}/100 · 최근 90일 BTC를 이긴 알트 비율(표본 ${as.n}개, 공식 지수 아님) · 75+ 알트 우위 / 25- 비트 우위 · 현재값 스냅샷`;
+    chips.push(mchip("알트 표본 지수",`<span class="${cls}">${v} · ${lbl}</span>`,sub,"",tip));}
+  if(!chips.length)return `<div id="marketStrip">${head}<div class="market"><div class="mchip skel">시장 데이터를 잠시 불러올 수 없습니다</div></div></div>`;
+  return `<div id="marketStrip">${head}<div class="market">${chips.join("")}</div></div>`;
 }
 /* 시장 레짐 — 15m/1h/4h 5상태 + 레짐별 내 성과 (연구 검증 분류기 경량 포팅, 진입시각 기준) */
 const RGC={TREND_UP:"#3fb950",TREND_DOWN:"#f85149",SQUEEZE:"#58a6ff",RANGE:"#8b949e",CHOP:"#d29922"};
@@ -534,7 +541,7 @@ function regimePanel(rg){
     return mchip(esc(t.tf),`<span style="color:${c}">${t.emoji} ${esc(t.name)}</span>`,
       `확신 ${esc(t.grade||"—")}${t.top_pct!=null?` · 상위 ${t.top_pct}%`:` (${t.conf})`}${drift}`,"",
       `${t.tf} 기준, 마지막 완결봉 ${t.ts} UTC의 판정입니다. 확신 점수는 ${t.conf}이고, 등급은 최근 30일 동안의 자기 자신과 비교한 상대 수준입니다.${t.drift_on?` '표류'는 지난 24시간 동안 가격이 한쪽으로 밀렸다는 과거 사실 표시로, 박스 레벨을 믿기 어렵다는 경고일 뿐 그 방향으로 계속 간다는 뜻은 아닙니다.`:''} 이 라벨은 시장의 성격(변동성 구조)을 설명하는 것이지 방향 예측이 아닙니다.`);}).join("");
-  const warn=lv.warn?`<p class="empty-inline" style="color:var(--red,#f85149)">⚠ ${esc(lv.warn)}</p>`:"";
+  const warn=lv.warn?`<p class="empty-inline rgwarn">${ICONS.warn} ${esc(lv.warn)}</p>`:"";
   const rows=(rg.perf&&rg.perf.rows)||[];
   const perf=rows.length?`<div class="table-wrap rgperf" style="margin-top:8px"><table><thead><tr><th data-tip="진입 시각 기준으로 그 시점 레짐에 매칭">레짐</th><th class="num">거래</th><th class="num">승률</th><th class="num">합손익</th><th class="num">평균R</th></tr></thead><tbody>${
     rows.map(p=>{const c=RGC[p.regime]||"#8b949e";const nw=p.n<10?'<span class="muted">*</span>':'';
@@ -565,7 +572,7 @@ function rsPanel(m){
   const board=rs.board, last=board.length-1, top=board[0], bot=board[last];
   const pos=Math.max(5,Math.min(95,Math.round(rs.outperform/rs.n*100)));  // 슬라이더 위치(끝 잘림 방지)
   const fmtv=v=>(v>=0?'+':'')+v+'%';
-  // 롱/숏 후보: BTC 우위면 롱=BTC, 알트 우위면 숏=BTC, 그 외엔 최강/최약 알트
+  // 상대강도 상·하단: 방향 신호가 아니라 BTC 대비 관측 순위만 표시
   const longSym = rs.regime==='btc' ? 'BTC' : esc(top.sym);
   const longVal = rs.regime==='btc' ? '도미넌스 우위' : `BTC 대비 ${fmtv(top.vs_btc_7d)}`;
   const shortSym= rs.regime==='alt' ? 'BTC' : esc(bot.sym);
@@ -589,12 +596,12 @@ function rsPanel(m){
         <span class="rsend">ALT</span>
       </div>
       <div class="rsact">
-        <div class="rsa long"><span class="rsa-k">${ICONS.upR} 롱 후보</span><span class="rsa-v">${longSym}</span><span class="rsa-d">${longVal}</span></div>
-        <div class="rsa short"><span class="rsa-k">${ICONS.downR} 숏 후보</span><span class="rsa-v">${shortSym}</span><span class="rsa-d">${shortVal}</span></div>
+        <div class="rsa long"><span class="rsa-k">${ICONS.upR} 상대 강세</span><span class="rsa-v">${longSym}</span><span class="rsa-d">${longVal}</span></div>
+        <div class="rsa short"><span class="rsa-k">${ICONS.downR} 상대 약세</span><span class="rsa-v">${shortSym}</span><span class="rsa-d">${shortVal}</span></div>
       </div>
       ${ethsnap?`<div class="rsethline">${ethsnap}</div>`:''}
       <details class="rsmore"><summary>알트 ${rs.n}개 상세 · 7일 상대수익률</summary><div class="rsbody">${rows}</div></details>
-      <div class="ccap muted">슬라이더 위치 = ${rs.outperform}/${rs.n} 알트가 BTC보다 강함 · 표본 ${rs.n}개라 방향 참고용</div>
+      <div class="ccap muted">시장 폭(Breadth) = ${rs.outperform}/${rs.n} 알트가 BTC보다 강함 · 위치 표시는 상대강도 분포이며 진입 신호가 아닙니다</div>
     </div>`;
 }
 /* 자금 흐름(TOTAL2/3/OTHERS) + 섹터 강도 */
@@ -659,6 +666,7 @@ function paintMarket(){
   const e=$("#marketStrip"); if(e)e.outerHTML=marketStrip(MARKET);
   const h=$("#rsHost"); if(h)h.innerHTML=rsPanel(MARKET);
   const f=$("#flowHost"); if(f)f.innerHTML=flowPanel(MARKET);
+  const l=$("#liqHost"); if(l&&LIQ)l.outerHTML=liqCard(LIQ);  // OI 해석의 가격축도 같은 기간으로 다시 맞춤
 }
 async function ensureMarket(){
   if(!$("#marketStrip"))return;
@@ -688,7 +696,7 @@ function posSection(list){
       <td class="num">${fmtP(p.entry)} <span class="muted">→</span> ${fmtP(p.mark)}</td><td class="num">${up}</td><td>${lvls}</td><td>${plan}</td></tr>`;
   }).join("");
   const crossN=list.filter(p=>p.margin_mode==='cross').length;
-  const crossWarn=crossN?`<div class="cross-warn">⚠ <b>교차(Cross) 모드 포지션 ${crossN}개</b> — 격리(Isolated) 규율 위반. 교차는 계좌 전체가 담보라 한 포지션의 손실이 다른 포지션까지 전염됩니다. 거래소에서 격리로 전환하세요. <span class="muted">(일지는 주문 경로 밖 — 차단은 불가, 감지·경고까지)</span></div>`:"";
+  const crossWarn=crossN?`<div class="cross-warn">${ICONS.warn} <b>교차(Cross) 모드 포지션 ${crossN}개</b> · 격리(Isolated) 규율 위반. 교차는 계좌 전체가 담보라 한 포지션의 손실이 다른 포지션까지 전염됩니다. 거래소에서 격리로 전환하세요. <span class="muted">일지는 주문 경로 밖이라 차단하지 못하고 감지·경고만 제공합니다.</span></div>`:"";
   return `<div id="posHost"><div class="section-title">보유 중 · 미청산 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">(실시간 · 청산되면 일지에 기록됩니다)</span></div>
     ${crossWarn}<div class="table-wrap"><table><thead><tr><th>심볼</th><th>방향</th><th class="num">진입 → 현재</th><th class="num">미실현손익</th><th>손절 / 익절</th><th>사전 계획</th></tr></thead><tbody>${rows}</tbody></table></div></div>`;
 }
@@ -726,15 +734,19 @@ function liqCard(d){
     const mapRows=bins.map(b=>{const lw=b.long/mx*100,sw=b.short/mx*100;
       return `<div class="liqrow"><span class="liqpx num">${fmtP(Math.round((b.lo+b.hi)/2))}</span><span class="liqbar"><span class="neg" style="width:${lw}%"></span><span class="pos" style="width:${sw}%"></span></span><span class="num muted">${fmtBig(b.long+b.short)}</span></div>`;}).join('');
     const mapBlock=bins.length?`<div class="liqmaphdr">${esc(d.map.symbol)} 가격대별 청산 <span class="muted">· 실제 체결 누적</span></div><div class="liqmap">${mapRows}</div>`:'';
-    const tape=(d.tape||[]).map(t=>`<div class="srow"><span class="snm">${esc(t.sym)} <span class="${t.side==='long'?'neg':'pos'}">${t.side==='long'?'롱':'숏'}</span></span><span class="num muted">${fmtP(t.price)}</span><span class="num ${t.side==='long'?'neg':'pos'}">${fmtBig(t.notional)}</span></div>`).join('');
+    const bands=(d.size_bands||[]),bmx=Math.max(1,...bands.map(b=>b.usd||0));
+    const bandRows=bands.map(b=>{const w=Math.round((b.usd||0)/bmx*100),hot=b.key==='large'&&b.n>0;
+      return `<div class="liqsize-row${hot?' hot':''}"><span class="liqsize-name">${esc(b.label)}<small>${esc(b.range||'')}</small></span><span class="liqsize-track"><i style="width:${w}%"></i></span><span class="liqsize-val"><b>${fmtBig(b.usd||0)}</b><small>${b.n||0}건</small></span></div>`;}).join('');
+    const sizeBlock=bandRows?`<div class="liqmaphdr">청산 규모 분포 <span class="muted">· 고정 명목가 구간</span></div><div class="liqsize">${bandRows}</div>`:'';
     const cap=`최근 ${d.since_min||0}분 · ${d.n||0}건 · ${esc(src)} 공개 스트림 · 실제 청산 체결(예측 아님) · 베타`;
-    fills=`${split}${mapBlock}${tape?`<div class="liqtapehdr">최근 대형 청산</div><div class="sess">${tape}</div>`:''}<div class="ccap muted">${cap}</div>`;
+    fills=`${split}${sizeBlock}${mapBlock}<div class="ccap muted">${cap}</div>`;
   }else{
     fills=`<p class="muted" style="margin:0;font-size:var(--fs-sm)">${esc(d.reason||'청산 스트림 연결 대기')} · 공개 스트림에서 실제 청산 체결이 들어오면 표시됩니다(예측 아님).</p>`;
   }
-  const defPane=d.oi?'oi':(d.available?'fills':'oi');  // OI 데이터 있으면 OI · 없고 청산 스트림 있으면 청산 · 둘 다 없으면 미결제약정을 기본 탭으로
+  const autoPane=d.oi?'oi':(d.available?'fills':'oi');
+  const defPane=(LIQ_PANE==='oi'||LIQ_PANE==='fills')?LIQ_PANE:autoPane;
   return `<div id="liqHost"><div class="section-title">포지셔닝 · 청산 체결 <span class="muted" style="font-weight:400;text-transform:none;letter-spacing:0">· Binance 공개 통계</span></div>
-    <div class="card liqcard"><div class="liqtabs"><button class="liqtab${defPane==='oi'?' on':''}" onclick="liqTab(this,'oi')">OI · 롱숏</button><button class="liqtab${defPane==='fills'?' on':''}" onclick="liqTab(this,'fills')">청산 체결</button></div><div class="liqpane" data-pane="oi"${defPane==='oi'?'':' hidden'}>${oiBlock(d.oi,'24h')}</div><div class="liqpane" data-pane="fills"${defPane==='fills'?'':' hidden'}>${fills}</div></div></div>`;
+    <div class="card liqcard"><div class="liqtabs"><button class="liqtab${defPane==='oi'?' on':''}" onclick="liqTab(this,'oi')">OI · 롱숏</button><button class="liqtab${defPane==='fills'?' on':''}" onclick="liqTab(this,'fills')">청산 체결</button></div><div class="liqpane" data-pane="oi"${defPane==='oi'?'':' hidden'}>${oiBlock(d.oi,OI_TF)}</div><div class="liqpane" data-pane="fills"${defPane==='fills'?'':' hidden'}>${fills}</div></div></div>`;
 }
 async function ensureLiquidations(){
   const h=$("#liqHost"); if(!h)return;
@@ -872,9 +884,9 @@ function econStrip(ev,meta){
 async function ensureEconomy(){const h=$("#econHost");if(!h)return;if(ECON_EVENTS!==null){h.innerHTML=econStrip(ECON_EVENTS,ECON_META);return;}if(ECON_LOADING)return;ECON_LOADING=true;
   try{ECON_META=await(await api('/api/economic-calendar')).json();ECON_EVENTS=ECON_META.available?(ECON_META.events||[]):[];}catch(e){ECON_META={available:false,error:'경제 일정을 불러오지 못했습니다'};ECON_EVENTS=[];}
   ECON_LOADING=false;const h2=$("#econHost");if(h2)h2.innerHTML=econStrip(ECON_EVENTS,ECON_META);}
+const DASH_GRIP_SVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
 function renderDashboard(el){
-  const gripSVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
-  const mp=(key,html,pin,span=12)=>`<section class="mkt-panel dash-panel${pin?' pin':''}" data-panel="${key}" data-span="${span}">${pin?'':`<div class="panel-tools"><button class="drag-h panel-grip" aria-label="${key} 패널 이동" title="누른 채 원하는 위치로 이동">${gripSVG}</button><button class="panel-size" type="button" aria-label="패널 너비 변경" title="반폭과 전폭 전환">${span===6?'전폭':'반폭'}</button></div>`}${html}</section>`;
+  const mp=(key,html,pin,span=12)=>`<section class="mkt-panel dash-panel${pin?' pin':''}" data-panel="${key}" data-span="${span}">${pin?'':`<div class="panel-tools"><button class="drag-h panel-grip" aria-label="${key} 패널 이동" title="누른 채 원하는 위치로 이동">${DASH_GRIP_SVG}</button><button class="panel-size" type="button" aria-label="패널 너비 변경" title="반폭과 전폭 전환">${span===6?'전폭':'반폭'}</button></div>`}${html}</section>`;
   const market=mp('econ',`<div id="econHost">${econStrip(ECON_EVENTS,ECON_META)}</div>`,true)+mp('strip',marketStrip(MARKET),true)+mp('regime',`<div id="regimeHost">${regimePanel(REGIME)}</div>`,false,6)+mp('liq',`<div id="liqHost"></div>`,false,6)+mp('rsflow',`<div class="mkt-half"><div id="rsHost">${rsPanel(MARKET)}</div><div id="flowHost">${flowPanel(MARKET)}</div></div>`)+mp('liqmap',`<div id="liqmapHost"></div>`);
   if(!DATA.trades.length){el.innerHTML=`<div id="warnHost">${warnStrip()}</div>`+market+`<div id="posHost"></div>`+onboarding();const ep=$("#emptyPull");if(ep)ep.onclick=pull;ensureEconomy();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();return;}
   const mine=mp('today',todayCard(),false)
@@ -938,8 +950,8 @@ function bindDashDnD(){const dash=document.querySelector('#view-dashboard .dash3
       if(e.key==='ArrowUp'||e.key==='ArrowLeft'){e.preventDefault();if(i>0)z.insertBefore(p,movable[i-1]);}
       else if(e.key==='ArrowDown'||e.key==='ArrowRight'){e.preventDefault();if(i>=0&&i<movable.length-1)z.insertBefore(movable[i+1],p);else if(i===movable.length-1)z.appendChild(p);}
       else return;saveDashboardLayout();});
-    h.addEventListener('pointerdown',e=>{if(!DASH_EDIT||e.button!==0)return;const p=h.closest('.dash-panel');if(!p)return;e.preventDefault();try{h.setPointerCapture&&h.setPointerCapture(e.pointerId);}catch(_){}active={id:e.pointerId,panel:p,sx:e.clientX,sy:e.clientY,started:false};});
-    h.addEventListener('pointermove',e=>{if(!active||active.id!==e.pointerId)return;const dx=e.clientX-active.sx,dy=e.clientY-active.sy;if(!active.started&&Math.hypot(dx,dy)<5)return;if(!active.started){active.started=true;active.panel.classList.add('dragging');dash.classList.add('dragging-layout');document.body.classList.add('dragging-dash');dash.querySelectorAll('.dash-zone').forEach(z=>z.classList.add('drag-live'));ghost=document.createElement('div');ghost.className='dash-drag-ghost';const title=active.panel.querySelector('.section-title');ghost.textContent=(title?title.childNodes[0].textContent:active.panel.dataset.panel||'패널').trim();document.body.appendChild(ghost);const i=line();i.style.gridColumn=`span ${active.panel.dataset.span==='6'?6:12}`;}ghost.style.transform=`translate3d(${e.clientX+14}px,${e.clientY+14}px,0)`;const z=zoneAt(e.clientX,e.clientY);if(!z)return;const zr=z.getBoundingClientRect();if(e.clientY<zr.top+42)z.scrollTop-=14;else if(e.clientY>zr.bottom-42)z.scrollTop+=14;const a=dashAfter(z,e.clientX,e.clientY),i=line();if(a)z.insertBefore(i,a);else z.appendChild(i);});
+    h.addEventListener('pointerdown',e=>{if(!DASH_EDIT||e.button!==0)return;const p=h.closest('.dash-panel');if(!p)return;e.preventDefault();try{h.setPointerCapture&&h.setPointerCapture(e.pointerId);}catch(_){}const r=p.getBoundingClientRect();active={id:e.pointerId,panel:p,sx:e.clientX,sy:e.clientY,w:r.width,h:r.height,started:false};});
+    h.addEventListener('pointermove',e=>{if(!active||active.id!==e.pointerId)return;const dx=e.clientX-active.sx,dy=e.clientY-active.sy;if(!active.started&&Math.hypot(dx,dy)<5)return;if(!active.started){active.started=true;active.panel.classList.add('dragging');dash.classList.add('dragging-layout');document.body.classList.add('dragging-dash');dash.querySelectorAll('.dash-zone').forEach(z=>z.classList.add('drag-live'));ghost=document.createElement('div');ghost.className='dash-drag-ghost';const title=active.panel.querySelector('.section-title');ghost.innerHTML=`${DASH_GRIP_SVG}<span>${esc((title?title.childNodes[0].textContent:active.panel.dataset.panel||'패널').trim())}</span>`;ghost.style.width=Math.min(420,Math.max(220,active.w))+'px';document.body.appendChild(ghost);const i=line();i.style.gridColumn=`span ${active.panel.dataset.span==='6'?6:12}`;i.style.height=Math.min(520,Math.max(86,active.h))+'px';}ghost.style.transform=`translate3d(${e.clientX+12}px,${e.clientY+12}px,0) scale(.985)`;const z=zoneAt(e.clientX,e.clientY);if(!z)return;const zr=z.getBoundingClientRect();if(e.clientY<zr.top+56)z.scrollTop-=Math.max(8,Math.round((zr.top+56-e.clientY)/3));else if(e.clientY>zr.bottom-56)z.scrollTop+=Math.max(8,Math.round((e.clientY-(zr.bottom-56))/3));const a=dashAfter(z,e.clientX,e.clientY),i=line();if(a)z.insertBefore(i,a);else z.appendChild(i);});
     const finish=e=>{if(!active||active.id!==e.pointerId)return;const moved=active.started,p=active.panel,before=new Map([...dash.querySelectorAll('.dash-panel:not(.pin)')].map(x=>[x,x.getBoundingClientRect()]));if(moved&&ind&&ind.parentNode)ind.parentNode.insertBefore(p,ind);clear();active=null;if(moved){settle(before);saveDashboardLayout();}};
     h.addEventListener('pointerup',finish);h.addEventListener('pointercancel',e=>{if(!active||active.id!==e.pointerId)return;clear();active=null;});
   });
@@ -982,33 +994,39 @@ function bindJdock(){const t=document.getElementById('jdockToggle');const host=d
   try{if(localStorage.getItem('jdockCollapsed')==='1'){host.classList.add('dock-collapsed');t.setAttribute('aria-expanded','false');}}catch(e){}
   t.onclick=()=>{const c=host.classList.toggle('dock-collapsed');if(c){const d=document.getElementById('jdock');if(d)d.classList.remove('expanded');}t.setAttribute('aria-expanded',String(!c));try{localStorage.setItem('jdockCollapsed',c?'1':'');}catch(e){}requestAnimationFrame(sizeDash);};}
 /* R2b: 청산/미결제약정 탭 + OI 블록 */
-function liqTab(btn,which){const card=btn.closest('.liqcard');if(!card)return;card.querySelectorAll('.liqtab').forEach(b=>b.classList.toggle('on',b===btn));card.querySelectorAll('.liqpane').forEach(p=>{p.hidden=(p.dataset.pane!==which);});}
+function liqTab(btn,which){const card=btn.closest('.liqcard');if(!card)return;LIQ_PANE=which;card.querySelectorAll('.liqtab').forEach(b=>b.classList.toggle('on',b===btn));card.querySelectorAll('.liqpane').forEach(p=>{p.hidden=(p.dataset.pane!==which);});}
 function oiLevel(p){if(p==null)return['보통','lv-normal'];if(p>=90)return['과열 · 위험','lv-risk'];if(p>=70)return['높음','lv-high'];if(p<30)return['낮음','lv-low'];return['보통','lv-normal'];}
-function oiInsight(oc,pc,tfl){const oUp=oc>=0,pUp=pc>=0;
-  if(oUp&&pUp)return `${tfl} OI 증가와 가격 상승이 동행합니다. 롱 우세 가능성이 있으나 테이커 매수 흐름을 함께 확인하세요.`;
-  if(oUp&&!pUp)return `${tfl} OI 증가와 가격 하락이 동행합니다. 신규 숏 압력 가능성이 높아진 구간입니다.`;
-  if(!oUp&&pUp)return `${tfl} OI가 줄며 반등했습니다. 신규 매수보다 숏 커버 영향일 수 있어 지속력 확인이 필요합니다.`;
-  return `${tfl} OI가 줄며 하락했습니다. 롱 디레버리징 가능성이 있어 신규 숏 추격은 주의하세요.`;}
+function oiInsight(oc,pc,tfl){if(oc==null||pc==null)return'';const oUp=oc>=0,pUp=pc>=0;
+  const pair=`${tfl} 가격 ${(pc>=0?'+':'')+pc}% · OI ${(oc>=0?'+':'')+oc}%`;
+  if(oUp&&pUp)return `<b>${pair}</b>. 가격과 OI가 함께 늘었습니다. 롱 우세 가능성은 테이커 매수 흐름으로 교차 확인하세요.`;
+  if(oUp&&!pUp)return `<b>${pair}</b>. 가격은 내리고 OI는 늘었습니다. 신규 숏 압력 가능성이 커진 구간입니다.`;
+  if(!oUp&&pUp)return `<b>${pair}</b>. OI가 줄며 반등했습니다. 신규 매수보다 숏 커버 영향일 수 있어 지속력을 확인하세요.`;
+  return `<b>${pair}</b>. 가격과 OI가 함께 줄었습니다. 롱 디레버리징 가능성이 있어 신규 숏 추격은 주의하세요.`;}
+function btcChangeFor(tf){const b=(typeof MARKET!=='undefined'&&MARKET&&MARKET.btc)||null;if(!b)return null;
+  if(b.chg_tf&&b.chg_tf[tf]!=null)return Number(b.chg_tf[tf]);
+  if(tf==='24h'&&b.chg24!=null)return Number(b.chg24);if(tf==='7d'&&b.chg7!=null)return Number(b.chg7);return null;}
 function oiBlock(oi,tf){if(!oi||!oi.available)return `<div class="oi-empty"><b>포지셔닝 데이터를 받지 못했습니다</b><span>${esc((oi&&oi.error)||'Binance 공개 API 연결을 확인해 주세요.')}</span></div>`;
   tf=tf||'24h';const TFS=[['1h','1H'],['4h','4H'],['24h','24H'],['7d','7D']];
   const chg=(oi.tf&&oi.tf[tf]!=null)?oi.tf[tf]:null;
   const tfl={'1h':'1시간','4h':'4시간','24h':'24시간','7d':'7일'}[tf]||tf;
-  const lv=oiLevel(oi.pct_rank), pc=(typeof MARKET!=='undefined'&&MARKET&&MARKET.btc)?(MARKET.btc.chg24||0):0;
+  const lv=oiLevel(oi.pct_rank), pc=btcChangeFor(tf);
   const arr=(oi.by_symbol||[]),mx=Math.max(1,...arr.map(x=>x.usd||0));
   const rows=arr.map(x=>{const w=Math.round((x.usd||0)/mx*100),xc=x.chg24==null?'':(x.chg24>=0?'pos':'neg');
     return `<div class="oirow"><span class="oisym">${esc(x.sym)}</span><span class="oitrack"><span class="oifill" style="width:${w}%"></span></span><span class="oiu"><span class="num">${fmtBig(x.usd)}</span><span class="num ${xc}">${x.chg24==null?'—':(x.chg24>=0?'+':'')+x.chg24+'%'}</span></span></div>`;}).join('');
   const seg=TFS.map(([k,lab])=>`<button class="oitfb${k===tf?' on':''}" onclick="oiTf(this,'${k}')">${lab}</button>`).join('');
   const lp=oi.long_pct,sp=oi.short_pct,hasCrowd=lp!=null&&sp!=null;
-  const dmap=oi.long_delta_pp||{},dkey=(tf==='7d'?'24h':tf),ld=dmap[dkey],dlab=(tf==='7d'?'24시간':tfl);
-  const trend=oi.crowd_trend==='long_increasing'?'롱 계정 증가':oi.crowd_trend==='short_increasing'?'숏 계정 증가':'비중 안정';
-  const crowd=hasCrowd?`<div class="crowd"><div class="crowd-head"><span>전체 계정 비중</span><b>${trend}${ld==null?'':` · ${dlab} 롱 ${(ld>=0?'+':'')+ld}%p`}</b></div><div class="crowd-bar"><span class="crowd-long" style="width:${lp}%"></span><span class="crowd-short" style="width:${sp}%"></span></div><div class="crowd-legend"><span class="pos">롱 ${lp}%</span><span class="neg">숏 ${sp}%</span></div>${oi.crowd_risk?`<div class="crowd-risk">${oi.crowd_risk==='long'?'롱':'숏'} 계정이 60% 이상으로 쏠렸습니다. 비중은 방향 예측이 아니라 혼잡도 경고로 보세요.</div>`:''}</div>`:'';
+  const dmap=oi.long_delta_pp||{},ld=dmap[tf];
+  const trend=ld==null?'증감 확인 불가':ld>=.1?'롱 계정 비중 증가':ld<=-.1?'숏 계정 비중 증가':'비중 변화 작음';
+  const deltaRow=[['1h','1H'],['4h','4H'],['24h','24H'],['7d','7D']].map(([k,l])=>{const v=dmap[k];return `<span${k===tf?' class="on"':''}>${l} <b class="${v==null?'muted':v>=0?'pos':'neg'}">${v==null?'없음':(v>=0?'+':'')+v+'%p'}</b></span>`;}).join('');
+  const crowd=hasCrowd?`<div class="crowd"><div class="crowd-head"><span>전체 계정 비중</span><b>${trend}${ld==null?'':` · ${tfl} ${(ld>=0?'+':'')+ld}%p`}</b></div><div class="crowd-bar"><span class="crowd-long" style="width:${lp}%"></span><span class="crowd-short" style="width:${sp}%"></span></div><div class="crowd-legend"><span class="pos">롱 ${lp}%</span><span class="neg">숏 ${sp}%</span></div><div class="crowd-deltas" aria-label="기간별 롱 계정 비중 변화">${deltaRow}</div>${oi.crowd_risk?`<div class="crowd-risk">${oi.crowd_risk==='long'?'롱':'숏'} 계정이 60% 이상으로 쏠렸습니다. 비중은 방향 예측이 아니라 혼잡도 경고로 보세요.</div>`:''}</div>`:'';
   const taker=oi.taker_buy_pct_1h!=null?`<div class="taker"><span>최근 1시간 테이커 체결</span><div class="taker-bar"><i style="width:${oi.taker_buy_pct_1h}%"></i></div><b class="${oi.taker_buy_pct_1h>=50?'pos':'neg'}">매수 ${oi.taker_buy_pct_1h}% · 매도 ${oi.taker_sell_pct_1h}%</b></div>`:'';
   const total=oi.total_usd!=null?fmtBig(oi.total_usd):(oi.total_contracts!=null?Number(oi.total_contracts).toLocaleString():'—');
   const totalLabel=oi.oi_unit==='contracts'?'BTC OI 계약수':'BTC OI 명목가치';
   const changeText=chg==null?'—':(chg>=0?'+':'')+chg+'%';
   const asof=oi.asof?new Date(oi.asof).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}):'—';
-  return `<div class="oitop"><div class="oitf">${seg}</div><span class="oilevel ${lv[1]}" data-tip="현재 BTC 미결제약정이 Binance 최근 30일 분포에서 ${oi.pct_rank!=null?oi.pct_rank+'백분위':'비교 불가'} 수준">BTC OI ${lv[0]}</span></div><div class="oihead"><div class="oim"><div class="oil">${totalLabel}</div><div class="oiv">${total}</div></div><div class="oim"><div class="oil">${tfl} OI 변화</div><div class="oiv ${chg==null?'':(chg>=0?'pos':'neg')}">${changeText}</div></div><div class="oim"><div class="oil">롱 계정 비중</div><div class="oiv ${lp!=null&&lp>=60?'warn':''}">${lp==null?'—':lp+'%'}</div></div><div class="oim"><div class="oil">테이커 매수 · 1H</div><div class="oiv ${oi.taker_buy_pct_1h==null?'':(oi.taker_buy_pct_1h>=50?'pos':'neg')}">${oi.taker_buy_pct_1h==null?'—':oi.taker_buy_pct_1h+'%'}</div></div></div>${chg==null?'':`<div class="oi-insight"><span class="oi-il">해석</span>${oiInsight(chg,pc,tfl)}</div>`}${crowd}${taker}${rows?`<div class="oibars">${rows}</div>`:''}<div class="ccap muted">${esc(oi.source||'Binance USDⓈ-M')} 공개 API · OI 최근 30일 기준 · 계정 비중과 테이커 체결은 서로 다른 지표 · ${asof} KST 기준</div>`;}
-function oiTf(btn,tf){const pane=btn.closest('.liqpane');if(!pane||!(LIQ&&LIQ.oi))return;pane.innerHTML=oiBlock(LIQ.oi,tf);}
+  const insight=oiInsight(chg,pc,tfl);
+  return `<div class="oitop"><div class="oitf">${seg}</div><span class="oilevel ${lv[1]}" data-tip="현재 BTC 미결제약정이 Binance 최근 30일 분포에서 ${oi.pct_rank!=null?oi.pct_rank+'백분위':'비교 불가'} 수준">BTC OI ${lv[0]}</span></div><div class="oihead"><div class="oim"><div class="oil">${totalLabel}</div><div class="oiv">${total}</div></div><div class="oim"><div class="oil">${tfl} OI 변화</div><div class="oiv ${chg==null?'':(chg>=0?'pos':'neg')}">${changeText}</div></div><div class="oim"><div class="oil">롱 계정 비중</div><div class="oiv ${lp!=null&&lp>=60?'warn':''}">${lp==null?'—':lp+'%'}</div></div><div class="oim"><div class="oil">테이커 매수 · 1H</div><div class="oiv ${oi.taker_buy_pct_1h==null?'':(oi.taker_buy_pct_1h>=50?'pos':'neg')}">${oi.taker_buy_pct_1h==null?'—':oi.taker_buy_pct_1h+'%'}</div></div></div>${insight?`<div class="oi-insight"><span class="oi-il">해석</span>${insight}</div>`:(chg!=null?`<div class="oi-insight muted"><span class="oi-il">해석</span>${tfl} BTC 가격 변화가 아직 없어 OI와의 사분면 해석을 보류합니다.</div>`:'')}${crowd}${taker}${rows?`<div class="oibars">${rows}</div>`:''}<div class="ccap muted">${esc(oi.source||'Binance USDⓈ-M')} 공개 API · OI 최근 30일 기준 · 계정 비중과 테이커 체결은 서로 다른 지표 · ${asof} KST 기준</div>`;}
+function oiTf(btn,tf){const pane=btn.closest('.liqpane');if(!pane||!(LIQ&&LIQ.oi))return;OI_TF=tf;pane.innerHTML=oiBlock(LIQ.oi,tf);}
 function iso(d){const p=n=>String(n).padStart(2,'0');return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());}
 function chipGroup(field,opts){return opts.map(([v,label])=>`<button class="btn sm fchip" data-field="${field}" data-val="${esc(v)}" aria-pressed="${JT[field]===v?'true':'false'}">${esc(label)}</button>`).join('');}
 function jtMatch(t){
@@ -1288,10 +1306,10 @@ function perfMetrics(ts){
   const fees=ts.reduce((a,t)=>a+num(t.fees),0), funding=ts.reduce((a,t)=>a+num(t.funding),0);
   const wr=decided?wins.length/decided:0, payoff=avgLoss?Math.abs(avgWin/avgLoss):0;
   const kelly=payoff?(wr-(1-wr)/payoff):0;  // 최적 베팅비중(프랙셔널 켈리 권장)
-  const mar=mdd?Math.abs(sum/mdd):(sum>0?Infinity:0);  // 수익÷최대낙폭(계좌무관, 자산 약분)
+  const returnToDd=mdd?(sum/Math.abs(mdd)):(sum>0?Infinity:0);  // 관측기간 누적손익÷MDD, 연율화 MAR가 아님
   const rps=ts.map(t=>t.risk_pct).filter(v=>v!=null);
   const avgRiskPct=rps.length?rps.reduce((a,b)=>a+b,0)/rps.length:null, maxRiskPct=rps.length?Math.max(...rps):null;
-  return {n,sum,winRate:wr,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding,payoff,kelly,mar,avgRiskPct,maxRiskPct,riskN:rps.length};
+  return {n,sum,winRate:wr,avgWin,avgLoss,pf,exp:n?sum/n:0,avgR,rsN:rs.length,mdd,fees,funding,gross:sum+fees,net:sum+funding,payoff,kelly,returnToDd,avgRiskPct,maxRiskPct,riskN:rps.length};
 }
 function mcard(l,v,cls,sub){return `<div class="mcard"><div class="ml">${l}</div><div class="mval ${cls||''}">${v}</div>${sub?`<div class="msub">${sub}</div>`:''}</div>`;}
 function metricsRow(m){
@@ -1301,10 +1319,10 @@ function metricsRow(m){
     +mcard('손익비',m.avgLoss?(m.avgWin/Math.abs(m.avgLoss)).toFixed(2):'—','','평균이익 ÷ 평균손실')
     +mcard('Profit Factor',!isFinite(m.pf)?(m.n>=20?'∞':'—'):m.pf.toFixed(2),(isFinite(m.pf)&&m.pf>=1)?'pos':(isFinite(m.pf)?'neg':''),!isFinite(m.pf)?(m.n>=20?'손실 없음':'표본 부족(20건+)'):'총이익 ÷ 총손실')
     +mcard('최대 낙폭(MDD)',money(m.mdd),'neg','누적 고점 대비 (청산 기준)')
-    +mcard('MAR (수익÷MDD)',!isFinite(m.mar)?(m.n>=3?'∞':'—'):m.mar.toFixed(2),m.mar>=1?'pos':(m.mar>0?'':'neg'),'클수록 낙폭 대비 효율↑')
+    +mcard('손익/MDD (비연율)',!isFinite(m.returnToDd)?(m.n>=3?'∞':'—'):m.returnToDd.toFixed(2),m.returnToDd>=1?'pos':(m.returnToDd>0?'':'neg'),'관측기간 누적손익 ÷ 최대낙폭 · 일반 MAR 아님')
     +(m.avgRiskPct!=null?mcard('평균 리스크/거래',m.avgRiskPct.toFixed(2)+'%',m.avgRiskPct>2?'neg':'',`최대 ${m.maxRiskPct.toFixed(2)}% · 계좌 대비`):'')
     +mcard('순손익',money(m.net),m.net>=0?'pos':'neg',m.funding?'펀딩 포함':'수수료 반영')
-    +mcard('켈리 비중',(m.n>=20&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=20&&m.kelly>0)?'pos':'',m.n<20?'표본 부족(20건+ 필요)':(m.kelly>0?`½켈리만 권장 ${Math.round(m.kelly*50)}%`:'기댓값 0 이하 · 우위 없음'))
+    +mcard('켈리 추정치',(m.n>=30&&m.kelly>0)?Math.round(m.kelly*100)+'%':'—',(m.n>=30&&m.kelly>0)?'pos':'',m.n<30?'표본 부족(30건+ 필요)':(m.kelly>0?`과거 표본의 ½켈리 ${Math.round(m.kelly*50)}% · 실제 리스크 상한 아님`:'현재 표본의 기댓값 0 이하'))
     +`</div>`;
 }
 let EQ_MODE='usdt';  // 자산곡선 모드: 'usdt' | 'r'(리스크 정규화)
@@ -1570,13 +1588,14 @@ function renderInsights(el){
   const glossary=`<details class="glossary"><summary>지표 용어 설명 (R이 뭐죠?)</summary>
     <dl><dt>실현 R (R배수)</dt><dd>청산 후 결과 손익을 <b>진입~손절 거리(1R)</b>로 나눈 값. +2R = 각오한 손실의 2배를 벌었다는 뜻. 사이즈가 달라도 거래 잘잘못을 같은 잣대로 비교.</dd>
     <dt>목표 R:R (계획)</dt><dd>진입 전 목표 손익비 = 목표이익 ÷ 각오한 손실(진입~손절). 실현 R은 끝난 결과, R:R은 들어가기 전 계획.</dd>
-    <dt>기대값/거래</dt><dd>1거래당 평균 손익. 양수면 계속할수록 번다.</dd>
+    <dt>기대값/거래</dt><dd>현재 표본의 1거래당 평균 손익. 양수라도 표본 수와 시장 변화에 따라 달라질 수 있습니다.</dd>
     <dt>손익비</dt><dd>평균이익 ÷ 평균손실. 1.5면 이길 때 질 때보다 1.5배 먹음.</dd>
-    <dt>Profit Factor</dt><dd>총이익 ÷ 총손실. <b>1보다 크면 버는 시스템</b>.</dd>
-    <dt>MDD (최대 낙폭)</dt><dd>누적손익이 고점 대비 가장 많이 빠진 폭(청산 기준). MAR(수익÷MDD)의 분모.</dd>
-    <dt>켈리 비중</dt><dd>수학적 최적 베팅 비중. 과대평가되기 쉬워 <b>절반(½켈리)만</b> 쓰길 권장. 표본 20건+부터만 표시.</dd>
+    <dt>Profit Factor</dt><dd>총이익 ÷ 총손실. 1보다 크면 현재 관측기간의 총이익이 총손실보다 컸다는 뜻이며 미래 성과를 보장하지 않습니다.</dd>
+    <dt>MDD (최대 낙폭)</dt><dd>누적손익이 고점 대비 가장 많이 빠진 폭(청산 기준).</dd>
+    <dt>손익/MDD (비연율)</dt><dd>현재 일지의 관측기간 누적손익 ÷ 최대낙폭. 낙폭 대비 회복 효율을 보는 단순 비율이며, 연율 수익률을 쓰는 일반적인 MAR와는 다릅니다.</dd>
+    <dt>켈리 추정치</dt><dd>과거 승률·손익비로 계산한 이론값. 오차에 매우 민감해 30건 미만은 숨기며, 표시값도 실제 거래의 리스크 상한으로 쓰면 안 됩니다.</dd>
     <dt>펀딩(비)</dt><dd>무기한 선물 보유 중 롱·숏이 주기적으로 주고받는 수수료. 순손익에 ± 반영.</dd>
-    <dt>상대강도</dt><dd>각 알트가 최근 7일 BTC보다 얼마나 더(또는 덜) 올랐는지. 위=강세(롱 후보), 아래=약세(숏 후보).</dd>
+    <dt>상대강도</dt><dd>각 알트가 최근 7일 BTC보다 얼마나 더(또는 덜) 올랐는지. 위=상대 강세, 아래=상대 약세이며 그 자체가 진입 신호는 아닙니다.</dd>
     <dt>청산 방식</dt><dd>포지션이 어떻게 닫혔나: 손절(SL)·익절(TP)·트레일링·수동·강제청산. (Bybit 자동 판별)</dd>
     <dt>복수매매 / 틸트</dt><dd>복수매매 = 손실 직후 만회하려 급히 재진입. 틸트 = 감정에 휘둘려 무너지는 상태(연패·복수매매로 추정).</dd>
     <dt>무 (본절)</dt><dd>진입가 근처에서 끝나 사실상 본전인 거래(명목가 0.1% 이내 ≈ 왕복 수수료 크기). 승·패 어디에도 넣지 않고 <b>승률 분모에서도 제외</b>합니다. 본절이 패배로 둔갑하지 않도록.</dd></dl></details>`;
@@ -1636,7 +1655,7 @@ function renderSettings(el){
         <div class="field"><label for="setEquity">계좌 자산 (USDT)</label><input id="setEquity" type="number" step="any" inputmode="decimal" placeholder="예: 10000" value="${ME.account_equity??''}"></div>
         <div class="field"><label for="setBe">본절 기준 (%)</label><input id="setBe" type="number" step="0.01" inputmode="decimal" placeholder="0.1" value="${ME.be_pct??''}"></div>
       </div>
-      <p class="muted" style="font-size:var(--fs-xs);margin:0 0 12px;line-height:1.55">계좌 자산을 입력하면 거래별 리스크가 <b>계좌 %</b>로 표시되고 MAR 계산에 쓰입니다. 본절 기준 = |손익|÷명목가가 이 %보다 작으면 무승부(기본 0.1% ≈ 왕복 수수료).</p>
+      <p class="muted" style="font-size:var(--fs-xs);margin:0 0 12px;line-height:1.55">계좌 자산을 입력하면 진입가·손절가·수량으로 계산한 거래별 리스크가 <b>계좌 %</b>로 표시됩니다. 본절 기준 = |손익|÷명목가가 이 %보다 작으면 무승부(기본 0.1% ≈ 왕복 수수료).</p>
       <button class="btn primary sm" id="saveSettings">설정 저장</button></div>
     <div class="section-title">계정</div><div class="card"><div class="conn">
       <div><div class="nm" id="acctEmail"></div><div class="hint">키·시크릿은 암호화되어 저장됩니다 (평문 미저장).</div></div>
