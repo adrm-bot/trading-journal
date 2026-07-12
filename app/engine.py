@@ -23,6 +23,10 @@ logger = logging.getLogger("app.engine")
 LOOKBACK = int(os.getenv("LOOKBACK_DAYS", "90"))
 # 같은 심볼·방향에서 직전 청산으로부터 이 시간 내 청산이면 같은 포지션으로 묶는다.
 POS_GAP_HOURS = float(os.getenv("POSITION_GAP_HOURS", "12"))
+BINANCE_CONTEXT_STEP_DAYS = int(os.getenv("BINANCE_CONTEXT_STEP_DAYS", "30"))
+BINANCE_MAX_HISTORY_DAYS = int(os.getenv("BINANCE_MAX_HISTORY_DAYS", "180"))
+EXIT_LEG_MERGE_BPS = float(os.getenv("EXIT_LEG_MERGE_BPS", "2"))
+EXIT_LEG_MAX_BANDS = int(os.getenv("EXIT_LEG_MAX_BANDS", "12"))
 
 
 def _f(d, k):
@@ -39,7 +43,7 @@ def _ts_str(ms):
 def _position_row(exchange, trade_id, symbol, direction, entry, exit_, qty, pnl,
                   opened_ms, closed_ms, fees=0.0, funding=0.0, leverage=0.0,
                   fill_count=0, liquidated=False, exit_reason="unknown",
-                  exit_count=0, exit_legs=None):
+                  exit_count=0, raw_exit_count=0, exit_legs=None):
     return {
         "trade_id": trade_id, "exchange": exchange, "symbol": symbol, "direction": direction,
         "entry": entry, "exit": exit_, "qty": qty, "pnl": pnl,
@@ -47,7 +51,8 @@ def _position_row(exchange, trade_id, symbol, direction, entry, exit_, qty, pnl,
         "fees": round(fees, 6), "funding": round(funding, 6),
         "leverage": leverage or None, "fill_count": fill_count or None,
         "liquidated": 1 if liquidated else 0, "exit_reason": exit_reason, "status": "의도 미기입",
-        "exit_count": exit_count or None, "exit_legs": exit_legs,  # 분할청산 레그(JSON)
+        "exit_count": exit_count or None, "raw_exit_count": raw_exit_count or None,
+        "exit_legs": exit_legs,  # 청산 가격 구간(JSON) + 압축 전 주문 수
     }
 
 
@@ -187,11 +192,12 @@ def fetch_bybit(key, secret, lookback):
 
 
 # ---------- Binance: userTrades 부호 walk ----------
-def _binance_symbols_and_funding(ex, lookback):
-    now = ex.milliseconds()
+def _binance_symbols_and_funding(ex, lookback, now=None):
+    now = int(now if now is not None else ex.milliseconds())
     start = now - lookback * 86_400_000
     week = 7 * 86_400_000
-    symbols, fevents = set(), {}
+    symbols, fevents, realized_ledger = set(), {}, {}
+    seen_income = set()
     cur = start
     while cur < now:
         e = min(cur + week, now)
@@ -201,6 +207,15 @@ def _binance_symbols_and_funding(ex, lookback):
             if not batch:
                 break
             for inc in batch:
+                # 주간 윈도 경계와 페이지 경계가 겹쳐도 같은 원장 행을 두 번 더하지 않는다.
+                ikey = str(inc.get("tranId") or "") or (
+                    str(inc.get("incomeType") or ""), str(inc.get("symbol") or ""),
+                    int(inc.get("time") or 0), str(inc.get("income") or ""),
+                    str(inc.get("info") or ""),
+                )
+                if ikey in seen_income:
+                    continue
+                seen_income.add(ikey)
                 typ = inc.get("incomeType")
                 sym = inc.get("symbol") or ""
                 # 심볼 발견: 거래가 있었으면 REALIZED_PNL이든 COMMISSION이든 잡는다(누락 방지)
@@ -208,20 +223,41 @@ def _binance_symbols_and_funding(ex, lookback):
                     symbols.add(sym)
                 if typ == "FUNDING_FEE" and sym:  # 시각 보존 → 포지션별 귀속용
                     fevents.setdefault(sym, []).append((int(inc.get("time") or 0), _f(inc, "income")))
+                if typ == "REALIZED_PNL" and sym:
+                    realized_ledger[sym] = realized_ledger.get(sym, 0.0) + _f(inc, "income")
             if len(batch) < 1000:
                 break
             ws = int(batch[-1].get("time") or ws) + 1
-        cur = e
-    return symbols, fevents
+        cur = e + 1
+    return symbols, fevents, realized_ledger
 
 
-def _binance_user_trades(ex, symbol, lookback):
-    now = ex.milliseconds()
-    start = now - lookback * 86_400_000
+def _reconcile_binance_realized(symbol, fills, target_start_ms, ledger_total):
+    """같은 기간의 REALIZED_PNL 원장과 userTrades 체결 손익을 적재 전에 대조한다.
+
+    완전히 닫힌 포지션만 비교하면 진행 중 포지션의 부분청산이 빠질 수 있으므로 원시 체결
+    전체를 비교한다. 불일치하면 기존 DB를 건드리기 전에 pull을 중단한다.
+    """
+    fill_total = sum(_f(t, "realizedPnl") for t in fills
+                     if int(t.get("time") or 0) >= int(target_start_ms))
+    ledger_total = float(ledger_total or 0.0)
+    tolerance = max(0.5, abs(ledger_total) * 0.0001)
+    delta = fill_total - ledger_total
+    if abs(delta) > tolerance:
+        raise RuntimeError(
+            f"binance {symbol} 실현손익 원장과 체결 합계가 일치하지 않습니다 "
+            f"(원장 {ledger_total:.2f}, 체결 {fill_total:.2f}). 기존 일지는 유지했습니다"
+        )
+    return {"symbol": symbol, "ledger": round(ledger_total, 8),
+            "fills": round(fill_total, 8), "delta": round(delta, 8)}
+
+
+def _binance_user_trades_range(ex, symbol, start, end):
+    """Binance userTrades를 주어진 구간에서 완전 페이지네이션한다."""
     week = 7 * 86_400_000
     out, cur = [], start
-    while cur < now:
-        e = min(cur + week, now)
+    while cur < end:
+        e = min(cur + week, end)
         from_id = None
         while True:
             p = {"symbol": symbol, "startTime": cur, "endTime": e, "limit": 1000}
@@ -230,18 +266,60 @@ def _binance_user_trades(ex, symbol, lookback):
             batch = ex.fapiPrivateGetUserTrades(p)
             if not batch:
                 break
-            out += batch
+            # fromId 페이지는 거래소가 시간 상한 뒤의 새 체결까지 돌려줄 수 있다. 스냅샷
+            # 종료시각 밖 행은 버려 원장 조회와 정확히 같은 닫힌 구간을 비교한다.
+            out += [t for t in batch if start <= int(t.get("time") or 0) <= end]
             if len(batch) < 1000:
                 break
             from_id = int(batch[-1]["id"]) + 1  # 완전 페이지네이션
         cur = e
-    # 중복 제거(시간창+fromId 혼용 안전장치)
+    return out
+
+
+def _uniq_fills(rows):
+    """시간창+fromId 혼용 안전장치. 시간순으로 정규화한다."""
     seen, uniq = set(), []
-    for t in out:
-        if t["id"] not in seen:
-            seen.add(t["id"])
+    for t in sorted(rows, key=lambda x: (int(x.get("time") or 0), int(x.get("id") or 0))):
+        key = str(t.get("id"))
+        if key not in seen:
+            seen.add(key)
             uniq.append(t)
     return uniq
+
+
+def _boundary_ambiguous(fills):
+    """각 positionSide의 첫 체결이 실현손익을 갖는다면 조회창이 포지션 중간에서 시작했다."""
+    first = {}
+    for t in fills:
+        first.setdefault(t.get("positionSide") or "BOTH", t)
+    return any(abs(_f(t, "realizedPnl")) > 1e-9 for t in first.values())
+
+
+def _binance_user_trades(ex, symbol, lookback, now=None):
+    """대상 창 + 필요한 만큼의 선행 체결 문맥을 조회한다.
+
+    조회 시작일의 첫 체결이 이미 청산(realizedPnl!=0)이면 포지션 진입이 창 밖에 있다는 뜻이다.
+    30일씩 과거를 확장해 최대 180일까지 진입 문맥을 복원한다. 문맥은 재구성에만 쓰고,
+    fetch_binance에서 실제 적재 창 밖에 청산된 포지션은 다시 제외한다.
+    """
+    now = int(now if now is not None else ex.milliseconds())
+    target_start = now - lookback * 86_400_000
+    floor = now - BINANCE_MAX_HISTORY_DAYS * 86_400_000
+    context_start = target_start
+    rows = _uniq_fills(_binance_user_trades_range(ex, symbol, target_start, now))
+    step = max(1, BINANCE_CONTEXT_STEP_DAYS) * 86_400_000
+    while rows and _boundary_ambiguous(rows) and context_start > floor:
+        earlier = max(floor, context_start - step)
+        rows = _uniq_fills(_binance_user_trades_range(ex, symbol, earlier, context_start - 1) + rows)
+        context_start = earlier
+    if rows and _boundary_ambiguous(rows):
+        raise RuntimeError(
+            f"binance {symbol} 포지션 진입이 조회 가능 범위보다 오래되어 안전하게 재구성할 수 없습니다"
+        )
+    if context_start < target_start:
+        logger.info("binance %s 경계 문맥 %d일 보강", symbol,
+                    round((target_start - context_start) / 86_400_000))
+    return rows
 
 
 def _new_bpos(direction, ts, anchor):
@@ -322,11 +400,47 @@ def _finalize_pos(exchange, symbol, pos, closing_id):
     # 실현손익: 거래소 보고 합(rp) 우선, 없으면 vwap 계산으로 폴백(Gate 등 fill에 pnl 미포함 대비)
     pnl = pos["rp"] if abs(pos["rp"]) > 1e-9 else dsign * (exit_ - entry) * xq - pos["fee"]
     tid = f"{exchange}:pos:{symbol}:{closing_id}"
-    legs = pos.get("legs") or []
+    raw_legs = pos.get("legs") or []
+    legs = _compact_exit_legs(raw_legs)
     return _position_row(exchange, tid, symbol, pos["dir"], round(entry, 10), round(exit_, 10),
                          round(eq, 10), round(pnl, 8), pos["o"], pos["c"],
                          fees=pos["fee"], fill_count=pos["n"], liquidated=pos["liq"],
-                         exit_count=len(legs), exit_legs=(json.dumps(legs) if len(legs) > 1 else None))
+                         exit_count=len(legs), raw_exit_count=(len(raw_legs) if len(raw_legs) > len(legs) else 0),
+                         exit_legs=(json.dumps(legs) if len(legs) > 1 or len(raw_legs) > len(legs) else None))
+
+
+def _compact_exit_legs(legs, merge_bps=EXIT_LEG_MERGE_BPS, max_bands=EXIT_LEG_MAX_BANDS):
+    """원시 주문 수가 아니라 트레이더가 읽을 수 있는 청산 가격 구간으로 압축한다.
+
+    1) 연속된 주문이 같은 가격대(기본 2bp)면 VWAP 한 구간으로 병합한다.
+    2) 그래도 너무 많으면 시간 순서를 유지한 채 최대 12개 VWAP 구간으로 묶는다.
+    원시 체결 수는 fill_count에 그대로 남으므로 감사 가능성과 화면 가독성을 동시에 지킨다.
+    """
+    clean = [(float(p), float(q)) for p, q in (legs or []) if p and q and float(q) > 0]
+    if not clean:
+        return []
+
+    merged = []
+    for price, qty in clean:
+        if merged:
+            prev_price, prev_qty = merged[-1]
+            rel_bps = abs(price - prev_price) / max(abs(price), abs(prev_price), 1e-12) * 10_000
+            if rel_bps <= merge_bps:
+                nq = prev_qty + qty
+                merged[-1] = ((prev_price * prev_qty + price * qty) / nq, nq)
+                continue
+        merged.append((price, qty))
+
+    max_bands = max(1, int(max_bands))
+    if len(merged) > max_bands:
+        size = (len(merged) + max_bands - 1) // max_bands
+        compact = []
+        for i in range(0, len(merged), size):
+            chunk = merged[i:i + size]
+            qty = sum(q for _, q in chunk)
+            compact.append((sum(p * q for p, q in chunk) / qty, qty))
+        merged = compact
+    return [[round(p, 10), round(q, 10)] for p, q in merged]
 
 
 def _mae_mfe_prices(ohlcv, direction, o_ms, c_ms):
@@ -352,11 +466,18 @@ def _mae_mfe_prices(ohlcv, direction, o_ms, c_ms):
 def fetch_binance(key, secret, lookback):
     ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
     try:
-        symbols, fevents = _binance_symbols_and_funding(ex, lookback)
+        snapshot_end = ex.milliseconds()  # 원장·체결을 동일한 닫힌 시점으로 조회해 진행 중 체결 경합 방지
+        symbols, fevents, realized_ledger = _binance_symbols_and_funding(ex, lookback, snapshot_end)
+        target_start_ms = snapshot_end - lookback * 86_400_000
+        target_start = target_start_ms / 1000
         rows = []
         for sym in sorted(symbols):
-            trades = _binance_user_trades(ex, sym, lookback)
-            rows += reconstruct_walk("binance", sym, trades, fevents.get(sym))
+            trades = _binance_user_trades(ex, sym, lookback, snapshot_end)
+            audit = _reconcile_binance_realized(sym, trades, target_start_ms,
+                                                realized_ledger.get(sym, 0.0))
+            logger.info("binance realized audit %s", audit)
+            rebuilt = reconstruct_walk("binance", sym, trades, fevents.get(sym))
+            rows += [r for r in rebuilt if (_closed_ts(r.get("closed_at")) or 0) >= target_start]
         return rows
     except ccxt.BaseError:
         raise RuntimeError("binance 인증/조회 실패. USDⓈ-M read-only 키·권한·시간동기를 확인하세요") from None

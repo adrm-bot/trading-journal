@@ -11,6 +11,7 @@
 앱은 계속 뜬다(시장 카드들과 동일 규약).
 """
 import logging
+import os
 import threading
 import time
 
@@ -23,8 +24,8 @@ log = logging.getLogger("regime")
 FAPI = "https://fapi.binance.com"
 REGIMES = ("TREND_UP", "TREND_DOWN", "SQUEEZE", "RANGE", "CHOP")
 NAME = {"TREND_UP": "상승추세", "TREND_DOWN": "하락추세", "SQUEEZE": "수렴(돌파대기)",
-        "RANGE": "박스권", "CHOP": "스퀴즈(관망)"}
-EMOJI = {"TREND_UP": "🟢", "TREND_DOWN": "🔴", "SQUEEZE": "🔵", "RANGE": "⚪", "CHOP": "🟠"}
+        "RANGE": "박스권", "CHOP": "혼조(관망)"}
+EMOJI = {r: "●" for r in REGIMES}
 SUPER = {"TREND_UP": "UP", "TREND_DOWN": "DOWN"}
 
 # 리서치 동결 파라미터 (창은 벽시계 기준, TF별 봉수 환산)
@@ -33,16 +34,25 @@ ADX_LO, ADX_SCALE = 20.0, 15.0
 W_DIR, W_VOL, W_FUEL, NEAR_TIE = 0.5, 0.3, 0.2, 0.02
 RAMP_LO, RAMP_HI = (0.15, 0.25), (0.75, 0.85)
 DEAD_Q = 0.25
-QUAD_TEXT = {1: "🟩 신규 롱 자금이 들어오고 있습니다 — 추세 연료로 판정에 반영 중",
-             2: "🟥 신규 숏 자금이 들어오고 있습니다 — 추세 연료로 판정에 반영 중",
-             3: "↩ 숏 커버(기존 숏 정리) 중 — 판정은 그대로, 확신만 15% 낮춰 반영",
-             4: "↩ 롱 청산(기존 롱 정리) 중 — 판정은 그대로, 확신만 15% 낮춰 반영",
-             0: "— 특별한 OI 변화가 없습니다"}
+QUAD_TEXT = {1: "가격·OI 동반 상승 — 신규 롱 우세 가능성. 테이커 매수 흐름을 함께 확인하세요",
+             2: "가격 하락·OI 증가 — 신규 숏 우세 가능성. 테이커 매도 흐름을 함께 확인하세요",
+             3: "가격 상승·OI 감소 — 숏 커버 가능성. 신규 매수의 지속력은 별도 확인이 필요합니다",
+             4: "가격·OI 동반 하락 — 롱 디레버리징 가능성. 신규 숏 추격은 주의하세요",
+             0: "가격·OI 변화가 모두 유의 구간 밖입니다"}
 
 _TTL = 300
 _live_cache: dict = {}  # {symbol: {"at": ts, "data": payload}}
 _labels_cache: dict = {}   # sym -> {"at": ts, "since": Timestamp, "s": Series|None}
+_oi_cache: dict = {}       # sym -> {"at": ts, "data": DataFrame|None}
+_positioning_cache: dict = {}  # sym -> {"at": ts, "data": payload}
 _lock = threading.Lock()
+_oi_lock = threading.Lock()
+
+POSITIONING_SYMBOLS = tuple(dict.fromkeys(
+    s.strip().upper() for s in os.getenv(
+        "POSITIONING_SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT"
+    ).split(",") if s.strip()
+))
 
 
 # ── 데이터 ───────────────────────────────────────────────────────────────────
@@ -139,7 +149,175 @@ def _fetch_oi(symbol: str, session=None) -> pd.DataFrame | None:
     m = pd.DataFrame(rows)
     m["snap_ts"] = pd.to_datetime(m["timestamp"].astype("int64"), unit="ms", utc=True)
     m["oi"] = m["sumOpenInterest"].astype("float64")
-    return m.drop_duplicates("snap_ts").sort_values("snap_ts")[["snap_ts", "oi"]]
+    # USD 명목가치는 화면 표시·시장 간 비교용. 분류기는 기존 계약수(oi)를 그대로 쓴다.
+    m["oi_usd"] = pd.to_numeric(m.get("sumOpenInterestValue"), errors="coerce")
+    return m.drop_duplicates("snap_ts").sort_values("snap_ts")[["snap_ts", "oi", "oi_usd"]]
+
+
+def _cached_oi(symbol: str) -> pd.DataFrame | None:
+    """레짐과 포지셔닝 카드가 같은 5분 OI 스냅샷을 공유한다.
+
+    FastAPI 동시 요청에서 레짐/OI 카드가 각각 30일 데이터를 중복 조회하지 않도록
+    네트워크 구간까지 짧은 전용 락으로 직렬화한다.
+    """
+    now = time.time()
+    hit = _oi_cache.get(symbol)
+    if hit is not None and now - hit["at"] < _TTL:
+        return hit["data"]
+    with _oi_lock:
+        hit = _oi_cache.get(symbol)
+        if hit is not None and now - hit["at"] < _TTL:
+            return hit["data"]
+        data = _fetch_oi(symbol)
+        _oi_cache[symbol] = {"at": time.time(), "data": data}
+        return data
+
+
+def _fetch_public_series(path: str, symbol: str, period: str = "5m", limit: int = 500,
+                         session=None) -> list[dict]:
+    """Binance USDⓈ-M 공개 통계 시계열. 실패는 빈 리스트로 강등한다."""
+    s = session or requests
+    try:
+        r = s.get(f"{FAPI}{path}", params={"symbol": symbol, "period": period, "limit": limit},
+                  timeout=30)
+        if r.status_code in (400, 404):
+            return []
+        r.raise_for_status()
+        rows = r.json()
+        return sorted((x for x in rows if isinstance(x, dict)),
+                      key=lambda x: int(x.get("timestamp") or 0))
+    except Exception as e:  # noqa: BLE001
+        log.warning("공개 포지셔닝 실패 %s %s: %s", path, symbol, e)
+        return []
+
+
+def _series_change(s: pd.Series, delta: pd.Timedelta) -> float | None:
+    s = s.dropna().sort_index()
+    if len(s) < 2:
+        return None
+    cur = float(s.iloc[-1])
+    old = s.asof(s.index[-1] - delta)
+    if pd.isna(old) or not float(old):
+        return None
+    return round((cur / float(old) - 1.0) * 100, 2)
+
+
+def _row_at(rows: list[dict], delta: pd.Timedelta) -> dict | None:
+    if not rows:
+        return None
+    end = int(rows[-1].get("timestamp") or 0)
+    target = end - int(delta.total_seconds() * 1000)
+    prior = [r for r in rows if int(r.get("timestamp") or 0) <= target]
+    return prior[-1] if prior else None
+
+
+def _fnum(v) -> float | None:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _brief_oi(symbol: str) -> dict | None:
+    """비교 심볼은 1시간×7일 한 번만 조회해 카드 부하를 제한한다."""
+    rows = _fetch_public_series("/futures/data/openInterestHist", symbol, "1h", 169)
+    if not rows:
+        return None
+    vals = [(_fnum(r.get("sumOpenInterestValue")), int(r.get("timestamp") or 0)) for r in rows]
+    vals = [(v, ts) for v, ts in vals if v is not None]
+    if not vals:
+        return None
+    cur = vals[-1][0]
+    old = vals[-25][0] if len(vals) >= 25 else vals[0][0]
+    return {"sym": symbol.replace("USDT", ""), "usd": round(cur, 2),
+            "chg24": round((cur / old - 1) * 100, 2) if old else None}
+
+
+def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = None,
+                      taker_rows: list[dict] | None = None, by_symbol: list[dict] | None = None,
+                      symbol: str = "BTCUSDT") -> dict:
+    """OI·계정 비중·테이커 체결을 한 스냅샷으로 정규화하는 순수 조립 함수."""
+    ratio_rows, taker_rows = ratio_rows or [], taker_rows or []
+    out = {"available": False, "symbol": symbol, "source": "Binance USDⓈ-M",
+           "window_days": 30, "tf": {}, "by_symbol": by_symbol or []}
+
+    if oi is not None and not oi.empty:
+        frame = oi.drop_duplicates("snap_ts").sort_values("snap_ts").copy()
+        col = "oi_usd" if "oi_usd" in frame and frame["oi_usd"].notna().any() else "oi"
+        s = frame.set_index("snap_ts")[col].astype(float)
+        if s.notna().any():
+            cur = float(s.dropna().iloc[-1])
+            hist = s.dropna()
+            out.update(available=True, oi_available=True,
+                       pct_rank=round(float((hist <= cur).mean()) * 100),
+                       asof=hist.index[-1].isoformat(), oi_unit=("usd" if col == "oi_usd" else "contracts"))
+            out["total_usd" if col == "oi_usd" else "total_contracts"] = round(cur, 2)
+            out["tf"] = {
+                "1h": _series_change(hist, pd.Timedelta(hours=1)),
+                "4h": _series_change(hist, pd.Timedelta(hours=4)),
+                "24h": _series_change(hist, pd.Timedelta(days=1)),
+                "7d": _series_change(hist, pd.Timedelta(days=7)),
+            }
+    else:
+        out["oi_available"] = False
+
+    if ratio_rows:
+        last = ratio_rows[-1]
+        lp, sp = _fnum(last.get("longAccount")), _fnum(last.get("shortAccount"))
+        ratio = _fnum(last.get("longShortRatio"))
+        if lp is not None and sp is not None:
+            out.update(available=True, long_pct=round(lp * 100, 1), short_pct=round(sp * 100, 1),
+                       ls_ratio=round(ratio if ratio is not None else (lp / sp if sp else 0), 3))
+            deltas = {}
+            for key, delta in (("1h", pd.Timedelta(hours=1)), ("4h", pd.Timedelta(hours=4)),
+                               ("24h", pd.Timedelta(days=1))):
+                old = _row_at(ratio_rows, delta)
+                old_lp = _fnum((old or {}).get("longAccount"))
+                deltas[key] = None if old_lp is None else round((lp - old_lp) * 100, 2)
+            out["long_delta_pp"] = deltas
+            d1 = deltas.get("1h")
+            out["crowd_trend"] = ("long_increasing" if d1 is not None and d1 >= 0.2 else
+                                  "short_increasing" if d1 is not None and d1 <= -0.2 else "stable")
+            out["crowd_risk"] = "long" if lp >= 0.60 else ("short" if sp >= 0.60 else None)
+
+    if taker_rows:
+        end = int(taker_rows[-1].get("timestamp") or 0)
+        recent = [r for r in taker_rows if int(r.get("timestamp") or 0) >= end - 3600_000]
+        buy = sum(_fnum(r.get("buyVol")) or 0 for r in recent)
+        sell = sum(_fnum(r.get("sellVol")) or 0 for r in recent)
+        total = buy + sell
+        if total:
+            out.update(available=True, taker_buy_pct_1h=round(buy / total * 100, 1),
+                       taker_sell_pct_1h=round(sell / total * 100, 1),
+                       taker_ratio_1h=round(buy / sell, 3) if sell else None)
+    return out
+
+
+def positioning(symbol: str = "BTCUSDT") -> dict:
+    """대시보드 OI/롱숏 포지셔닝. 공개 API만 사용하며 5분 캐시한다."""
+    now = time.time()
+    hit = _positioning_cache.get(symbol)
+    if hit is not None and now - hit["at"] < _TTL:
+        return hit["data"]
+    oi = _cached_oi(symbol)
+    ratios = _fetch_public_series("/futures/data/globalLongShortAccountRatio", symbol)
+    taker = _fetch_public_series("/futures/data/takerlongshortRatio", symbol)
+    rows = []
+    for sym in POSITIONING_SYMBOLS:
+        if sym == symbol and oi is not None and not oi.empty and "oi_usd" in oi:
+            s = oi.set_index("snap_ts")["oi_usd"].dropna()
+            if len(s):
+                rows.append({"sym": sym.replace("USDT", ""), "usd": round(float(s.iloc[-1]), 2),
+                             "chg24": _series_change(s, pd.Timedelta(days=1))})
+        else:
+            row = _brief_oi(sym)
+            if row:
+                rows.append(row)
+    data = build_positioning(oi, ratios, taker, rows, symbol)
+    if not data["available"]:
+        data["error"] = "Binance 공개 포지셔닝 데이터를 받지 못했습니다"
+    _positioning_cache[symbol] = {"at": time.time(), "data": data}
+    return data
 
 
 # ── 2축 분류 (리서치 B2와 동일 수식) ─────────────────────────────────────────
@@ -304,7 +482,7 @@ def live(symbol: str = "BTCUSDT") -> dict:
     quad_info = None
     ribbons = {}
     idxmap = {r: i for i, r in enumerate(REGIMES)}
-    oi = _fetch_oi(symbol)
+    oi = _cached_oi(symbol)
     # 앞 3개 = 칩+리본, 12h/1d = 리본 전용 (레짐 흐름 TF 선택기)
     for interval, days, chip in [("15m", 60, True), ("1h", 80, True), ("4h", 130, True),
                                  ("12h", 260, False), ("1d", 400, False)]:

@@ -3,6 +3,7 @@ import json
 import os
 import sqlite3
 import time
+from datetime import datetime
 
 from . import crypto
 
@@ -11,7 +12,7 @@ DB_PATH = os.getenv("APP_DB_PATH", os.path.join(os.path.dirname(__file__), "data
 TRADE_COLS = ["exchange", "symbol", "direction", "entry", "exit", "qty", "pnl",
               "opened_at", "closed_at", "fees", "funding", "leverage", "fill_count",
               "liquidated", "exit_reason", "status", "plan", "setup", "sl", "emotion", "memo",
-              "exit_count", "exit_legs", "mae_price", "mfe_price",
+              "exit_count", "raw_exit_count", "exit_legs", "mae_price", "mfe_price",
               "point_value"]  # 분할청산 레그 + 최대 역행/순행(D) + 선물 포인트가치(NT — 달러 환산용)
 _INTENT = {"plan", "setup", "strategy", "sl", "tp", "tp2", "tp3", "emotion", "memo",
            "review", "mistake_tag", "chart_url", "status",
@@ -52,7 +53,7 @@ def init():
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL, emotion TEXT, memo TEXT,
           review TEXT, mistake_tag TEXT, chart_url TEXT,
           setup_grade TEXT, exec_grade TEXT, conviction INTEGER,
-          exit_count INTEGER, exit_legs TEXT, mae_price REAL, mfe_price REAL, point_value REAL,
+          exit_count INTEGER, raw_exit_count INTEGER, exit_legs TEXT, mae_price REAL, mfe_price REAL, point_value REAL,
           PRIMARY KEY(user_id, trade_id));
         """)
         # 마이그레이션: 기존 DB에 누락 컬럼 추가 (idempotent)
@@ -60,7 +61,7 @@ def init():
         for name, typ in (("tp", "REAL"), ("strategy", "TEXT"), ("tp2", "REAL"), ("tp3", "REAL"),
                           ("review", "TEXT"), ("mistake_tag", "TEXT"), ("chart_url", "TEXT"),
                           ("setup_grade", "TEXT"), ("exec_grade", "TEXT"), ("conviction", "INTEGER"),
-                          ("exit_count", "INTEGER"), ("exit_legs", "TEXT"),
+                          ("exit_count", "INTEGER"), ("raw_exit_count", "INTEGER"), ("exit_legs", "TEXT"),
                           ("mae_price", "REAL"), ("mfe_price", "REAL"), ("preplanned", "INTEGER"),
                           ("point_value", "REAL"),
                           ("opened_at", "TEXT"), ("fees", "REAL"), ("funding", "REAL"),
@@ -153,8 +154,44 @@ def delete_connection(uid, kind):
 # 청산주문 id가 바뀌어 같은 포지션이 새 trade_id로 잡힘) → 신원 기준으로 dedupe해야 중복 적재를 막는다.
 # 갱신 시 아래 시장 파생 컬럼만 덮어쓰고 유저 의도(status·plan·setup·sl·emotion·memo)는 절대 안 건드림.
 _MARKET_COLS = ["entry", "exit", "qty", "pnl", "closed_at", "fees", "funding", "leverage",
-                "fill_count", "liquidated", "exit_reason", "exit_count", "exit_legs",
+                "fill_count", "liquidated", "exit_reason", "exit_count", "raw_exit_count", "exit_legs",
                 "mae_price", "mfe_price", "point_value"]
+
+
+def _near(a, b, rel=0.01, floor=1e-9):
+    try:
+        aa, bb = float(a), float(b)
+    except (TypeError, ValueError):
+        return False
+    return abs(aa - bb) <= max(abs(aa), abs(bb), floor) * rel
+
+
+def _same_close_cycle(old: dict, new: dict) -> bool:
+    """재구성 경계가 달라져 opened_at/trade_id가 흔들린 같은 청산 사이클을 보수적으로 판별.
+
+    동일 초에 같은 심볼·방향 포지션이 닫히고 가격·수량·손익까지 유사해야 한다. 빠른 재진입을
+    임의로 합치지 않기 위해 closed_at이 한 글자라도 다르면 매칭하지 않는다.
+    """
+    if not old.get("closed_at") or old.get("closed_at") != new.get("closed_at"):
+        return False
+    try:
+        closed = datetime.fromisoformat(str(new["closed_at"]))
+        if datetime.fromisoformat(str(old.get("opened_at"))) > closed \
+                or datetime.fromisoformat(str(new.get("opened_at"))) > closed:
+            return False
+    except (TypeError, ValueError):
+        return False
+    if not (_near(old.get("entry"), new.get("entry"), 0.01)
+            and _near(old.get("exit"), new.get("exit"), 0.01)
+            and _near(old.get("qty"), new.get("qty"), 0.30)):
+        return False
+    op, np = old.get("pnl"), new.get("pnl")
+    try:
+        if float(op or 0) * float(np or 0) < 0:
+            return False
+    except (TypeError, ValueError):
+        return False
+    return _near(op, np, 0.30, floor=10.0)
 
 
 def upsert_trade(uid, t: dict) -> int:
@@ -175,6 +212,23 @@ def upsert_trade(uid, t: dict) -> int:
                 c.execute(f"UPDATE trades SET {sets} WHERE user_id=? AND trade_id=?",
                           [*[t.get(k) for k in _MARKET_COLS], uid, row["trade_id"]])
                 return 0
+            # 조회창 경계가 포지션 중간을 잘랐던 과거 버전은 opened_at과 마지막 체결 id가 흔들릴 수
+            # 있다. 동일 청산초 + 유사 시장값이면 기존 주석 행을 갱신해 중복 생성을 막는다.
+            if t.get("closed_at"):
+                candidates = c.execute(
+                    "SELECT * FROM trades WHERE user_id=? AND exchange=? AND symbol=? "
+                    "AND direction=? AND closed_at=?",
+                    (uid, t.get("exchange"), t.get("symbol"), t.get("direction"),
+                     t.get("closed_at"))).fetchall()
+                same = next((r for r in candidates if _same_close_cycle(dict(r), t)), None)
+                if same:
+                    # 더 긴 조회 문맥으로 복원한 실제 첫 진입시각도 교정한다. trade_id와 사용자 주석은
+                    # 유지해 기존 모달 링크·복기 기록이 끊기지 않게 한다.
+                    sets = "opened_at=?, " + ", ".join(f"{k}=?" for k in _MARKET_COLS)
+                    c.execute(f"UPDATE trades SET {sets} WHERE user_id=? AND trade_id=?",
+                              [t.get("opened_at"), *[t.get(k) for k in _MARKET_COLS],
+                               uid, same["trade_id"]])
+                    return 0
         cur = c.execute(f"INSERT OR IGNORE INTO trades(user_id,trade_id,{cols}) VALUES(?,?,{ph})",
                         [uid, t["trade_id"], *vals])
         return cur.rowcount

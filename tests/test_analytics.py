@@ -1,4 +1,6 @@
 """analytics.enrich 골든 케이스 — 정직성 직결(R 부호·over_loss 기준)."""
+import json
+
 from app import analytics
 
 
@@ -100,6 +102,24 @@ def test_outcome_break_even_band():
 def test_enrich_sets_outcome():
     assert analytics.enrich({"entry": 100, "exit": 120, "qty": 30, "pnl": 50, "direction": "Long"})["outcome"] == "win"
     assert analytics.enrich({"entry": 100, "exit": 100.05, "qty": 30, "pnl": 1.5, "direction": "Long"})["outcome"] == "be"
+
+
+def test_realized_return_uses_ledger_pnl_not_simple_vwap_direction():
+    t = analytics.enrich({"entry": 100, "exit": 90, "qty": 10, "pnl": -250, "direction": "Short"})
+    assert t["move_pct"] == 10.0       # 가격 VWAP만 보면 숏에 유리
+    assert t["pnl_pct"] == -25.0       # 실제 크기 변화가 반영된 실현손익률은 손실
+
+
+def test_legacy_many_exit_orders_compact_on_enrich_without_losing_raw_count():
+    legs = [[100 + i * 0.01, 1] for i in range(40)]
+    trade = {"entry": 90, "exit": 100, "qty": 40, "pnl": 400, "direction": "Long",
+             "exit_count": 40, "exit_legs": json.dumps(legs)}
+    out = analytics.enrich(trade)
+    shown = json.loads(out["exit_legs"])
+    assert len(shown) <= 12
+    assert out["exit_count"] == len(shown)
+    assert out["raw_exit_count"] == 40
+    assert abs(sum(q for _, q in shown) - 40) < 1e-8
 
 
 def test_enrich_risk_pct_with_equity():

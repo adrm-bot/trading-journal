@@ -13,6 +13,36 @@ from datetime import datetime
 # 본절(break-even) 밴드: |실현손익| ÷ 명목가(진입×수량)가 이 비율 미만이면 무승부로 본다.
 # 기본 0.1% ≈ 선물 왕복 수수료 크기 — '거래비용보다 작은 결과 = 사실상 본절'. env BREAK_EVEN_PCT(%)로 조정.
 BE_PCT = float(os.getenv("BREAK_EVEN_PCT", "0.1")) / 100.0
+EXIT_LEG_MERGE_BPS = float(os.getenv("EXIT_LEG_MERGE_BPS", "2"))
+EXIT_LEG_MAX_BANDS = int(os.getenv("EXIT_LEG_MAX_BANDS", "12"))
+
+
+def _compact_legs(legs, merge_bps=EXIT_LEG_MERGE_BPS, max_bands=EXIT_LEG_MAX_BANDS):
+    """과거 DB의 과다 청산 주문도 화면 계산 시 동일 가격대 VWAP 구간으로 정규화한다."""
+    try:
+        clean = [(float(p), float(q)) for p, q in (legs or []) if p and q and float(q) > 0]
+    except (TypeError, ValueError):
+        return []
+    merged = []
+    for price, qty in clean:
+        if merged:
+            pp, pq = merged[-1]
+            bps = abs(price - pp) / max(abs(price), abs(pp), 1e-12) * 10_000
+            if bps <= merge_bps:
+                nq = pq + qty
+                merged[-1] = ((pp * pq + price * qty) / nq, nq)
+                continue
+        merged.append((price, qty))
+    max_bands = max(1, int(max_bands))
+    if len(merged) > max_bands:
+        size = (len(merged) + max_bands - 1) // max_bands
+        compact = []
+        for i in range(0, len(merged), size):
+            chunk = merged[i:i + size]
+            qty = sum(q for _, q in chunk)
+            compact.append((sum(p * q for p, q in chunk) / qty, qty))
+        merged = compact
+    return [[round(p, 10), round(q, 10)] for p, q in merged]
 
 
 def outcome(pnl, entry, qty, be_pct=BE_PCT):
@@ -50,8 +80,23 @@ def sl_direction_error(direction, entry, sl):
 
 
 def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
-    """거래에 가격변동%·R·계획 R:R·리스크(·계좌%)·보유시간·규율 파생값 추가.
+    """거래에 가격변동%·실현손익률·R·계획 R:R·리스크(·계좌%)·보유시간·규율 파생값 추가.
     equity: 계좌 자산(USDT) — 주면 risk_pct(계좌 대비 리스크%) 계산. be_pct: 본절 밴드."""
+    # 과거 버전이 저장한 수십~수백 청산 주문도 재적재를 기다리지 않고 읽기 쉬운 가격 구간으로
+    # 변환한다. 원시 주문 수는 raw_exit_count에 남겨 데이터가 사라진 것처럼 보이지 않게 한다.
+    if t.get("exit_legs"):
+        try:
+            raw_legs = json.loads(t["exit_legs"]) if isinstance(t["exit_legs"], str) else t["exit_legs"]
+            compact = _compact_legs(raw_legs)
+            if compact:
+                raw_count = max(int(t.get("raw_exit_count") or 0), int(t.get("exit_count") or 0),
+                                len(raw_legs or []))
+                if raw_count > len(compact):
+                    t["raw_exit_count"] = raw_count
+                t["exit_count"] = len(compact)
+                t["exit_legs"] = json.dumps(compact)
+        except (ValueError, TypeError):
+            pass
     e, x, sl, d, qty = t.get("entry"), t.get("exit"), t.get("sl"), t.get("direction"), t.get("qty")
     tp, tp2, tp3 = t.get("tp"), t.get("tp2"), t.get("tp3")
     short = d == "Short"
@@ -71,6 +116,11 @@ def enrich(t: dict, equity=None, be_pct=BE_PCT) -> dict:
     if e and sl and tp3 and e != sl:
         t["rr3"] = round(abs(tp3 - e) / abs(e - sl), 2)
     pv = t.get("point_value") or 1.0  # 선물 포인트가치(NT) — 크립토 선형은 1
+    # 스케일 인/아웃 거래는 단순 진입VWAP→청산VWAP 방향과 실제 손익 부호가 다를 수 있다.
+    # 카드의 대표 수익률은 거래소 실현손익 ÷ 누적 진입 명목가로 계산해 손익과 항상 정합시킨다.
+    entry_notional = abs((e or 0) * (qty or 0) * pv)
+    if entry_notional > 0 and t.get("pnl") is not None:
+        t["pnl_pct"] = round(float(t["pnl"]) / entry_notional * 100, 2)
     if e and sl and qty:
         t["risk_usd"] = round(abs(e - sl) * qty * pv, 2)  # 계획 리스크 = 진입~손절 거리 × 수량 × 포인트가치
         if equity and equity > 0:

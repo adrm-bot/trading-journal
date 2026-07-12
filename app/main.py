@@ -28,7 +28,7 @@ load_dotenv(os.path.join(HERE, ".env"))
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
-from . import db, engine, crypto, market, analytics, liquidations, liqmap, regime  # noqa: E402
+from . import db, engine, crypto, market, analytics, liquidations, liqmap, regime, econ  # noqa: E402
 
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
               "kingfisher": "KingFisher", "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
@@ -233,6 +233,19 @@ def api_regime(request: Request):
     _, trades = engine.analyze_user(uid, be)
     enriched = [analytics.enrich(t, s["account_equity"], be) for t in trades]
     return JSONResponse({"live": regime.live(), "perf": regime.perf(enriched)})
+
+
+@app.get("/api/positioning")
+def api_positioning(request: Request):
+    """BTC OI·롱/숏 계정 비중·테이커 매수/매도 흐름(공개 데이터, 무키)."""
+    _require(request)
+    return JSONResponse(regime.positioning())
+
+
+@app.get("/api/economic-calendar")
+def api_economic_calendar(request: Request):
+    _require(request)
+    return JSONResponse(econ.calendar())
 
 
 @app.on_event("startup")

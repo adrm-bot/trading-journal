@@ -98,3 +98,37 @@ def test_perf_unknown_symbol_counts_unmatched(monkeypatch):
     monkeypatch.setattr(regime, "_labels_for", lambda sym, since: None)
     out = regime.perf([{"symbol": "NOPEUSDT", "opened_at": "2025-01-01T00:00:00", "pnl": 1.0}])
     assert out["rows"] == [] and out["unmatched"] == 1
+
+
+def test_build_positioning_tracks_oi_crowd_and_taker_flow():
+    idx = pd.date_range("2026-06-01", periods=12 * 24 * 8, freq="5min", tz="UTC")
+    oi = pd.DataFrame({"snap_ts": idx,
+                       "oi": np.linspace(1_000_000, 1_080_000, len(idx)),
+                       "oi_usd": np.linspace(30e9, 33e9, len(idx))})
+    ratio_rows = []
+    taker_rows = []
+    for i, ts in enumerate(idx[-500:]):
+        long = 0.52 + i / 499 * 0.13
+        ratio_rows.append({"timestamp": int(ts.timestamp() * 1000),
+                           "longAccount": str(long), "shortAccount": str(1 - long),
+                           "longShortRatio": str(long / (1 - long))})
+        taker_rows.append({"timestamp": int(ts.timestamp() * 1000),
+                           "buyVol": "60", "sellVol": "40"})
+
+    out = regime.build_positioning(
+        oi, ratio_rows, taker_rows,
+        [{"sym": "BTC", "usd": 33e9, "chg24": 1.2}], "BTCUSDT")
+
+    assert out["available"] is True and out["oi_available"] is True
+    assert out["total_usd"] == 33e9
+    assert out["tf"]["24h"] is not None and out["tf"]["7d"] is not None
+    assert out["long_pct"] == 65.0 and out["short_pct"] == 35.0
+    assert out["long_delta_pp"]["1h"] > 0 and out["crowd_trend"] == "long_increasing"
+    assert out["taker_buy_pct_1h"] == 60.0 and out["taker_sell_pct_1h"] == 40.0
+
+
+def test_build_positioning_honestly_degrades_when_all_sources_missing():
+    out = regime.build_positioning(None, [], [], [], "BTCUSDT")
+    assert out["available"] is False
+    assert out["oi_available"] is False
+    assert out["tf"] == [] or out["tf"] == {}

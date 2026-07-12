@@ -55,6 +55,32 @@ def test_distinct_positions_not_merged(tmp_path):
     assert len(db.get_trades(uid)) == 3
 
 
+def test_shifted_open_same_close_cycle_updates_annotated_row(tmp_path):
+    uid = _fresh(tmp_path)
+    old = _pos("binance:pos:BTCUSDT:100", exchange="binance")
+    db.upsert_trade(uid, old)
+    db.update_intent(uid, old["trade_id"], {"plan": "경계 전 계획", "status": "기록완료"})
+    # 과거 조회창 경계 때문에 진입시각·마지막 체결 id·집계 수량이 조금 달라진 동일 청산 사이클
+    new = _pos("binance:pos:BTCUSDT:132", exchange="binance",
+               opened_at="2026-07-01 10:05:00", entry=45120.0, exit=45520.0,
+               qty=0.11, pnl=52.0)
+    assert db.upsert_trade(uid, new) == 0
+    rows = db.get_trades(uid)
+    assert len(rows) == 1
+    assert rows[0]["plan"] == "경계 전 계획"
+    assert rows[0]["pnl"] == 52.0 and rows[0]["qty"] == 0.11
+    assert rows[0]["opened_at"] == "2026-07-01 10:05:00"
+
+
+def test_near_values_different_close_second_remain_distinct(tmp_path):
+    uid = _fresh(tmp_path)
+    db.upsert_trade(uid, _pos("binance:pos:BTCUSDT:100", exchange="binance"))
+    later = _pos("binance:pos:BTCUSDT:101", exchange="binance",
+                 opened_at="2026-07-01 12:00:01", closed_at="2026-07-01 12:00:01")
+    assert db.upsert_trade(uid, later) == 1
+    assert len(db.get_trades(uid)) == 2
+
+
 def test_no_opened_at_falls_back_to_tradeid(tmp_path):
     uid = _fresh(tmp_path)
     # opened_at 없는 레거시/테스트 경로 — trade_id 기준 멱등

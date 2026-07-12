@@ -56,6 +56,7 @@
   --fs-xl:23px;     /* h1 */
 }
 *{box-sizing:border-box} html,body{height:100%}
+[hidden]{display:none!important}
 body{margin:0;background:var(--bg);color:var(--text);font-family:var(--f-body);font-size:var(--fs-base);line-height:1.5;letter-spacing:-.01em;word-break:keep-all;-webkit-font-smoothing:antialiased}
 a{color:inherit;text-decoration:none}
 .mono,.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums;letter-spacing:0}
@@ -117,23 +118,29 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .cards{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s3)}  /* minmax(0,1fr): 넓은 hero 숫자가 컬럼 폭을 밀어내지 않게 — 4칸 동일 폭. 기본 align-items:stretch로 동일 높이 */
 #view-dashboard .cards{margin-top:var(--s6)}  /* 스켈레톤 등 라벨 없는 경우의 섹션 여백 */
 #view-dashboard .section-title + .cards{margin-top:0}  /* '핵심 지표' 라벨이 앞서면 라벨 마진(24/0/12)이 간격 담당 — 이중 여백 방지 */
-/* 대시보드 2단(드래그로 폭 조절): 좌 내 정보(주) · 우 시장(보조). 가운데 리사이저=구분선 */
-.dash3{display:grid;grid-template-columns:minmax(300px,1fr) 1px 620px;gap:0;align-items:start}  /* R2b: 중앙 시장 · 하이라인 구분선 · 우 브리프 620px */
+/* 대시보드 2단: 시장 판단 영역 + 내 브리프. 폭·패널 배치는 사용자별 저장 */
+.dash3{--brief-w:620px;display:grid;grid-template-columns:minmax(560px,1fr) 12px var(--brief-w);gap:0;align-items:start}
 .dash-me,.dash-mkt{min-width:0}
-.dash-me{display:flex;flex-direction:column;padding-left:var(--s6)}  /* 내 브리프(우) */
+.dash-zone{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));column-gap:var(--s4);align-content:start;min-width:0}
+.dash-panel{grid-column:span 12;min-width:0;position:relative}
+.dash-panel[data-span="6"]{grid-column:span 6}
+.dash-me{padding-left:var(--s4)}  /* 내 브리프(우) */
+.dash-me .dash-panel[data-span="6"]{grid-column:span 12} /* 620px 브리프에서는 비교 가독성 우선 */
 .dash-me>.section-title:first-child{margin-top:0}
-.dash-mkt{padding-right:var(--s6)}  /* 시장(중앙) */
+.dash-mkt{padding-right:var(--s4)}  /* 시장(중앙) */
 .dash-mkt>.section-title:first-child{margin-top:0}
-.dash-resizer{align-self:stretch;background:var(--line);min-height:100%}  /* R2b: 정적 하이라인 구분선 */
-.dash-resizer::before{content:none}
+.dash-resizer{align-self:stretch;position:relative;min-height:100%;cursor:col-resize;touch-action:none;background:transparent}
+.dash-resizer::before{content:"";position:absolute;top:0;bottom:0;left:50%;width:1px;background:var(--line);transition:background .14s,width .14s}
+.dash-resizer:hover::before,.dash-resizer:focus-visible::before,.resizing-dash .dash-resizer::before{width:2px;background:var(--frost)}
+.resizing-dash{cursor:col-resize!important;user-select:none}
 
 @media(min-width:1081px){  /* 2단일 때만: 좌측 KPI 2×2, 좁아진 우측 시장 칩·TOTAL 2×2 */
   .dash-me .cards{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr}
   .dash-mkt .market{grid-template-columns:repeat(4,minmax(0,1fr))}
   .dash-mkt .flowrow{grid-template-columns:repeat(2,1fr)}
 }
-@media(max-width:1440px){.dash3{grid-template-columns:minmax(300px,1fr) 1px minmax(300px,.62fr)}}  /* 좁은 데스크탑: 우열 비율 축소 */
-@media(max-width:1080px){.dash3{grid-template-columns:1fr}.dash-resizer{display:none}.dash-me{padding-left:0}.dash-mkt{padding-right:0}}
+@media(max-width:1440px){.dash3{--brief-w:min(520px,40vw)}}
+@media(max-width:1080px){.dash3{grid-template-columns:1fr}.dash-resizer{display:none}.dash-me{padding-left:0}.dash-mkt{padding-right:0}.dash-panel[data-span="6"]{grid-column:span 12}}
 /* R2 신규: 경제 이벤트 D-n 스트립 */
 .econ{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;background:var(--card);border:1px solid var(--line);border-radius:var(--r-card);box-shadow:var(--inset);padding:9px 14px;margin-bottom:var(--s3)}
 .econ .ek{font-family:var(--f-mono);font-size:var(--fs-cap);letter-spacing:.08em;text-transform:uppercase;color:var(--fog);margin-right:var(--s2)}
@@ -142,22 +149,30 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .eitem.soon .ed{color:var(--amber)}
 .eitem.soon .ed{font-weight:700}
 .eitem .et{color:var(--muted);font-size:var(--fs-xs);font-family:var(--f-mono)}
+.econ-state{color:var(--muted);font-size:var(--fs-sm)}.econ-state.err{color:var(--ember)}
+.econ-src{margin-left:var(--s2);padding-left:var(--s2);border-left:1px solid var(--line);color:var(--dim)}
 /* R2b: 하단 매매일지 도크(fixed) — 균일 카드 그리드 · 독립 스크롤 */
-.jdock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line-2);box-shadow:0 -10px 30px rgba(0,0,0,.45)}
+.jdock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line-2);box-shadow:0 -8px 24px rgba(0,0,0,.34)}
 .jdock-inner{max-width:1944px;margin:0 auto;padding:0 var(--s8)}
-.jdock-head{display:flex;align-items:center;gap:var(--s3);height:46px}
+.jdock-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);min-height:50px}
+.jdock-summary,.jdock-controls,.jdock-view{display:flex;align-items:center;min-width:0}
+.jdock-summary{gap:var(--s3)}
+.jdock-controls{gap:var(--s2);margin-left:auto}
+.jdock-view{gap:6px;color:var(--muted);font:500 var(--fs-xs)/1 var(--f-mono)}
 .jdock-title{font-family:var(--f-display);font-weight:600;color:var(--glacier);font-size:var(--fs-md);letter-spacing:-.01em}
 .jdock-count{font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--frost);background:var(--info-soft);border-radius:var(--r-badge);padding:1px 7px;margin-left:6px}
 .jdock-sub{font-size:var(--fs-xs);font-family:var(--f-mono)}
-.jdock-all{margin-left:var(--s4);font-size:var(--fs-sm);color:var(--frost)} .jdock-all:hover{color:var(--glacier);text-decoration:underline}
+.jdock-peak{appearance:none;display:inline-flex;align-items:center;gap:6px;max-width:260px;height:32px;padding:0 10px;border:1px solid var(--line);border-radius:var(--r-btn);background:transparent;color:var(--muted);font:500 var(--fs-xs)/1 var(--f-mono);cursor:pointer;white-space:nowrap;overflow:hidden}
+.jdock-peak b{color:var(--pos);font-weight:500;overflow:hidden;text-overflow:ellipsis}.jdock-peak:hover{border-color:var(--slate);color:var(--moonlight);background:var(--card-2)}
+.jdock-all{height:32px;display:inline-flex;align-items:center;padding:0 10px;border:1px solid var(--line-2);border-radius:var(--r-btn);font-size:var(--fs-xs);color:var(--frost);white-space:nowrap}.jdock-all:hover{border-color:var(--slate);color:var(--glacier);background:var(--card-2)}
 .brand-sub{font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--slate);letter-spacing:.02em;margin-left:3px}
 .jdock-sortl{display:inline-flex;align-items:center;gap:6px;font-size:var(--fs-xs);color:var(--muted);font-family:var(--f-mono)}
-.jdock-sort{appearance:none;background:var(--card-2);border:1px solid var(--line-2);color:var(--moonlight);font:inherit;font-size:var(--fs-xs);border-radius:var(--r-btn);height:28px;min-height:0;box-sizing:border-box;padding:0 24px 0 10px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2.4'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 8px center}
+.jdock-sort{appearance:none;background:var(--card-2);border:1px solid var(--line-2);color:var(--moonlight);font:inherit;font-size:var(--fs-xs);border-radius:var(--r-btn);height:32px;min-height:0;box-sizing:border-box;padding:0 28px 0 10px;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%238a8f98' stroke-width='2.4'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 9px center}
 .jdock-sort:hover{border-color:var(--slate);color:var(--glacier)}
 .jhr .jr{font-size:var(--fs-xs);font-weight:500;opacity:.82}
 /* R2e: 도크 열수 · 문제 거래 강조 · 한글 줄바꿈 · 로고 */
-.jdock-cols{display:inline-flex;align-items:center;margin-left:auto;background:var(--card-2);border:1px solid var(--line-2);border-radius:var(--r-btn);padding:2px;gap:2px;height:28px}
-.jdcol{appearance:none;background:none;border:none;color:var(--muted);font:inherit;font-size:var(--fs-xs);font-family:var(--f-mono);width:26px;height:22px;border-radius:5px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.jdock-cols{display:inline-flex;align-items:center;background:var(--card-2);border:1px solid var(--line-2);border-radius:var(--r-btn);padding:2px;gap:2px;height:32px}
+.jdcol{appearance:none;background:none;border:none;color:var(--muted);font:inherit;font-size:var(--fs-xs);font-family:var(--f-mono);width:28px;height:26px;border-radius:4px;cursor:pointer;display:flex;align-items:center;justify-content:center}
 .jdcol:hover{color:var(--moonlight)} .jdcol.on{background:var(--panel);color:var(--glacier);box-shadow:var(--inset)}
 .jdock-body.cols-1 .jfeed{grid-template-columns:1fr}
 .jdock-body.cols-2 .jfeed{grid-template-columns:repeat(2,1fr)}
@@ -168,9 +183,9 @@ tr.grow:focus-visible td{background:var(--card-2)}
 #pullbanner:not(:empty){max-width:1944px;margin:0 auto;padding:var(--s4) var(--s8) 0}
 .jplan,.jmemo,.jreview,.oi-insight,.empty-inline,.wtxt,.banner,.mcard .msub,.mcard .ml,.desc,.hh,.flag>span,.jhl{word-break:keep-all}
 /* R2f: 도크 확장 그립 + 심볼 줄바꿈 방지 */
-.jdock-grip{position:absolute;left:50%;transform:translateX(-50%);top:-17px;width:66px;height:18px;border-radius:10px 10px 0 0;background:var(--panel);border:1px solid var(--line-2);border-bottom:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fog);z-index:1;padding:0;transition:color .12s,background .12s}
+.jdock-grip{position:absolute;left:50%;transform:translateX(-50%);top:-23px;width:48px;height:24px;border-radius:8px 8px 0 0;background:var(--panel);border:1px solid var(--line-2);border-bottom:none;display:flex;align-items:center;justify-content:center;cursor:pointer;color:var(--fog);z-index:1;padding:0;transition:color .12s,background .12s,border-color .12s}
 .jdock-grip:hover{color:var(--glacier);background:var(--card-2)}
-.jdock-grip svg{width:13px;height:13px;display:block;transition:transform .18s}
+.jdock-grip svg{width:15px;height:15px;display:block;transition:transform .18s}
 .jdock.expanded .jdock-grip svg{transform:rotate(180deg)}
 .jdock.expanded .jdock-body{max-height:62vh}
 .jcard .jhl{overflow:hidden;overflow-wrap:normal}
@@ -182,9 +197,8 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .jdock-body.cols-1 .jbody{min-width:0}
 .jdock-body.cols-1 .jmid{min-width:0}
 /* R2g: 4열 컴팩트 · 2열 정돈 */
-.jdock-body.cols-4 .jcard{height:auto}
-.jdock-body.cols-4 .jbody,.jdock-body.cols-4 .jlegs,.jdock-body.cols-4 .jlevels{display:none}
-.jdock-body.cols-4 .jcard::after{display:none}
+.jdock-body.cols-4 .jcard{height:auto;padding:var(--s3)}
+.jdock-body.cols-4 .jmeta,.jdock-body.cols-4 .jstats{font-size:var(--fs-xs)}
 /* R2i: 2열 — 헤더 상단 전폭, 아래 좌(메타·지표) + 우(반성) 가로 배치로 높이 축소 */
 .jdock-body.cols-2 .jcard{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:2px 20px;align-items:start;height:auto}
 .jdock-body.cols-2 .jhead{grid-column:1 / -1}
@@ -212,30 +226,52 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .poslv .lv{font-family:var(--f-mono);font-size:var(--fs-micro);font-weight:510;padding:1px 6px;border-radius:var(--r-badge);background:var(--card-2);color:var(--pebble)}
 .poslv .lvsl{background:var(--neg-soft);color:var(--ember)}
 .poslv .lvtp{background:var(--pos-soft);color:var(--mint)}
-.jdock-toggle{margin-left:var(--s2);appearance:none;background:var(--card-2);border:1px solid var(--line-2);color:var(--moonlight);width:28px;height:28px;border-radius:var(--r-btn);cursor:pointer;font-size:12px;line-height:1;transition:.12s;display:inline-flex;align-items:center;justify-content:center}
+.jdock-toggle{appearance:none;background:var(--card-2);border:1px solid var(--line-2);color:var(--moonlight);width:32px;height:32px;border-radius:var(--r-btn);cursor:pointer;line-height:1;transition:.12s;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
+.jdock-toggle svg{width:15px;height:15px;display:block}
 .jdock-toggle:hover{color:var(--glacier);border-color:var(--slate)}
-.jdock-body{max-height:210px;overflow:auto;overscroll-behavior:contain;padding:2px 0 var(--s5);scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
-.jdock-body::-webkit-scrollbar{width:10px}
+.jdock-body{max-height:210px;overflow:auto;overscroll-behavior:contain;padding:2px 0 var(--s5);scrollbar-width:thin;scrollbar-color:var(--steel) transparent}
+.jdock-body::-webkit-scrollbar{width:6px;height:6px}
 .jdock-body::-webkit-scrollbar-track{background:transparent}
-.jdock-body::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;border:3px solid var(--panel);background-clip:padding-box}
-.jdock-body::-webkit-scrollbar-thumb:hover{background:var(--slate);background-clip:padding-box}
+.jdock-body::-webkit-scrollbar-thumb{background:var(--steel);border-radius:8px}
+.jdock-body::-webkit-scrollbar-thumb:hover{background:var(--slate)}
 .jdock-body .jfeed{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--s3);align-items:start}
-.jdock-body .jcard{margin:0;height:172px;overflow:hidden;position:relative}
-.jdock-body .jcard::after{content:"";position:absolute;left:1px;right:1px;bottom:1px;height:30px;border-radius:0 0 var(--r-card) var(--r-card);background:linear-gradient(transparent,var(--card));pointer-events:none}
+.jdock-body .jcard{margin:0;min-height:172px;height:auto;overflow:visible;position:relative}
+.jdock-body .jcard::after{display:none}
 #view-dashboard{padding-bottom:300px}
 #view-dashboard.dock-collapsed .jdock-body{display:none}
 #view-dashboard.dock-collapsed{padding-bottom:64px}
 #view-dashboard.dock-collapsed .jdock-toggle{transform:rotate(180deg)}
-/* R2b: 시장 패널 드래그 재정렬 (드롭 표시선·리프트) */
-.mkt-panel{position:relative;transition:opacity .12s ease}
-.mkt-panel.dragging{opacity:.35}
-.mkt-panel>.drag-h{position:absolute;top:8px;right:8px;width:28px;height:24px;display:none;align-items:center;justify-content:center;cursor:grab;color:var(--slate);background:var(--card-2);border:1px solid var(--line-2);border-radius:var(--r-badge);z-index:3;padding:0;transition:color .12s,background .12s,box-shadow .12s}
-.mkt-panel:not(.pin):hover>.drag-h{display:flex}
-.mkt-panel>.drag-h:hover{color:var(--moonlight);background:var(--panel);box-shadow:var(--inset)} .mkt-panel>.drag-h:active{cursor:grabbing;color:var(--glacier)}
-/* 드롭 위치 표시선 — 실제 패널을 옮기지 않고 여기로 떨어질 것임을 표시(안 튐) */
-.mkt-drop{height:2px;margin:4px 2px;border-radius:2px;background:var(--indigo);box-shadow:0 0 8px 1px rgba(94,106,210,.55);pointer-events:none}
-.mkt-panel>.drag-h svg{width:13px;height:13px;display:block}
-.dash-mkt.drag-live .mkt-panel:not(.pin){outline:1px dashed var(--line-2);outline-offset:3px;border-radius:var(--r-card)}
+/* 대시보드 편집 모드: 명시적으로 켰을 때만 이동·크기 조절 노출 */
+.mkt-panel{position:relative;transition:opacity .14s ease}
+.mkt-panel.dragging{opacity:.2}
+.panel-tools{position:absolute;top:6px;right:6px;z-index:8;display:none;align-items:center;gap:4px;padding:3px;background:var(--panel);border:1px solid var(--line-2);border-radius:var(--r-btn);box-shadow:var(--card-elev)}
+.layout-edit .panel-tools{display:flex}
+.panel-tools .drag-h,.panel-size{appearance:none;width:28px;height:24px;display:flex;align-items:center;justify-content:center;color:var(--muted);background:transparent;border:0;border-radius:5px;padding:0;cursor:grab;font:500 var(--fs-micro)/1 var(--f-mono)}
+.panel-tools .drag-h{touch-action:none}
+.panel-tools .drag-h:hover,.panel-size:hover{color:var(--glacier);background:var(--card-2)}
+.panel-tools .drag-h:active{cursor:grabbing}.panel-tools .drag-h svg{width:13px;height:13px;display:block}
+.panel-size{width:34px;cursor:pointer}
+.layout-edit .dash-panel:not(.pin){outline:1px dashed var(--line-2);outline-offset:3px;border-radius:var(--r-card)}
+.layout-edit .dash-panel:not(.pin):hover{outline-color:var(--frost)}
+.dash-zone.drag-live{min-height:120px;background:rgba(122,132,255,.025);border-radius:var(--r-card)}
+.dash-drop{height:58px;margin:2px 0 10px;border:1px dashed var(--frost);border-radius:var(--r-card);background:var(--info-soft);pointer-events:none}
+.dragging-layout,.dragging-dash{user-select:none}.dragging-dash{cursor:grabbing!important}
+.dash-drag-ghost{position:fixed;left:0;top:0;z-index:90;min-width:180px;max-width:320px;height:40px;display:flex;align-items:center;padding:0 12px;border:1px solid var(--frost);border-radius:var(--r-btn);background:var(--panel);box-shadow:0 8px 24px rgba(0,0,0,.34);color:var(--glacier);font:600 var(--fs-sm)/1 var(--f-body);pointer-events:none;will-change:transform}
+@media(max-width:980px){
+  .jdock-head{align-items:flex-start;flex-direction:column;gap:8px;padding:10px 0}
+  .jdock-controls{width:100%;margin-left:0;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+  .jdock-controls::-webkit-scrollbar{display:none}
+  .jdock-summary{width:100%;justify-content:space-between}
+  .jdock-body.cols-4 .jfeed{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:620px){
+  .jdock-inner{padding:0 var(--s3)}
+  .jdock-peak{display:none}
+  .jdock-view>span,.jdock-sortl>span{display:none}
+  .jdock-body .jfeed,.jdock-body.cols-2 .jfeed,.jdock-body.cols-4 .jfeed{grid-template-columns:1fr}
+  .jdock-body.cols-1 .jcard,.jdock-body.cols-2 .jcard{display:block}
+  .jdock-all{margin-left:auto}
+}
 /* R2b: 상대강도 · 자금흐름 반반 한 줄 */
 .mkt-half{display:grid;grid-template-columns:1fr 1fr;gap:0 var(--s5);align-items:start}
 .mkt-half>div{min-width:0}
@@ -271,6 +307,18 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .oilevel.lv-risk{color:var(--ember);background:var(--neg-soft);border-color:rgba(235,87,87,.4)}
 .oi-insight{display:flex;align-items:baseline;gap:9px;margin:var(--s3) 0;font-size:var(--fs-sm);color:var(--moonlight);line-height:1.5;background:var(--card-2);border:1px solid var(--line);border-radius:var(--r-card);padding:9px 12px}
 .oi-insight .oi-il{font-family:var(--f-mono);font-size:var(--fs-micro);text-transform:uppercase;letter-spacing:.06em;color:var(--frost);flex:0 0 auto}
+.oi-empty{display:grid;gap:5px;padding:14px;border:1px solid var(--line);background:var(--card-2);border-radius:var(--r-card)}
+.oi-empty b{font-size:var(--fs-sm);color:var(--moonlight);font-weight:600}.oi-empty span{font-size:var(--fs-xs);color:var(--muted)}
+.crowd{margin:var(--s3) 0;padding:11px 12px;border:1px solid var(--line);border-radius:var(--r-card);background:var(--card-2)}
+.crowd-head,.crowd-legend{display:flex;align-items:center;justify-content:space-between;gap:var(--s3);font-size:var(--fs-xs)}
+.crowd-head{color:var(--muted);margin-bottom:8px}.crowd-head b{font-family:var(--f-mono);font-weight:500;color:var(--moonlight);text-align:right}
+.crowd-bar{display:flex;height:7px;overflow:hidden;border-radius:2px;background:var(--panel)}
+.crowd-long{background:var(--pos)}.crowd-short{background:var(--neg)}
+.crowd-legend{margin-top:7px;font-family:var(--f-mono)}
+.crowd-risk{margin-top:8px;padding-top:8px;border-top:1px solid var(--line);font-size:var(--fs-xs);line-height:1.45;color:var(--amber)}
+.taker{display:grid;grid-template-columns:auto minmax(90px,1fr) auto;align-items:center;gap:10px;margin:var(--s3) 0;font-size:var(--fs-xs);color:var(--muted)}
+.taker-bar{height:3px;background:var(--neg);overflow:hidden}.taker-bar i{display:block;height:100%;background:var(--pos)}
+.taker b{font-family:var(--f-mono);font-weight:500;white-space:nowrap}
 .domr .domsp{margin-left:auto;display:inline-flex;align-items:center}
 .domr .domsp .spark{width:46px;height:14px}
 /* R2c: 브리프 규율 카드 컴팩트 */

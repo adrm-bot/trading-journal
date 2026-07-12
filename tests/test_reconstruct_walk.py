@@ -1,4 +1,6 @@
 """reconstruct_walk(Binance/Gate 공용) + _finalize_pos 골든 케이스."""
+import pytest
+
 from app import engine
 from conftest import fill, ts, assert_pnl_sum, T0
 
@@ -71,6 +73,25 @@ def test_exit_legs_distinct_orders_kept():
               fill(3, "SELL", 140, 1, T0 + 120_000, pnl=40.0, order="oB")]
     out = engine.reconstruct_walk("binance", "ETHUSDT", trades)
     assert out[0]["exit_count"] == 2
+
+
+def test_exit_legs_near_same_price_compacted_across_orders():
+    """수십 개 주문이어도 같은 가격대면 화면에는 하나의 청산 구간으로 보인다."""
+    trades = [fill(1, "BUY", 100, 40, T0, order="open")]
+    trades += [fill(10 + i, "SELL", 120 + (i % 2) * 0.001, 1,
+                    T0 + 60_000 + i, pnl=20.0, order=f"exit-{i}") for i in range(40)]
+    out = engine.reconstruct_walk("binance", "ETHUSDT", trades)
+    assert out[0]["fill_count"] == 41       # 원시 체결 감사값은 보존
+    assert out[0]["exit_count"] == 1        # 화면용 의미 구간은 1개
+    assert out[0]["raw_exit_count"] == 40
+    assert out[0]["exit_legs"] is not None   # 원시 주문→가격구간 압축 사실은 감사용으로 보존
+
+
+def test_exit_legs_many_prices_capped_and_qty_conserved():
+    legs = [(100 + i, 1 + (i % 3)) for i in range(50)]
+    compact = engine._compact_exit_legs(legs, merge_bps=0, max_bands=12)
+    assert len(compact) <= 12
+    assert abs(sum(q for _, q in compact) - sum(q for _, q in legs)) < ROUND
 
 
 def test_flip_long_to_short():
@@ -174,3 +195,49 @@ def test_realized_sum_invariant():
               fill(3, "BUY", 100, 1, T0 + 2, pnl=0.0), fill(4, "SELL", 95, 1, T0 + 3, pnl=-5.0)]
     out = engine.reconstruct_walk("binance", "BTCUSDT", trades)
     assert_pnl_sum(out, 5.0)
+
+
+def test_binance_query_extends_before_lookback_for_mid_position_boundary():
+    day = 86_400_000
+    now = T0 + 20 * day
+    all_fills = [
+        fill(1, "BUY", 50_000, 1, now - 15 * day, pnl=0.0),
+        fill(2, "SELL", 60_000, 1, now - 5 * day, pnl=10_000.0),
+    ]
+
+    class FakeExchange:
+        def __init__(self):
+            self.starts = []
+
+        def milliseconds(self):
+            return now
+
+        def fapiPrivateGetUserTrades(self, params):
+            if "fromId" in params:
+                return [t for t in all_fills if int(t["id"]) >= int(params["fromId"])]
+            start, end = int(params["startTime"]), int(params["endTime"])
+            self.starts.append(start)
+            return [t for t in all_fills if start <= int(t["time"]) <= end]
+
+    ex = FakeExchange()
+    rows = engine._binance_user_trades(ex, "BTCUSDT", lookback=10)
+    assert [int(r["id"]) for r in rows] == [1, 2]
+    assert min(ex.starts) < now - 10 * day  # 조회창 앞의 진입 체결까지 자동 보강
+    rebuilt = engine.reconstruct_walk("binance", "BTCUSDT", rows)
+    assert len(rebuilt) == 1 and rebuilt[0]["pnl"] == 10_000.0
+
+
+def test_binance_realized_ledger_reconciliation_includes_open_partial_closes():
+    fills = [
+        {"time": 1_000, "realizedPnl": "0"},
+        {"time": 2_000, "realizedPnl": "12.5"},
+        {"time": 3_000, "realizedPnl": "-2.25"},
+    ]
+    audit = engine._reconcile_binance_realized("BTCUSDT", fills, 1_500, 10.25)
+    assert audit == {"symbol": "BTCUSDT", "ledger": 10.25, "fills": 10.25, "delta": 0.0}
+
+
+def test_binance_realized_ledger_mismatch_stops_import():
+    fills = [{"time": 2_000, "realizedPnl": "30"}]
+    with pytest.raises(RuntimeError, match="기존 일지는 유지"):
+        engine._reconcile_binance_realized("BTCUSDT", fills, 1_000, 12.0)
