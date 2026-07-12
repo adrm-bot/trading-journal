@@ -13,8 +13,10 @@ def test_dashboard_uses_direct_manipulation_without_edit_mode():
     assert HTML.count("function renderDashboard(el)") == 1
     assert 'class="panel-grip"' in HTML
     assert 'class="panel-resize"' in HTML
-    assert "dashLayout:v2:" in HTML
+    assert "dashLayout:v3:" in HTML
     assert "window.addEventListener('pointermove'" in HTML
+    assert "sameRow=e.clientY>=r.top&&e.clientY<=r.bottom" in HTML
+    assert "hit.closest('.dash-drop')===placeholder" in HTML
 
 
 def test_dashboard_layout_has_grid_bounds_and_mobile_fallback():
@@ -31,5 +33,14 @@ def test_dashboard_layout_has_grid_bounds_and_mobile_fallback():
 def test_editorial_scale_is_readable_on_wide_displays():
     assert "--fs-base:15px" in CSS
     assert "--fs-lg:20px" in CSS
-    assert "--app-max:2400px" in CSS
+    assert "--app-max:none" in CSS
     assert "line-height:1.6" in CSS
+
+
+def test_dashboard_uses_terminal_chrome_without_floating_grip():
+    assert "--onyx:#0b0e11" in CSS
+    assert "--acid-lime:#fcd535" in CSS
+    assert ".panel-chrome-title" in CSS
+    assert 'class="jdock-expand"' in HTML
+    assert "jdock-grip" not in HTML
+    assert "dash-help" not in HTML
