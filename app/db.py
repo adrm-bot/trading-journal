@@ -82,7 +82,7 @@ def init():
         c.execute("DELETE FROM trades WHERE (trade_id LIKE 'bybit:%' OR trade_id LIKE 'binance:%') "
                   "AND trade_id NOT LIKE '%:pos:%'")
     # 재구성 trade_id 불안정으로 쌓인 같은-포지션 중복 정리(멱등) — 통계 부풀림 교정
-    removed = dedupe_positions()
+    removed = dedupe_positions() + dedupe_close_cycles()
     if removed:
         import logging
         logging.getLogger("app.db").warning("중복 포지션 %d건 정리", removed)
@@ -251,6 +251,79 @@ def dedupe_positions() -> int:
               ) WHERE rn > 1
             )""")
         return cur.rowcount
+
+
+def dedupe_close_cycles() -> int:
+    """과거 경계 버그로 opened_at만 달라진 동일 청산 사이클을 보수적으로 정리한다.
+
+    동일 사용자·거래소·심볼·방향·청산초 안에서 가격·수량·손익까지 유사한 행만 묶는다.
+    사용자 주석은 구성원 전체에서 합쳐 보존하고, 시장값은 가장 이른 진입시각(문맥이 가장 긴 행)을
+    기준으로 교정한다. 조건이 하나라도 불명확하면 건드리지 않는다.
+    """
+    removed = 0
+    with conn() as c:
+        rows = [dict(r) for r in c.execute(
+            "SELECT rowid AS _rowid,* FROM trades WHERE opened_at IS NOT NULL "
+            "AND closed_at IS NOT NULL AND trade_id LIKE '%:pos:%' "
+            "ORDER BY user_id,exchange,symbol,direction,closed_at,rowid"
+        )]
+        groups = {}
+        for r in rows:
+            key = (r.get("user_id"), r.get("exchange"), r.get("symbol"),
+                   r.get("direction"), r.get("closed_at"))
+            groups.setdefault(key, []).append(r)
+
+        status_rank = {"복기완료": 0, "기록완료": 1, "의도 미기입": 2}
+        for group in groups.values():
+            if len(group) < 2:
+                continue
+            pending = list(group)
+            components = []
+            while pending:
+                comp = [pending.pop(0)]
+                changed = True
+                while changed:
+                    changed = False
+                    for candidate in pending[:]:
+                        if any(_same_close_cycle(member, candidate) for member in comp):
+                            comp.append(candidate)
+                            pending.remove(candidate)
+                            changed = True
+                components.append(comp)
+
+            for comp in components:
+                if len(comp) < 2:
+                    continue
+                rich = sorted(comp, key=lambda r: (
+                    status_rank.get(r.get("status"), 3),
+                    -sum(1 for k in _INTENT if k != "status" and r.get(k) not in (None, "")),
+                    r.get("_rowid") or 0,
+                ))
+                keeper = rich[0]
+                market = min(comp, key=lambda r: (
+                    str(r.get("opened_at") or "9999"),
+                    -int(r.get("fill_count") or 0),
+                    r.get("_rowid") or 0,
+                ))
+
+                updates = {"opened_at": market.get("opened_at")}
+                updates.update({k: market.get(k) for k in _MARKET_COLS})
+                for field in (_INTENT - {"status"}):
+                    val = next((r.get(field) for r in rich if r.get(field) not in (None, "")), None)
+                    if val is not None:
+                        updates[field] = val
+                updates["status"] = rich[0].get("status") or "의도 미기입"
+                if any(r.get("preplanned") for r in comp):
+                    updates["preplanned"] = 1
+
+                sets = ", ".join(f"{k}=?" for k in updates)
+                c.execute(f"UPDATE trades SET {sets} WHERE user_id=? AND trade_id=?",
+                          [*updates.values(), keeper["user_id"], keeper["trade_id"]])
+                doomed = [r["trade_id"] for r in comp if r["trade_id"] != keeper["trade_id"]]
+                c.executemany("DELETE FROM trades WHERE user_id=? AND trade_id=?",
+                              [(keeper["user_id"], tid) for tid in doomed])
+                removed += len(doomed)
+    return removed
 
 
 def delete_auto_trades(uid, kind, since=None, unannotated_only=False) -> int:

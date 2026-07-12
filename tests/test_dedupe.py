@@ -81,6 +81,30 @@ def test_near_values_different_close_second_remain_distinct(tmp_path):
     assert len(db.get_trades(uid)) == 2
 
 
+def test_semantic_startup_dedupe_merges_shifted_close_cycle_and_all_annotations(tmp_path):
+    uid = _fresh(tmp_path)
+    a = _pos("binance:pos:ONDOUSDT:1", exchange="binance", symbol="ONDOUSDT",
+             opened_at="2026-07-01 08:00:00", entry=0.91, exit=0.87, qty=45000, pnl=-1800)
+    b = _pos("binance:pos:ONDOUSDT:2", exchange="binance", symbol="ONDOUSDT",
+             opened_at="2026-07-01 08:04:00", entry=0.912, exit=0.871, qty=44800, pnl=-1790)
+    # upsert의 실시간 방어를 우회해 과거 버전이 이미 만든 중복 두 행을 재현한다.
+    with db.conn() as c:
+        cols = ", ".join(db.TRADE_COLS)
+        ph = ", ".join("?" for _ in db.TRADE_COLS)
+        for row in (a, b):
+            c.execute(f"INSERT INTO trades(user_id,trade_id,{cols}) VALUES(?,?,{ph})",
+                      [uid, row["trade_id"], *[row.get(k) for k in db.TRADE_COLS]])
+    db.update_intent(uid, a["trade_id"], {"plan": "초기 계획", "status": "기록완료"})
+    db.update_intent(uid, b["trade_id"], {"review": "복기 내용", "status": "복기완료"})
+    assert db.dedupe_close_cycles() == 1
+    rows = db.get_trades(uid)
+    assert len(rows) == 1
+    assert rows[0]["opened_at"] == "2026-07-01 08:00:00"  # 더 긴 시장 문맥
+    assert rows[0]["plan"] == "초기 계획" and rows[0]["review"] == "복기 내용"
+    assert rows[0]["status"] == "복기완료"
+    assert db.dedupe_close_cycles() == 0
+
+
 def test_no_opened_at_falls_back_to_tradeid(tmp_path):
     uid = _fresh(tmp_path)
     # opened_at 없는 레거시/테스트 경로 — trade_id 기준 멱등
