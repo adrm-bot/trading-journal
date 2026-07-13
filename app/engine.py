@@ -25,6 +25,7 @@ LOOKBACK = int(os.getenv("LOOKBACK_DAYS", "90"))
 POS_GAP_HOURS = float(os.getenv("POSITION_GAP_HOURS", "12"))
 BINANCE_CONTEXT_STEP_DAYS = int(os.getenv("BINANCE_CONTEXT_STEP_DAYS", "30"))
 BINANCE_MAX_HISTORY_DAYS = int(os.getenv("BINANCE_MAX_HISTORY_DAYS", "180"))
+BINANCE_SETTLEMENT_LAG_MS = int(os.getenv("BINANCE_SETTLEMENT_LAG_MS", "120000"))
 EXIT_LEG_MERGE_BPS = float(os.getenv("EXIT_LEG_MERGE_BPS", "2"))
 EXIT_LEG_MAX_BANDS = int(os.getenv("EXIT_LEG_MAX_BANDS", "12"))
 
@@ -192,9 +193,20 @@ def fetch_bybit(key, secret, lookback):
 
 
 # ---------- Binance: userTrades 부호 walk ----------
+def _binance_snapshot_end(now_ms):
+    """체결과 REALIZED_PNL 원장이 모두 반영된 닫힌 시점까지만 감사한다."""
+    return max(0, int(now_ms) - max(0, BINANCE_SETTLEMENT_LAG_MS))
+
+
+def _binance_window_start(snapshot_end_ms, lookback):
+    """임의 밀리초 경계 대신 UTC 자정 경계로 고정해 원장·체결 시각 오차를 제거한다."""
+    exact = int(snapshot_end_ms) - int(lookback) * 86_400_000
+    return (exact // 86_400_000) * 86_400_000
+
+
 def _binance_symbols_and_funding(ex, lookback, now=None):
     now = int(now if now is not None else ex.milliseconds())
-    start = now - lookback * 86_400_000
+    start = _binance_window_start(now, lookback)
     week = 7 * 86_400_000
     symbols, fevents, realized_ledger = set(), {}, {}
     seen_income = set()
@@ -243,19 +255,22 @@ class RealizedPnlMismatch(RuntimeError):
         )
 
 
-def _reconcile_binance_realized(symbol, fills, target_start_ms, ledger_total):
+def _reconcile_binance_realized(symbol, fills, target_start_ms, ledger_total, snapshot_end_ms=None):
     """같은 기간의 REALIZED_PNL 원장과 userTrades 체결 손익을 적재 전에 대조한다.
 
     완전히 닫힌 포지션만 비교하면 진행 중 포지션의 부분청산이 빠질 수 있으므로 원시 체결
     전체를 비교한다. 불일치하면 기존 DB를 건드리기 전에 pull을 중단한다.
     """
     fill_total = sum(_f(t, "realizedPnl") for t in fills
-                     if int(t.get("time") or 0) >= int(target_start_ms))
+                     if int(t.get("time") or 0) >= int(target_start_ms)
+                     and (snapshot_end_ms is None or int(t.get("time") or 0) <= int(snapshot_end_ms)))
     ledger_total = float(ledger_total or 0.0)
     tolerance = max(0.5, abs(ledger_total) * 0.0001)
     delta = fill_total - ledger_total
     audit = {"symbol": symbol, "ledger": round(ledger_total, 8),
              "fills": round(fill_total, 8), "delta": round(delta, 8)}
+    if snapshot_end_ms is not None:
+        audit.update({"window_start_ms": int(target_start_ms), "window_end_ms": int(snapshot_end_ms)})
     if abs(delta) > tolerance:
         raise RealizedPnlMismatch(audit)
     return audit
@@ -312,7 +327,7 @@ def _binance_user_trades(ex, symbol, lookback, now=None):
     fetch_binance에서 실제 적재 창 밖에 청산된 포지션은 다시 제외한다.
     """
     now = int(now if now is not None else ex.milliseconds())
-    target_start = now - lookback * 86_400_000
+    target_start = _binance_window_start(now, lookback)
     floor = now - BINANCE_MAX_HISTORY_DAYS * 86_400_000
     context_start = target_start
     rows = _uniq_fills(_binance_user_trades_range(ex, symbol, target_start, now))
@@ -475,16 +490,16 @@ def _mae_mfe_prices(ohlcv, direction, o_ms, c_ms):
 def fetch_binance(key, secret, lookback, audit_sink=None):
     ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
     try:
-        snapshot_end = ex.milliseconds()  # 원장·체결을 동일한 닫힌 시점으로 조회해 진행 중 체결 경합 방지
+        snapshot_end = _binance_snapshot_end(ex.milliseconds())
         symbols, fevents, realized_ledger = _binance_symbols_and_funding(ex, lookback, snapshot_end)
-        target_start_ms = snapshot_end - lookback * 86_400_000
+        target_start_ms = _binance_window_start(snapshot_end, lookback)
         target_start = target_start_ms / 1000
         rows = []
         for sym in sorted(symbols):
             trades = _binance_user_trades(ex, sym, lookback, snapshot_end)
             try:
                 audit = _reconcile_binance_realized(sym, trades, target_start_ms,
-                                                    realized_ledger.get(sym, 0.0))
+                                                    realized_ledger.get(sym, 0.0), snapshot_end)
             except RealizedPnlMismatch as exc:
                 if audit_sink is not None:
                     audit_sink.append(exc.audit)
@@ -926,6 +941,135 @@ def resync_user(uid):
 
 
 # ---------- 보유 중(미청산) 포지션 — 일지엔 닫힌 거래만 들어가므로 현재 보유는 별도 조회 ----------
+def _boolish(v):
+    return v is True or str(v).strip().lower() in ("1", "true", "yes")
+
+
+def _order_number(order, *keys):
+    info = order.get("info") or {}
+    for key in keys:
+        value = order.get(key)
+        if value in (None, "", 0, "0", "0.0", "0.00000"):
+            value = info.get(key)
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            continue
+        if value:
+            return value
+    return None
+
+
+def _embedded_position_orders(position, direction, qty):
+    """거래소가 TP/SL을 포지션 응답에 직접 싣는 경우를 통일 주문처럼 변환."""
+    if direction not in ("Long", "Short"):
+        return []
+    info = position.get("info") or {}
+    out = []
+    for kind, keys in (("sl", ("stopLossPrice", "stopLoss", "sl")),
+                       ("tp", ("takeProfitPrice", "takeProfit", "tp"))):
+        price = _order_number(position, *keys)
+        if price is None:
+            price = _order_number(info, *keys)
+        if price is None:
+            continue
+        out.append({"id": f"position-{kind}", "symbol": position.get("symbol"),
+                    "side": "sell" if direction == "Long" else "buy",
+                    "type": "stop_loss" if kind == "sl" else "take_profit",
+                    "triggerPrice": price, "amount": qty, "reduceOnly": True,
+                    "info": {"positionSide": direction.upper(), "embedded": True}})
+    return out
+
+
+def _fetch_position_orders(ex, kind, symbol):
+    """일반·조건부 미체결 주문을 읽기 전용으로 조회. 실패해도 포지션 표시는 유지한다."""
+    if not (getattr(ex, "has", {}) or {}).get("fetchOpenOrders"):
+        return [], "unavailable"
+    base = {"category": "linear"} if kind == "bybit" else ({"settle": "usdt"} if kind == "gate" else {})
+    variants = [base]
+    if kind == "bybit":
+        variants.append({**base, "orderFilter": "StopOrder"})
+    elif kind in ("binance", "gate"):
+        # CCXT가 별도 조건부 주문 endpoint를 지원하는 버전에서는 stop=True로 조회된다.
+        variants.append({**base, "stop": True})
+    orders, regular_ok, conditional_ok = [], False, len(variants) == 1
+    for index, params in enumerate(variants):
+        try:
+            orders += list(ex.fetch_open_orders(symbol, None, None, params) or [])
+            if index == 0:
+                regular_ok = True
+            else:
+                conditional_ok = True
+        except Exception:  # noqa: BLE001 — 주문 조회 실패가 보유 포지션 자체를 숨기면 안 된다.
+            logger.debug("%s %s 미체결 주문 조회 실패 params=%s", kind, symbol, params, exc_info=True)
+            continue
+    deduped, seen = [], set()
+    for order in orders:
+        key = (str(order.get("id") or ""), str(order.get("clientOrderId") or ""),
+               str(order.get("type") or ""), str(order.get("side") or ""),
+               _order_number(order, "triggerPrice", "stopPrice", "price"))
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(order)
+    status = "ok" if conditional_ok else ("partial" if regular_ok else "unavailable")
+    return deduped, status
+
+
+def _normalise_exit_orders(position_row, position, orders):
+    """반대편 reduce-only/조건부 주문만 현재 포지션의 실제 청산 주문으로 분류."""
+    direction = position_row.get("direction")
+    if direction not in ("Long", "Short"):
+        return []
+    expected_side = "sell" if direction == "Long" else "buy"
+    entry = position_row.get("entry") or 0
+    qty = position_row.get("qty") or 0
+    pinfo = position.get("info") or {}
+    pos_idx = str(pinfo.get("positionIdx") or "0")
+    out = []
+    for order in list(orders or []) + _embedded_position_orders(position, direction, qty):
+        info = order.get("info") or {}
+        side = str(order.get("side") or info.get("side") or info.get("S") or "").lower()
+        if side != expected_side:
+            continue
+        order_pos = str(info.get("positionSide") or info.get("ps") or "").upper()
+        if order_pos in ("LONG", "SHORT") and order_pos != direction.upper():
+            continue
+        order_idx = str(info.get("positionIdx") or "0")
+        if pos_idx in ("1", "2") and order_idx in ("1", "2") and order_idx != pos_idx:
+            continue
+        typ = str(order.get("type") or info.get("orderType") or info.get("type") or info.get("o") or "").lower()
+        reduce_only = _boolish(order.get("reduceOnly")) or any(_boolish(info.get(k)) for k in (
+            "reduceOnly", "reduce_only", "closeOnTrigger", "closePosition", "cp", "R", "is_close", "is_reduce_only"))
+        conditional = any(x in typ for x in ("stop", "take_profit", "takeprofit", "trailing"))
+        trigger = _order_number(order, "triggerPrice", "stopPrice", "stopLossPrice", "takeProfitPrice",
+                                "trigger_price", "stop_price", "tp", "sl")
+        price = trigger or _order_number(order, "price")
+        if not (reduce_only or conditional):
+            continue
+        if "trailing" in typ:
+            kind = "trailing"
+        elif "take_profit" in typ or "takeprofit" in typ:
+            kind = "tp"
+        elif "stop_loss" in typ or "stoploss" in typ:
+            kind = "sl"
+        elif price is not None and entry:
+            kind = "sl" if ((direction == "Long" and price < entry) or
+                             (direction == "Short" and price > entry)) else "tp"
+        else:
+            kind = "other"
+        amount = _order_number(order, "remaining", "amount", "quantity", "qty")
+        if amount is None and any(_boolish(info.get(k)) for k in ("closePosition", "closeOnTrigger", "cp", "is_close")):
+            amount = qty or None
+        out.append({"kind": kind, "price": price, "qty": amount,
+                    "type": typ or "conditional", "order_id": str(order.get("id") or "") or None})
+    order_rank = {"sl": 0, "tp": 1, "trailing": 2, "other": 3}
+    out.sort(key=lambda o: (order_rank.get(o["kind"], 9),
+                            (o["price"] if direction == "Long" else -(o["price"] or 0))
+                            if o["price"] is not None else float("inf")))
+    return out
+
+
 def _open_positions(kind, key, secret):
     if kind == "bybit":
         ex = ccxt.bybit({"apiKey": key, "secret": secret, "enableRateLimit": True})
@@ -941,6 +1085,7 @@ def _open_positions(kind, key, secret):
     else:
         return []
     rows = []
+    order_cache = {}
     for p in poss:
         contracts = _f(p, "contracts")
         if not contracts:
@@ -961,11 +1106,22 @@ def _open_positions(kind, key, secret):
                 mm = "isolated" if str(info["tradeMode"]) == "1" else "cross"
             else:
                 mm = None
-        rows.append({"exchange": kind, "symbol": sym,
-                     "direction": "Long" if side == "long" else ("Short" if side == "short" else None),
+        direction = "Long" if side == "long" else ("Short" if side == "short" else None)
+        unified_symbol = p.get("symbol")
+        if unified_symbol not in order_cache:
+            order_cache[unified_symbol] = _fetch_position_orders(ex, kind, unified_symbol)
+        open_orders, orders_status = order_cache[unified_symbol]
+        row = {"exchange": kind, "symbol": sym,
+                     "direction": direction,
                      "entry": _f(p, "entryPrice"), "qty": contracts, "leverage": _f(p, "leverage") or None,
                      "upnl": _f(p, "unrealizedPnl"), "mark": _f(p, "markPrice"),
-                     "margin_mode": mm})
+                     "margin_mode": mm}
+        row["exchange_exit_orders"] = _normalise_exit_orders(row, p, open_orders)
+        if orders_status == "unavailable" and _embedded_position_orders(p, direction, contracts):
+            orders_status = "partial"
+        row["orders_status"] = orders_status
+        row["orders_asof"] = datetime.now(timezone.utc).isoformat()
+        rows.append(row)
     return rows
 
 

@@ -241,3 +241,29 @@ def test_binance_realized_ledger_mismatch_stops_import():
     fills = [{"time": 2_000, "realizedPnl": "30"}]
     with pytest.raises(RuntimeError, match="기존 일지는 유지"):
         engine._reconcile_binance_realized("BTCUSDT", fills, 1_000, 12.0)
+
+
+def test_binance_audit_uses_stable_utc_day_boundary_for_income_trade_time_skew():
+    day = 86_400_000
+    snapshot_end = 100 * day + 12_345
+    exact_start = snapshot_end - 90 * day
+    stable_start = engine._binance_window_start(snapshot_end, 90)
+    fills = [{"time": exact_start - 500, "realizedPnl": "85.91"}]
+
+    with pytest.raises(engine.RealizedPnlMismatch):
+        engine._reconcile_binance_realized("BTCUSDT", fills, exact_start, 85.91, snapshot_end)
+
+    audit = engine._reconcile_binance_realized("BTCUSDT", fills, stable_start, 85.91, snapshot_end)
+    assert audit["delta"] == 0.0
+    assert stable_start % day == 0
+    assert stable_start <= exact_start < stable_start + day
+
+
+def test_binance_audit_excludes_unsettled_fills_after_snapshot_end():
+    fills = [
+        {"time": 2_000, "realizedPnl": "10"},
+        {"time": 3_001, "realizedPnl": "99"},
+    ]
+    audit = engine._reconcile_binance_realized("BTCUSDT", fills, 1_000, 10.0, 3_000)
+    assert audit["fills"] == 10.0
+    assert audit["window_end_ms"] == 3_000

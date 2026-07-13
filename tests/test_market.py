@@ -69,6 +69,31 @@ def test_capture_profile_requires_both_up_and_down_samples():
     assert market._capture_profile(_series_from_returns(only_up), _series_from_returns(only_up)) is None
 
 
+def test_relative_strength_profile_exposes_intraday_to_monthly_beta_adjusted_horizons():
+    btc_returns = ([0.001, -0.001] * 360) + [0.001]
+    alt_returns = ([0.0015, -0.0015] * 360) + [0.003]
+
+    profile = market._relative_strength_profile(
+        _series_from_returns(alt_returns), _series_from_returns(btc_returns)
+    )
+
+    assert set(profile["rs_tf"]) == {"1h", "4h", "1d", "7d", "30d"}
+    assert 1.4 < profile["btc_beta_30d"] < 1.6
+    assert profile["rs_tf"]["1h"]["residual"] > 0.1
+    assert profile["rs_sample_hours"] == 720
+
+
+def test_relative_strength_profile_marks_alt_weaker_than_its_btc_beta():
+    btc_returns = ([0.001, -0.001] * 100) + [0.001]
+    alt_returns = ([0.002, -0.002] * 100) + [-0.001]
+
+    profile = market._relative_strength_profile(
+        _series_from_returns(alt_returns), _series_from_returns(btc_returns)
+    )
+
+    assert profile["rs_tf"]["1h"]["residual"] < 0
+
+
 def test_coin_includes_price_spark_newest_first():
     # 가격 추이 스파크: 이미 받은 일봉 재사용, newest-first(F&G·알트시즌 규약), 30개
     c = market._coin(_FakeEx(), "BTC/USDT")

@@ -95,11 +95,11 @@ tr.grow:focus-visible td{background:var(--card-2)}
 
 .main{display:block;min-width:0}
 /* 페이지 헤더(구 topbar) — 콘텐츠 폭 안, sticky 아님 */
-.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);margin:0 auto var(--s5);max-width:2320px;padding:var(--s6) var(--page-pad) 0}
+.pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);width:100%;margin:0 auto var(--s5);padding:var(--s6) 0 0}
 .pagehead .eyebrow{margin-bottom:6px;color:var(--muted)}
 .pagehead h1{margin:0;font-family:var(--f-display);font-size:28px;font-weight:600;color:var(--glacier);letter-spacing:-.022em;line-height:1.05}
 .pagehead .desc{color:var(--muted);font-size:var(--fs-sm);margin-top:5px}
-.content{max-width:2320px;width:100%;margin:0 auto;padding:0 var(--page-pad) var(--s8)}
+.content{width:100%;margin:0;padding:0 var(--page-pad) var(--s8)}
 
 /* ---- buttons (sharp 2px) ---- */
 .btn{font:inherit;font-weight:500;cursor:pointer;border:1px solid var(--line-2);box-shadow:none;background:transparent;color:var(--moonlight);
@@ -151,7 +151,7 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .econ-source{color:var(--fog);text-decoration:none}.econ-source:hover{color:var(--glacier)}
 /* R2b: 하단 매매일지 도크(fixed) — 균일 카드 그리드 · 독립 스크롤 */
 .jdock{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--panel);border-top:1px solid var(--line-2);box-shadow:0 -10px 30px rgba(0,0,0,.45)}
-.jdock-inner{max-width:2320px;margin:0 auto;padding:0 var(--page-pad)}
+.jdock-inner{width:100%;margin:0;padding:0 var(--page-pad)}
 .jdock-head{display:flex;align-items:center;gap:var(--s3);height:46px}
 .jdock-title{font-family:var(--f-display);font-weight:600;color:var(--glacier);font-size:var(--fs-md);letter-spacing:-.01em}
 .jdock-count{font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--frost);background:var(--info-soft);border-radius:var(--r-badge);padding:1px 7px;margin-left:6px}
@@ -166,7 +166,7 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .jcard.flagged{border-color:rgba(235,87,87,.45);box-shadow:inset 3px 0 0 var(--neg)}
 .jcard.flagged:hover{border-color:rgba(235,87,87,.7)}
 .brand-mark{width:26px;height:26px;border-radius:7px;background:var(--acid-lime);color:var(--onyx);font-family:var(--f-display);font-weight:800;font-size:12px;letter-spacing:-.03em;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto}
-#pullbanner:not(:empty){max-width:2320px;margin:0 auto;padding:var(--s4) var(--page-pad) 0}
+#pullbanner:not(:empty){width:100%;margin:0;padding:var(--s4) var(--page-pad) 0}
 .jplan,.jmemo,.jreview,.oi-insight,.empty-inline,.wtxt,.banner,.mcard .msub,.mcard .ml,.desc,.hh,.flag>span,.jhl{word-break:keep-all}
 /* R2f: 도크 확장 그립 + 심볼 줄바꿈 방지 */
 .jdock-grip{position:absolute;left:50%;transform:translateX(-50%);top:-11px;width:58px;height:12px;border-radius:2px 2px 0 0;background:var(--panel);border:1px solid var(--line-2);border-bottom:none;display:flex;align-items:center;justify-content:center;cursor:ns-resize;color:var(--fog);z-index:2;padding:0;transition:background .12s,border-color .12s;touch-action:none}
@@ -195,6 +195,10 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .poslv .lv{font-family:var(--f-mono);font-size:var(--fs-micro);font-weight:510;padding:1px 6px;border-radius:var(--r-badge);background:var(--card-2);color:var(--pebble)}
 .poslv .lvsl{background:var(--neg-soft);color:var(--ember)}
 .poslv .lvtp{background:var(--pos-soft);color:var(--mint)}
+.poslv .lvtrail{background:var(--warn-soft);color:var(--amber)}
+.pos-order-stack{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:start;gap:5px 8px;min-width:190px}
+.pos-order-stack .poslv{margin:0}.pos-order-label{padding-top:2px;color:var(--fog);font-size:var(--fs-micro);white-space:nowrap}
+.pos-order-note{display:inline-block;margin-top:4px;color:var(--amber);font:500 var(--fs-micro)/1.2 var(--f-mono);cursor:help}
 .jdock-toggle{margin-left:var(--s2);appearance:none;background:var(--card-2);border:1px solid var(--line-2);color:var(--moonlight);width:28px;height:28px;border-radius:var(--r-btn);cursor:pointer;font-size:12px;line-height:1;transition:.12s;display:inline-flex;align-items:center;justify-content:center}
 .jdock-toggle:hover{color:var(--glacier);border-color:var(--slate)}
 .jdock-body{height:var(--dock-h,220px);max-height:70vh;overflow:auto;overscroll-behavior:contain;padding:2px 0 var(--s5);scrollbar-width:thin;scrollbar-color:var(--line-2) transparent}
@@ -202,8 +206,8 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .jdock-body::-webkit-scrollbar-track{background:transparent}
 .jdock-body::-webkit-scrollbar-thumb{background:var(--line-2);border-radius:8px;border:2px solid var(--panel);background-clip:padding-box}
 .jdock-body::-webkit-scrollbar-thumb:hover{background:var(--slate);background-clip:padding-box}
-.jdock-body .jfeed{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--s3);align-items:start}
-.jdock-body .jcard{margin:0;min-height:172px;height:auto;overflow:visible;position:relative}
+.jdock-body .jfeed{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--s3);align-items:stretch}
+.jdock-body .jcard{margin:0;min-height:172px;height:100%;overflow:visible;position:relative}
 .jdock-body .jcard::after{display:none}
 #view-dashboard{padding-bottom:calc(var(--dock-h,220px) + 76px)}
 #view-dashboard.dock-collapsed .jdock-body{display:none}
@@ -242,6 +246,8 @@ tr.grow:focus-visible td{background:var(--card-2)}
 .panel-chrome{position:relative;z-index:7;height:32px;display:flex;align-items:center;padding:0 9px;background:var(--card-2);border-bottom:1px solid var(--line)}
 .panel-chrome-title{position:relative;z-index:2;pointer-events:none;color:var(--moonlight);font-size:var(--fs-xs);font-weight:620;line-height:1;letter-spacing:-.005em}
 .panel-content{min-width:0;min-height:0;overflow:auto;overscroll-behavior:contain;padding:var(--panel-shell-pad,10px);background:var(--panel);scrollbar-width:thin;scrollbar-color:var(--steel) transparent}
+.dash-mkt>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h,var(--panel-min-h,140px)),var(--panel-natural-h,0px));max-height:none;grid-template-rows:32px auto}
+.dash-mkt>.dash-panel>.panel-content{min-height:max-content;overflow:visible;overscroll-behavior:auto}
 .panel-empty-state{height:100%;min-height:84px;display:grid;align-content:center;gap:5px;padding:14px 16px;border:1px solid var(--line);border-radius:2px;background:var(--card)}
 .panel-empty-state b{color:var(--moonlight);font-size:var(--fs-sm);font-weight:600}.panel-empty-state span{color:var(--muted);font-size:var(--fs-xs);line-height:1.5;overflow-wrap:anywhere}
 .panel-empty-state.compact{height:auto;min-height:96px;padding:12px 14px}
@@ -413,6 +419,18 @@ body.panel-moving{cursor:grabbing!important;user-select:none!important}body.resi
 .flag.warn{border-left-color:var(--warn)} .flag.warn .fi{color:var(--warn)}
 .flag.info{border-left-color:var(--indigo)} .flag.info .fi{color:var(--indigo)}
 .flag.good{border-left-color:var(--pos)} .flag.good .fi{color:var(--pos)}
+.correction-queue{display:grid;gap:var(--s3)}
+.corr-row{position:relative;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px var(--s3);padding:var(--s4);border:1px solid var(--line);border-left:2px solid var(--warn);background:var(--card);min-width:0}
+.corr-head{display:flex;align-items:center;gap:var(--s2);min-width:0}.corr-head b{min-width:0;color:var(--moonlight);font-size:var(--fs-sm);font-weight:600;overflow-wrap:anywhere}
+.corr-trend{flex:0 0 auto;padding:2px 5px;border:1px solid var(--line-2);border-radius:var(--r-badge);color:var(--muted);font:500 var(--fs-micro)/1 var(--f-mono)}
+.corr-trend.neg{border-color:rgba(var(--neg-rgb),.35);background:var(--neg-soft)}.corr-trend.pos{border-color:rgba(var(--pos-rgb),.35);background:var(--pos-soft)}
+.corr-metrics{grid-column:1/-1;display:flex;align-items:center;gap:5px 10px;min-width:0;flex-wrap:wrap;color:var(--muted);font:400 var(--fs-xs)/1.4 var(--f-mono)}
+.corr-row p{grid-column:1/2;margin:2px 0 0;color:var(--pebble);font-size:var(--fs-sm);line-height:1.55;word-break:keep-all;overflow-wrap:anywhere}
+.corr-action-k{display:inline-block;margin-right:7px;color:var(--fog);font:600 var(--fs-micro)/1 var(--f-mono);letter-spacing:.04em;text-transform:uppercase}
+.corr-open{grid-column:2/3;grid-row:3;align-self:end;white-space:nowrap}
+.correction-empty{display:flex;flex-direction:column;gap:4px;padding:var(--s4);border:1px solid var(--line);background:var(--card)}
+.correction-empty b{color:var(--moonlight);font-size:var(--fs-sm);font-weight:600}.correction-empty span{color:var(--muted);font-size:var(--fs-xs);line-height:1.5;word-break:keep-all}
+@container dashboard-panel (max-width:420px){.corr-row{grid-template-columns:1fr}.corr-open{grid-column:1;grid-row:auto;justify-self:start}}
 .stat .msub{color:var(--dim);font-size:var(--fs-cap);margin-top:4px;font-family:var(--f-mono)}
 svg.rh{width:100%;height:170px;display:block}
 .rh .hx{fill:var(--muted);font-size:var(--fs-cap);font-family:var(--f-mono)}
@@ -605,6 +623,10 @@ input.err:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(var(--neg-rg
 
 /* ---- 상대강도 (BTC vs 알트) ---- */
 .rscard{padding:var(--s5) var(--s5)}
+.rs-title{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.rstfs{display:inline-flex;align-items:center;border:1px solid var(--line-2);border-radius:var(--r-btn);overflow:hidden;background:var(--card)}
+.rstf{appearance:none;height:27px;padding:0 9px;border:0;border-right:1px solid var(--line);background:transparent;color:var(--muted);font:500 var(--fs-micro)/1 var(--f-body);cursor:pointer;white-space:nowrap}
+.rstf:last-child{border-right:0}.rstf:hover{color:var(--ice);background:var(--card-2)}.rstf.on{color:var(--glacier);background:var(--info-soft);box-shadow:inset 0 -2px 0 var(--frost)}
 /* 주인공: BTC ←→ ALT 스펙트럼 슬라이더 */
 .rsspec{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:var(--s3);margin:10px 0 var(--s5)}
 .rsend{font-family:var(--f-mono);font-size:var(--fs-cap);letter-spacing:.06em;color:var(--fog)}
@@ -628,7 +650,7 @@ input.err:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(var(--neg-rg
 .rsa-k svg{width:12px;height:12px}
 .rsa.long .rsa-k{color:var(--mint)} .rsa.short .rsa-k{color:var(--ember)}
 .rsa-v{font-family:var(--f-display);font-size:var(--fs-lg);font-weight:510;color:var(--ice);letter-spacing:-.01em;overflow-wrap:anywhere}
-.rsa-d{font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--muted)}
+.rsa-d{font-family:var(--f-mono);font-size:var(--fs-xs);line-height:1.45;color:var(--muted);overflow-wrap:anywhere}
 .rsethline{margin-bottom:var(--s3);font-family:var(--f-mono);font-size:var(--fs-xs);color:var(--muted)}
 /* 상세(조연·접힘) */
 .rsmore{margin-bottom:6px}
@@ -647,7 +669,7 @@ input.err:focus{border-color:var(--ember);box-shadow:0 0 0 3px rgba(var(--neg-rg
 .rsbar.pos{left:50%;background:var(--mint)} .rsbar.neg{right:50%;background:var(--ember)}
 .rsmetrics{display:grid;justify-items:end;gap:1px;min-width:0;font-family:var(--f-mono);line-height:1.2;text-align:right}
 .rsmetrics .num{font-size:var(--fs-xs);font-weight:600;white-space:nowrap}
-.rsmetrics small{font-size:var(--fs-micro);color:var(--muted);white-space:nowrap}
+.rsmetrics small{font-size:var(--fs-micro);line-height:1.35;color:var(--muted);white-space:normal;overflow-wrap:anywhere}
 
 /* ---- 실시간 청산 체결(공개 WS) ---- */
 .liqcard{padding:var(--s4) var(--s5)}

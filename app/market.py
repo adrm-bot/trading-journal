@@ -76,16 +76,28 @@ def _coin(ex, symbol, mtf=False, with_rs=False):
            "ema200": round(e200, 2) if e200 is not None else None,
            # 최근 30일 종가 스파크(newest-first: F&G·알트시즌과 동일 규약) — 이미 받은 캔들 재사용(추가 호출 0)
            "spark": [round(c, 8) for c in closes[-30:]][::-1] if len(closes) >= 10 else None}
+    hourly_oh = None
     if with_rs:
         # 상대강도 계산 전용 시계열. _alt_board에서 소비 후 제거하므로 API 응답에는 노출하지 않는다.
         out["_rs_series"] = [[int(c[0]), float(c[4])] for c in oh if c and c[4]][-91:]
+        try:
+            # 1시간·4시간·1일·1주·1개월을 한 시계열에서 계산한다. 마지막 봉은 진행 중일 수 있어 제외.
+            hourly_oh = [c for c in ex.fetch_ohlcv(symbol, "1h", limit=750) if c and c[4]]
+            closed = hourly_oh[:-1] if len(hourly_oh) > 1 else []
+            out["_rs_hourly"] = [[int(c[0]), float(c[4])] for c in closed][-721:]
+        except Exception:  # noqa: BLE001
+            out["_rs_hourly"] = []
     if mtf:  # 1h·4h·1d 각각 EMA50/200 추세 (1d는 이미 받은 캔들 재사용)
         tf = {}
         hourly = None
         for t in _TFS:
             try:
-                cl = closes if t == "1d" else [
-                    x[4] for x in ex.fetch_ohlcv(symbol, t, limit=300) if x and x[4]]
+                if t == "1d":
+                    cl = closes
+                elif t == "1h" and hourly_oh:
+                    cl = [x[4] for x in hourly_oh if x and x[4]]
+                else:
+                    cl = [x[4] for x in ex.fetch_ohlcv(symbol, t, limit=300) if x and x[4]]
                 if t == "1h":
                     hourly = cl
                 tr, a, b = _trend(cl)
@@ -149,6 +161,50 @@ def _capture_profile(alt_series, btc_series, window=60):
         "sample_down": down_n,
         "window_days": min(window, len(stamps) - 1),
     }
+
+
+RS_HORIZONS = (("1h", 1), ("4h", 4), ("1d", 24), ("7d", 24 * 7), ("30d", 24 * 30))
+
+
+def _relative_strength_profile(alt_series, btc_series):
+    """30일 1시간봉으로 BTC 베타를 추정하고 기간별 BTC 베타조정 잔차수익률을 계산한다.
+
+    잔차수익률 > 0이면 같은 기간 BTC 움직임과 해당 알트의 통상 민감도를 감안해도 상대적으로 강했고,
+    < 0이면 상대적으로 약했다는 뜻이다. 미래 방향 예측값은 아니다.
+    """
+    try:
+        alt = {int(t): float(v) for t, v in (alt_series or []) if v}
+        btc = {int(t): float(v) for t, v in (btc_series or []) if v}
+    except (TypeError, ValueError):
+        return None
+    stamps = sorted(set(alt) & set(btc))[-721:]
+    if len(stamps) < 73:
+        return None
+    ar, br = [], []
+    for prev, cur in zip(stamps, stamps[1:]):
+        if not alt[prev] or not btc[prev]:
+            continue
+        ar.append(alt[cur] / alt[prev] - 1)
+        br.append(btc[cur] / btc[prev] - 1)
+    if len(br) < 72:
+        return None
+    am, bm = sum(ar) / len(ar), sum(br) / len(br)
+    variance = sum((x - bm) ** 2 for x in br)
+    if variance <= 1e-18:
+        return None
+    beta = sum((x - bm) * (y - am) for x, y in zip(br, ar)) / variance
+    horizons = {}
+    for key, bars in RS_HORIZONS:
+        if len(stamps) <= bars:
+            continue
+        a_ret = (alt[stamps[-1]] / alt[stamps[-1 - bars]] - 1) * 100
+        b_ret = (btc[stamps[-1]] / btc[stamps[-1 - bars]] - 1) * 100
+        horizons[key] = {"alt": round(a_ret, 2), "btc": round(b_ret, 2),
+                         "residual": round(a_ret - beta * b_ret, 2)}
+    if not horizons:
+        return None
+    return {"rs_tf": horizons, "btc_beta_30d": round(beta, 3),
+            "rs_asof": int(stamps[-1]), "rs_sample_hours": len(br)}
 
 
 def _ratio_trend(a, b):
@@ -240,11 +296,12 @@ ALTS = [
 
 
 def _alt_board(ex, btc):
-    """ALTS 각각의 BTC 대비 60일 상·하방 포착률 보드 + 7일 초과수익률 + ETH 스냅샷.
+    """ALTS 각각의 기간별 BTC 베타조정 상대강도 + 60일 포착률 + ETH 스냅샷.
     심볼별 조회를 개별 try로 감싼다 — 거래소에 없거나(신규·미상장) 타임아웃 나는 알트
     하나가 전체 보드를 죽이지 않게. 빠진 심볼은 조용히 제외(정직: 없는 데이터는 안 만든다)."""
     btc_chg7 = btc.get("chg7") if btc else None
     btc_series = (btc or {}).get("_rs_series") or []
+    btc_hourly = (btc or {}).get("_rs_hourly") or []
     eth, board = None, []
     for sym in ALTS:
         try:
@@ -253,6 +310,7 @@ def _alt_board(ex, btc):
             logger.debug("market 알트 %s 조회 실패 — 보드에서 제외", sym)
             continue
         profile = _capture_profile((c or {}).pop("_rs_series", None), btc_series)
+        relative = _relative_strength_profile((c or {}).pop("_rs_hourly", None), btc_hourly)
         if sym == "ETH":
             eth = c
         if c and c.get("chg7") is not None and btc_chg7 is not None:
@@ -261,6 +319,12 @@ def _alt_board(ex, btc):
                    "vs_btc_7d": round(c["chg7"] - btc_chg7, 2)}
             if profile:
                 row.update(profile)
+                row["capture_score_60d"] = row.pop("rs_score")
+            if relative:
+                row.update(relative)
+                row["rs_score"] = (relative.get("rs_tf", {}).get("1d") or {}).get("residual")
+            elif profile:
+                row["rs_score"] = row.get("capture_score_60d")
             board.append(row)
     board.sort(key=lambda b: (b.get("rs_score") is not None,
                               b.get("rs_score") if b.get("rs_score") is not None else b["vs_btc_7d"]),
@@ -269,13 +333,15 @@ def _alt_board(ex, btc):
 
 
 def _regime(board, btc):
-    """알트 breadth로 시장 레짐 판정: BTC 우위 / 알트 우위 / 혼조."""
+    """1일 BTC 베타조정 상대강도 breadth로 BTC 우위 / 알트 우위 / 혼조를 요약."""
     n = len(board)
     if not n:
         return None
-    scored = [b for b in board if b.get("rs_score") is not None]
+    mtf = [b for b in board if ((b.get("rs_tf") or {}).get("1d") or {}).get("residual") is not None]
+    scored = mtf or [b for b in board if b.get("rs_score") is not None]
     basis_rows = scored or board
-    op = sum(1 for b in basis_rows if (b.get("rs_score") if scored else b["vs_btc_7d"]) > 0)
+    op = sum(1 for b in basis_rows if ((((b.get("rs_tf") or {}).get("1d") or {}).get("residual"))
+                                       if mtf else (b.get("rs_score") if scored else b["vs_btc_7d"])) > 0)
     n_basis = len(basis_rows)
     if op <= n_basis * 0.35:
         regime = "btc"       # 대부분 알트가 BTC보다 약함 → BTC 우위
@@ -286,7 +352,8 @@ def _regime(board, btc):
     return {"regime": regime, "board": board, "n": n, "universe_n": len(ALTS),
             "universe_basis": "대형 시총 우선 + 섹터 대표 보강",
             "outperform": op, "breadth_n": n_basis,
-            "strength_basis": "60일 상방 포착률 - 하방 포착률" if scored else "7일 BTC 초과수익률",
+            "strength_basis": "30일 베타 추정 기반 1일 BTC 잔차수익률" if mtf else ("60일 상방 포착률 - 하방 포착률" if scored else "7일 BTC 초과수익률"),
+            "horizons": [k for k, _ in RS_HORIZONS], "default_horizon": "1d",
             "btc_chg7": btc.get("chg7"), "btc_trend": btc.get("trend")}
 
 
@@ -311,6 +378,7 @@ def _market_data():
                 continue
             eth, board = _alt_board(ex, btc)
             btc.pop("_rs_series", None)
+            btc.pop("_rs_hourly", None)
             btcd_tf, usdtd_tf = _dom_proxy(ex)
             return {"btc": btc, "eth": eth, "rs": _regime(board, btc), "src": name,
                     "btcd_tf": btcd_tf, "usdtd_tf": usdtd_tf, "altseason": _altseason(board, btc)}

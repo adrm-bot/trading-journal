@@ -69,9 +69,14 @@ def test_market_ordering_and_current_data_panels_remain_available():
     assert "ensureEconomy()" in HTML
     assert "oi_context_quad" in HTML
     assert "OI 수급 맥락" in HTML
+    for label in ("신규 롱", "신규 숏", "숏 커버", "롱 청산"):
+        assert label in HTML
     assert "ratio_asof" in HTML
     assert "ETH.D ${d.eth}%" in HTML
-    assert "sample_up" in HTML
+    assert "RS_HORIZONS" in HTML
+    assert "btc_beta_30d" in HTML
+    assert "rsSetHorizon" in HTML
+    assert "기간별 상대강도 = 알트 수익률" in HTML
     assert "long_usd" in HTML and "short_usd" in HTML
     assert "e.confirmed?'확정':'예정'" in HTML
 
@@ -100,6 +105,31 @@ def test_dashboard_panel_spacing_is_fixed_across_journal_views():
     assert "--panel-pad-x:18px" in CSS
     assert "--dash-gap:16px" in CSS
     assert "el.dataset.density" not in HTML
+
+
+def test_dashboard_uses_full_viewport_width_and_equal_height_journal_rows():
+    assert ".content{width:100%;margin:0;padding:0 var(--page-pad) var(--s8)}" in CSS
+    assert ".pagehead{display:flex;align-items:flex-end;justify-content:space-between;gap:var(--s4);width:100%" in CSS
+    assert ".jdock-inner{width:100%;margin:0;padding:0 var(--page-pad)}" in CSS
+    assert ".jdock-body .jfeed{display:grid;grid-template-columns:repeat(auto-fill,minmax(420px,1fr));gap:var(--s3);align-items:stretch}" in CSS
+    assert ".jdock-body .jcard{margin:0;min-height:172px;height:100%;overflow:visible;position:relative}" in CSS
+
+
+def test_market_panels_share_one_vertical_scroll_per_column():
+    assert ".dash-mkt>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h" in CSS
+    assert "var(--panel-natural-h,0px));max-height:none;grid-template-rows:32px auto" in CSS
+    assert ".dash-mkt>.dash-panel>.panel-content{min-height:max-content;overflow:visible" in CSS
+    assert "--panel-user-h" in HTML
+    assert "function bindMarketNaturalHeights()" in HTML
+    assert "new ResizeObserver(sync)" in HTML
+    assert "zone.id==='mktCol'?parseInt(p.style.getPropertyValue('--panel-user-h')" in HTML
+
+
+def test_average_r_labels_describe_realized_r_without_colliding_with_payoff_ratio():
+    assert "평균 실현 R (30일)" in HTML
+    assert "mcard('평균 실현 R'" in HTML
+    assert "mcard('손익비'" in HTML
+    assert "평균 손익비" not in HTML
 
 
 def test_dashboard_responds_to_panel_width_without_clipping_copy():
@@ -139,6 +169,19 @@ def test_open_positions_show_quantity_and_all_planned_targets():
     assert "TP1 ${fmtP(_tp)}" in HTML
     assert "TP2 ${fmtP(_tp2)}" in HTML
     assert "TP3 ${fmtP(_tp3)}" in HTML
+    assert "function exchangeExitLevels(p)" in HTML
+    assert "exchange_exit_orders" in HTML
+    assert "거래소 주문" in HTML
+    assert "내 계획" in HTML
+
+
+def test_behavior_correction_queue_is_visible_on_dashboard_and_insights():
+    assert "function correctionQueue(ts,limit)" in HTML
+    assert "최근 20건과 직전 20건 비교" in HTML
+    assert "correctionQueue(DATA.trades,3)" in HTML
+    assert "correctionQueue(ts,6)" in HTML
+    assert ".correction-queue{" in CSS
+    assert ".corr-row{" in CSS
 
 
 def test_insight_sections_do_not_disappear_when_optional_annotations_are_empty():

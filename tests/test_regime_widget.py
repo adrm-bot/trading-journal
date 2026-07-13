@@ -134,6 +134,13 @@ def test_oi_context_quadrant_is_separate_from_v21_core():
     assert out["plot"]["points"]
 
 
+def test_oi_context_quadrants_use_actionable_position_flow_labels():
+    assert regime.QUAD_TEXT[1].startswith("신규 롱")
+    assert regime.QUAD_TEXT[2].startswith("신규 숏")
+    assert regime.QUAD_TEXT[3].startswith("숏 커버")
+    assert regime.QUAD_TEXT[4].startswith("롱 청산")
+
+
 def test_perf_unknown_symbol_counts_unmatched(monkeypatch):
     monkeypatch.setattr(regime, "_labels_for", lambda sym, since: None)
     out = regime.perf([{"symbol": "NOPEUSDT", "opened_at": "2025-01-01T00:00:00", "pnl": 1.0}])
