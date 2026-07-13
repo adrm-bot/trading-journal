@@ -46,6 +46,29 @@ def test_alt_board_no_btc_chg7_yields_no_rows():
     assert board == []
 
 
+def _series_from_returns(returns, start=100.0):
+    values = [start]
+    for r in returns:
+        values.append(values[-1] * (1 + r))
+    return [[i, v] for i, v in enumerate(values)]
+
+
+def test_capture_profile_rewards_upside_participation_and_downside_defense():
+    # BTC +1% 날 알트 +1.5%, BTC -1% 날 알트 -0.5% → 상방 150, 하방 50, 강도 +100.
+    btc_returns = [0.01, -0.01] * 30
+    alt_returns = [0.015, -0.005] * 30
+    p = market._capture_profile(_series_from_returns(alt_returns), _series_from_returns(btc_returns))
+    assert p["up_capture_60d"] == 150.0
+    assert p["down_capture_60d"] == 50.0
+    assert p["rs_score"] == 100.0
+    assert p["sample_up"] == 30 and p["sample_down"] == 30
+
+
+def test_capture_profile_requires_both_up_and_down_samples():
+    only_up = [0.01] * 10
+    assert market._capture_profile(_series_from_returns(only_up), _series_from_returns(only_up)) is None
+
+
 def test_coin_includes_price_spark_newest_first():
     # 가격 추이 스파크: 이미 받은 일봉 재사용, newest-first(F&G·알트시즌 규약), 30개
     c = market._coin(_FakeEx(), "BTC/USDT")
@@ -63,5 +86,7 @@ def test_coin_mtf_includes_horizon_matched_price_changes_without_extra_series():
 def test_alts_are_unique_and_include_requested_sectors():
     assert len(market.ALTS) == len(set(market.ALTS))       # 중복 없음
     assert market.ALTS[0] == "ETH"                          # 대장 스냅샷용 첫 항목
-    for s in ("HYPE", "ONDO", "ENA", "RENDER", "FET", "WLD"):
+    assert len(market.ALTS) >= 40                           # 대형 시총 + 섹터 대표 확장
+    for s in ("HYPE", "ONDO", "ENA", "RENDER", "FET", "WLD",
+              "TRX", "TON", "XLM", "HBAR", "MNT", "PENDLE", "PYTH", "IMX", "DYDX"):
         assert s in market.ALTS

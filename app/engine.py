@@ -232,6 +232,17 @@ def _binance_symbols_and_funding(ex, lookback, now=None):
     return symbols, fevents, realized_ledger
 
 
+class RealizedPnlMismatch(RuntimeError):
+    """Binance 원장과 체결 합계가 달라 적재를 중단한 상태."""
+
+    def __init__(self, audit):
+        self.audit = audit
+        super().__init__(
+            f"binance {audit['symbol']} 실현손익 원장과 체결 합계가 일치하지 않습니다 "
+            f"(원장 {audit['ledger']:.2f}, 체결 {audit['fills']:.2f}). 기존 일지는 유지했습니다"
+        )
+
+
 def _reconcile_binance_realized(symbol, fills, target_start_ms, ledger_total):
     """같은 기간의 REALIZED_PNL 원장과 userTrades 체결 손익을 적재 전에 대조한다.
 
@@ -243,13 +254,11 @@ def _reconcile_binance_realized(symbol, fills, target_start_ms, ledger_total):
     ledger_total = float(ledger_total or 0.0)
     tolerance = max(0.5, abs(ledger_total) * 0.0001)
     delta = fill_total - ledger_total
+    audit = {"symbol": symbol, "ledger": round(ledger_total, 8),
+             "fills": round(fill_total, 8), "delta": round(delta, 8)}
     if abs(delta) > tolerance:
-        raise RuntimeError(
-            f"binance {symbol} 실현손익 원장과 체결 합계가 일치하지 않습니다 "
-            f"(원장 {ledger_total:.2f}, 체결 {fill_total:.2f}). 기존 일지는 유지했습니다"
-        )
-    return {"symbol": symbol, "ledger": round(ledger_total, 8),
-            "fills": round(fill_total, 8), "delta": round(delta, 8)}
+        raise RealizedPnlMismatch(audit)
+    return audit
 
 
 def _binance_user_trades_range(ex, symbol, start, end):
@@ -463,7 +472,7 @@ def _mae_mfe_prices(ohlcv, direction, o_ms, c_ms):
     return (hi, lo) if direction == "Short" else (lo, hi)
 
 
-def fetch_binance(key, secret, lookback):
+def fetch_binance(key, secret, lookback, audit_sink=None):
     ex = ccxt.binanceusdm({"apiKey": key, "secret": secret, "enableRateLimit": True})
     try:
         snapshot_end = ex.milliseconds()  # 원장·체결을 동일한 닫힌 시점으로 조회해 진행 중 체결 경합 방지
@@ -473,8 +482,15 @@ def fetch_binance(key, secret, lookback):
         rows = []
         for sym in sorted(symbols):
             trades = _binance_user_trades(ex, sym, lookback, snapshot_end)
-            audit = _reconcile_binance_realized(sym, trades, target_start_ms,
-                                                realized_ledger.get(sym, 0.0))
+            try:
+                audit = _reconcile_binance_realized(sym, trades, target_start_ms,
+                                                    realized_ledger.get(sym, 0.0))
+            except RealizedPnlMismatch as exc:
+                if audit_sink is not None:
+                    audit_sink.append(exc.audit)
+                raise
+            if audit_sink is not None:
+                audit_sink.append(audit)
             logger.info("binance realized audit %s", audit)
             rebuilt = reconstruct_walk("binance", sym, trades, fevents.get(sym))
             rows += [r for r in rebuilt if (_closed_ts(r.get("closed_at")) or 0) >= target_start]
@@ -757,9 +773,13 @@ def _nt_open_positions(cred):
     return rows
 
 
+def _binance_adapter(cred, lb, audit_sink=None):
+    return fetch_binance(cred["key"], cred["secret"], lb, audit_sink=audit_sink)
+
+
 ADAPTERS = {
     "bybit": lambda cred, lb: fetch_bybit(cred["key"], cred["secret"], lb),
-    "binance": lambda cred, lb: fetch_binance(cred["key"], cred["secret"], lb),
+    "binance": _binance_adapter,
     "gate": lambda cred, lb: fetch_gate(cred["key"], cred["secret"], lb),
     "ninjatrader": fetch_ninjatrader,
 }
@@ -805,12 +825,16 @@ def apply_position_intents(uid, kind, new_rows) -> int:
     return applied
 
 
-def _pull_kind(uid, kind, cred, lookback, wipe_annotated):
+def _pull_kind(uid, kind, cred, lookback, wipe_annotated, audit_sink=None):
     """거래소 하나를 '창 교체' 방식으로 적재 — 재구성이 재풀링마다 포지션 경계를 다르게 잡아
     겹침 중복이 누적되던 문제 차단. 신선한 재구성을 먼저 안전히 수집한 뒤(실패 시 삭제 안 함),
     창 내 자동행을 지우고 새로 넣는다. wipe_annotated=False면 주석 있는 행은 보존(일상 pull),
     True면 창 내 자동행 전부 교체(재적재)."""
-    fresh = list(ADAPTERS[kind](cred, lookback))  # 실패하면 예외 → 아래 삭제 안 됨(데이터 보호)
+    adapter = ADAPTERS[kind]
+    if kind == "binance" and adapter is _binance_adapter:
+        fresh = list(adapter(cred, lookback, audit_sink))
+    else:
+        fresh = list(adapter(cred, lookback))  # 실패하면 예외 → 아래 삭제 안 됨(데이터 보호)
     # 삭제 하한 = 이번에 '실제로 다시 불러온' 거래들의 최초 오픈시각(closed_at과 비교) → 재구성 스팬에
     # 겹치는 조각(청산이 살짝 먼저 끝난 것 포함)은 걷어내되, 그보다 오래된(재조회 못 한) 기록은 절대
     # 안 지운다. 신규 없으면 삭제 안 함(데이터 보호).
@@ -828,6 +852,20 @@ def _pull_kind(uid, kind, cred, lookback, wipe_annotated):
     return {"added": added, "preplanned": preplanned, "error": None}
 
 
+def _sync_audit_details(rows, lookback=None):
+    rows = list(rows or [])
+    out = {
+        "symbol_count": len(rows),
+        "ledger_total": round(sum(float(r.get("ledger") or 0) for r in rows), 8),
+        "fills_total": round(sum(float(r.get("fills") or 0) for r in rows), 8),
+        "delta": round(sum(float(r.get("delta") or 0) for r in rows), 8),
+        "symbols": rows,
+    }
+    if lookback is not None:
+        out["lookback_days"] = int(lookback)
+    return out
+
+
 def pull_user(uid, lookback=None, wipe_annotated=False):
     """거래소별 적재 결과: {exchange: {"added": n, "preplanned": n, "error": str|None}}.
     lookback 지정 시 그 창(재적재는 길게), wipe_annotated=True면 창 내 자동행 전부 교체."""
@@ -837,14 +875,44 @@ def pull_user(uid, lookback=None, wipe_annotated=False):
         if kind not in ADAPTERS:
             continue
         cred = db.get_connection(uid, kind)
+        audit_rows = []
+        previous_audit = None
+        if kind == "binance":
+            previous_audit = next((a for a in db.get_sync_audits(uid)
+                                   if a["exchange"] == kind), None)
         try:
-            results[kind] = _pull_kind(uid, kind, cred, lb, wipe_annotated)
+            results[kind] = _pull_kind(uid, kind, cred, lb, wipe_annotated, audit_rows)
+            if kind == "binance":
+                old_days = int(((previous_audit or {}).get("details") or {}).get("lookback_days") or 0)
+                unresolved = (previous_audit or {}).get("status") == "mismatch"
+                can_clear = bool(audit_rows) and int(lb) >= old_days
+                status = "mismatch" if unresolved and not can_clear else ("matched" if audit_rows else "no_data")
+                if status != "mismatch":
+                    db.set_sync_audit(uid, kind, status, _sync_audit_details(audit_rows, lb))
+                results[kind]["audit_status"] = status
+        except RealizedPnlMismatch as e:
+            logger.warning("pull %s 원장 불일치 uid=%s: %s", kind, uid, e)
+            details = _sync_audit_details(audit_rows or [e.audit], lb)
+            db.set_sync_audit(uid, kind, "mismatch", details)
+            results[kind] = {"added": 0, "preplanned": 0, "error": str(e),
+                             "audit_status": "mismatch"}
         except RuntimeError as e:
             logger.warning("pull %s 실패 uid=%s: %s", kind, uid, e)
             results[kind] = {"added": 0, "preplanned": 0, "error": str(e)}
+            if kind == "binance":
+                status = "mismatch" if (previous_audit or {}).get("status") == "mismatch" else "unavailable"
+                if status == "unavailable":
+                    db.set_sync_audit(uid, kind, status, {"error": str(e), "lookback_days": int(lb)})
+                results[kind]["audit_status"] = status
         except Exception:  # noqa: BLE001
             logger.exception("pull %s 예외 uid=%s", kind, uid)
             results[kind] = {"added": 0, "preplanned": 0, "error": f"{kind} 적재 중 알 수 없는 오류"}
+            if kind == "binance":
+                status = "mismatch" if (previous_audit or {}).get("status") == "mismatch" else "unavailable"
+                if status == "unavailable":
+                    db.set_sync_audit(uid, kind, status,
+                                      {"error": "원장 검증 중 오류", "lookback_days": int(lb)})
+                results[kind]["audit_status"] = status
     return results
 
 

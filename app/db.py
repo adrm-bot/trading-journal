@@ -38,6 +38,12 @@ def init():
         CREATE TABLE IF NOT EXISTS connections(
           user_id INTEGER, kind TEXT, data_enc TEXT, updated INTEGER,
           PRIMARY KEY(user_id, kind));
+        CREATE TABLE IF NOT EXISTS liqmap_watchlists(
+          user_id INTEGER, provider TEXT, symbol TEXT, sort_order INTEGER, updated INTEGER,
+          PRIMARY KEY(user_id, provider, symbol));
+        CREATE TABLE IF NOT EXISTS sync_audits(
+          user_id INTEGER, exchange TEXT, status TEXT, details_json TEXT, checked_at INTEGER,
+          PRIMARY KEY(user_id, exchange));
         CREATE TABLE IF NOT EXISTS position_intents(
           user_id INTEGER, exchange TEXT, symbol TEXT, direction TEXT,
           plan TEXT, setup TEXT, strategy TEXT, sl REAL, tp REAL, tp2 REAL, tp3 REAL,
@@ -121,6 +127,8 @@ def delete_user(uid):
     with conn() as c:
         c.execute("DELETE FROM trades WHERE user_id=?", (uid,))
         c.execute("DELETE FROM connections WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM liqmap_watchlists WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM sync_audits WHERE user_id=?", (uid,))
         c.execute("DELETE FROM users WHERE id=?", (uid,))
 
 
@@ -146,6 +154,61 @@ def list_connections(uid):
 def delete_connection(uid, kind):
     with conn() as c:
         c.execute("DELETE FROM connections WHERE user_id=? AND kind=?", (uid, kind))
+        c.execute("DELETE FROM sync_audits WHERE user_id=? AND exchange=?", (uid, kind))
+
+
+# --- 거래소 원장 정합성 감사 ---
+def set_sync_audit(uid, exchange, status, details=None):
+    """마지막 원장 대조 결과를 사용자·거래소별로 보존한다.
+
+    거래 데이터와 분리해 pull 실패나 새로고침 뒤에도 정합성 상태를 숨기지 않는다.
+    """
+    payload = json.dumps(details or {}, ensure_ascii=False, separators=(",", ":"))
+    now = int(time.time())
+    with conn() as c:
+        c.execute(
+            "INSERT INTO sync_audits(user_id,exchange,status,details_json,checked_at) "
+            "VALUES(?,?,?,?,?) ON CONFLICT(user_id,exchange) DO UPDATE SET "
+            "status=excluded.status, details_json=excluded.details_json, "
+            "checked_at=excluded.checked_at",
+            (uid, exchange, status, payload, now),
+        )
+
+
+def get_sync_audits(uid):
+    with conn() as c:
+        rows = c.execute(
+            "SELECT exchange,status,details_json,checked_at FROM sync_audits "
+            "WHERE user_id=? ORDER BY exchange", (uid,)
+        ).fetchall()
+    out = []
+    for row in rows:
+        try:
+            details = json.loads(row["details_json"] or "{}")
+        except (TypeError, ValueError):
+            details = {}
+        out.append({"exchange": row["exchange"], "status": row["status"],
+                    "checked_at": row["checked_at"], "details": details})
+    return out
+
+
+# --- 예측형 청산맵 추적 심볼 (API 키와 독립적으로 유지) ---
+def get_liqmap_watchlist(uid, provider):
+    with conn() as c:
+        return [r["symbol"] for r in c.execute(
+            "SELECT symbol FROM liqmap_watchlists WHERE user_id=? AND provider=? "
+            "ORDER BY sort_order, rowid", (uid, provider))]
+
+
+def set_liqmap_watchlist(uid, provider, symbols):
+    """공급자별 순서를 보존해 목록 전체를 원자적으로 교체한다."""
+    now = int(time.time())
+    with conn() as c:
+        c.execute("DELETE FROM liqmap_watchlists WHERE user_id=? AND provider=?", (uid, provider))
+        c.executemany(
+            "INSERT INTO liqmap_watchlists(user_id,provider,symbol,sort_order,updated) "
+            "VALUES(?,?,?,?,?)",
+            [(uid, provider, symbol, i, now) for i, symbol in enumerate(symbols)])
 
 
 # --- trades ---

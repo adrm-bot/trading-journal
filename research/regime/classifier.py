@@ -45,9 +45,17 @@ class ClassifierParams:
     degrade_penalty: float = 0.80    # production degrade path only
     min_dwell: int = 0
     confirm_bars: int = 0
+    # A named production preset can make the price-only contract intrinsic instead of
+    # relying on every caller to remember keyword switches on classify().
+    price_only: bool = False
 
 
 DEFAULT_CP = ClassifierParams()
+
+# Production v2 profile: keep the validated price axes, remove unproven OI/funding influence,
+# and require one additional confirmed candidate bar before switching.  DEFAULT_CP remains the
+# immutable v1 research reference; callers opt into this profile through classify_v2().
+V2_CP = ClassifierParams(confirm_bars=1, price_only=True)
 
 
 def axis_scores(feat: pd.DataFrame, p: ClassifierParams, use_fuel: bool):
@@ -115,6 +123,11 @@ def classify(feat: pd.DataFrame, p: ClassifierParams = DEFAULT_CP, *,
     whole-series look-ahead decides the mode. The B2 ablation (use_fuel=False) stays
     unpenalized by definition.
     """
+    # V2_CP is safe even through the generic entry point: its price-only property cannot be
+    # accidentally undone by classify()'s v1-compatible keyword defaults.
+    if p.price_only:
+        use_fuel = False
+        use_funding = False
     scores, valid, fuel_mod, fuel_votes, fuel_available = axis_scores(feat, p, use_fuel)
     n = len(feat)
     fund = feat["funding_pct"].to_numpy(float) if "funding_pct" in feat.columns \
@@ -168,6 +181,16 @@ def classify(feat: pd.DataFrame, p: ClassifierParams = DEFAULT_CP, *,
         out["fuel_mod"] = fuel_mod
         out["fuel_votes"] = fuel_votes
     return out
+
+
+def classify_v2(feat: pd.DataFrame, *, debug: bool = False) -> pd.DataFrame:
+    """Canonical lightweight v2 classifier: price-only B2 scores with one-bar confirmation.
+
+    OI quadrants and funding percentiles are deliberately ignored, so the output depends only
+    on the direction and volatility axes.  The v1 defaults and historical research paths stay
+    unchanged; this wrapper is the single opt-in production preset for v2 consumers.
+    """
+    return classify(feat, V2_CP, use_fuel=False, use_funding=False, debug=debug)
 
 
 def to_records(res: pd.DataFrame) -> list:

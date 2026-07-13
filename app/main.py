@@ -31,7 +31,8 @@ logger = logging.getLogger("app")
 from . import db, engine, crypto, market, analytics, liquidations, liqmap, regime, econ  # noqa: E402
 
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
-              "kingfisher": "KingFisher", "notion": "Notion", "telegram": "Telegram", "sheets": "Google Sheets"}
+              "kingfisher": "KingFisher", "coinglass": "CoinGlass", "notion": "Notion",
+              "telegram": "Telegram", "sheets": "Google Sheets"}
 
 # /api/pull 유저별 쿨다운(초) — 거래소 키 throttle/ban 방지 + 단일 워커 보호 (in-memory, 재시작 시 초기화)
 PULL_COOLDOWN = int(os.getenv("PULL_COOLDOWN_SEC", "30"))
@@ -214,7 +215,9 @@ def api_data(request: Request):
     be = (s["be_pct"] / 100.0) if s["be_pct"] is not None else analytics.BE_PCT  # 저장은 %, 계산은 분수
     eq = s["account_equity"]
     summary, trades = engine.analyze_user(uid, be)
-    return JSONResponse({"summary": summary, "trades": [analytics.enrich(t, eq, be) for t in trades]})
+    return JSONResponse({"summary": summary,
+                         "trades": [analytics.enrich(t, eq, be) for t in trades],
+                         "sync_audits": db.get_sync_audits(uid)})
 
 
 @app.get("/api/market")
@@ -272,13 +275,64 @@ def api_liquidations(request: Request):
 
 @app.get("/api/liqmap")
 def api_liqmap(request: Request):
-    """예측형 청산맵(KingFisher) — 키 연결 시 실제 호출, 미연결이면 available:false. 스캐폴드(베타)."""
+    """선택 공급자·추적 심볼의 예측형 청산맵 1건. 목록 전체를 자동 호출해 크레딧을 쓰지 않는다."""
     uid = _require(request)
-    if "kingfisher" not in db.list_connections(uid):
-        return {"available": False, "connected": False, "reason": "KingFisher API 키 미연결"}
-    cred = db.get_connection(uid, "kingfisher") or {}
-    pair = (request.query_params.get("pair") or "BTCUSDT").upper()
-    return JSONResponse(liqmap.fetch_kingfisher(cred.get("key"), pair))
+    provider = (request.query_params.get("provider") or "kingfisher").lower()
+    if provider not in liqmap.PROVIDERS:
+        raise HTTPException(400, "지원하지 않는 청산맵 공급자입니다")
+    symbols = db.get_liqmap_watchlist(uid, provider) or list(liqmap.DEFAULT_SYMBOLS)
+    try:
+        pair = liqmap.normalize_symbol(request.query_params.get("pair") or symbols[0])
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    if pair not in symbols:
+        raise HTTPException(400, "추적 목록에 등록된 심볼만 조회할 수 있습니다")
+    if provider not in db.list_connections(uid):
+        return {"available": False, "connected": False, "provider": provider, "pair": pair,
+                "tracked_symbols": symbols,
+                "reason": f"{liqmap.PROVIDER_NAMES[provider]} API 키 미연결"}
+    cred = db.get_connection(uid, provider) or {}
+    data = liqmap.fetch(provider, cred.get("key"), pair)
+    data.update(provider=provider, tracked_symbols=symbols)
+    return JSONResponse(data)
+
+
+def _liqmap_config(uid):
+    connected = set(db.list_connections(uid))
+    return {
+        "providers": {
+            provider: {
+                "name": liqmap.PROVIDER_NAMES[provider],
+                "symbols": db.get_liqmap_watchlist(uid, provider) or list(liqmap.DEFAULT_SYMBOLS),
+                "connected": provider in connected,
+            }
+            for provider in liqmap.PROVIDERS
+        },
+        "max_symbols": liqmap.MAX_SYMBOLS,
+    }
+
+
+@app.get("/api/liqmap/config")
+def api_liqmap_config(request: Request):
+    """API 키 유무와 무관하게 공급자별 추적 심볼을 반환한다."""
+    return _liqmap_config(_require(request))
+
+
+@app.post("/api/liqmap/config")
+async def api_save_liqmap_config(request: Request):
+    uid = _require(request)
+    _csrf(request)
+    body = await request.json()
+    provider = str(body.get("provider") or "").lower()
+    if provider not in liqmap.PROVIDERS:
+        raise HTTPException(400, "지원하지 않는 청산맵 공급자입니다")
+    try:
+        symbols = liqmap.normalize_watchlist(body.get("symbols"))
+    except ValueError as e:
+        raise HTTPException(400, str(e)) from None
+    db.set_liqmap_watchlist(uid, provider, symbols)
+    return {"ok": True, "provider": provider, "symbols": symbols,
+            "max_symbols": liqmap.MAX_SYMBOLS}
 
 
 @app.get("/api/positions")
@@ -464,13 +518,13 @@ async def api_save_connection(request: Request):
             raise HTTPException(400, str(e)) from None
         warn = ("NinjaTrader 연결됨" + (" (demo 환경)" if data["env"] == "demo" else "")
                 + " · API 특성상 거래 권한 차단이 불가하니 계정 MFA·전용 API 키를 유지하세요")
-    elif kind == "kingfisher":
-        # 예측형 청산맵 유료 제공자 — 데이터 read API(거래 권한 없음). 키만 저장, 프로빙은 크레딧 소모라 생략.
+    elif kind in ("kingfisher", "coinglass"):
+        # 예측형 청산맵 유료 제공자 — 데이터 read API. 키만 저장, 프로빙은 크레딧 소모라 생략.
         key = (b.get("key") or "").strip()
         if len(key) < 8:
-            raise HTTPException(400, "KingFisher API 키를 입력해 주세요")
+            raise HTTPException(400, f"{EXCH_NAMES[kind]} API 키를 입력해 주세요")
         data = {"key": key}
-        warn = "KingFisher 연결됨 · 예측형 청산맵은 베타(유료 응답 스키마 검증 후 시각화 활성)"
+        warn = f"{EXCH_NAMES[kind]} 연결 저장됨 · 실 키 응답 스키마 확인 후 청산맵 시각화를 활성화합니다"
     elif kind == "notion":
         tok = (b.get("token") or "").strip()
         if not tok:

@@ -1,7 +1,7 @@
 """app.regime — 레짐 카드/레짐별 성과의 순수 로직 (네트워크·DB 불필요).
 
-classify2는 research/regime의 검증된 2축 수식과 동일해야 하고(합성 시나리오 부호),
-perf는 라벨 매칭·집계·미매칭 정직 카운트를 고정한다.
+운영 경로는 canonical REGIME v2.1과 동일해야 한다. classify2는 v1 연구 회귀 호환만
+검증하고, perf는 라벨 매칭·집계·미매칭 정직 카운트를 고정한다.
 """
 from datetime import datetime, timezone
 
@@ -9,6 +9,8 @@ import numpy as np
 import pandas as pd
 
 from app import regime
+from research.regime import classifier as research_classifier
+from research.regime import features as research_features
 
 
 def _bars(closes, start="2025-01-01"):
@@ -60,6 +62,31 @@ def test_classify2_fuel_quadrant():
     assert (reg.iloc[-60:] == "TREND_UP").mean() > 0.8
 
 
+def test_production_v21_matches_canonical_price_only_core():
+    g = np.random.default_rng(17)
+    bars = _bars(_walk(g, 4200, 0.003, drift=0.00015))
+    got_reg, got_conf = regime._classify_v2_bars(bars)
+    feat = research_features.compute_v2(bars, research_features.v2_params_for_chart(15))
+    expected = research_classifier.classify_v2(feat)
+    pd.testing.assert_series_equal(got_reg, expected["regime"], check_names=False)
+    pd.testing.assert_series_equal(got_conf, expected["confidence"], check_names=False)
+
+
+def test_live_v21_exposes_one_core_and_context_only(monkeypatch):
+    g = np.random.default_rng(19)
+    bars = _bars(_walk(g, 6000, 0.003, drift=0.0001))
+    monkeypatch.setattr(regime, "_fetch_klines", lambda *args, **kwargs: bars)
+    monkeypatch.setattr(regime, "_cached_oi", lambda *args, **kwargs: None)
+    regime._live_cache.clear()
+    out = regime.live("BTCUSDT")
+    assert out["available"] is True and out["version"] == "2.1"
+    assert len(out["tfs"]) == 1 and out["tfs"][0]["tf"] == "15m"
+    assert out["quad"] is None and out["oi_separate"] is True
+    assert out["oi_context_quad"] is None
+    assert out["core_minutes_by_chart"] == {5: 15, 15: 15, 60: 15, 240: 15}
+    assert {c["tf"] for c in out["contexts"]} == {"1h", "4h"}
+
+
 def test_norm_sym():
     assert regime._norm_sym("BTC/USDT:USDT") == "BTCUSDT"
     assert regime._norm_sym("BTC_USDT") == "BTCUSDT"
@@ -91,7 +118,20 @@ def test_perf_matches_entry_regime(monkeypatch):
     assert by["RANGE"]["avg_r"] == -1.0 and by["RANGE"]["n_r"] == 1
     assert by["TREND_UP"]["n"] == 1 and by["TREND_UP"]["win_rate"] == 1.0
     assert out["unmatched"] == 2
-    assert "청산시각 사용 1건" in out["note"]
+    assert "청산 시각 대체 1건" in out["note"]
+
+
+def test_oi_context_quadrant_is_separate_from_v21_core():
+    g = np.random.default_rng(23)
+    bars = _bars(_walk(g, 3600, 0.002, drift=0.00025))
+    snap = pd.date_range(bars.index[0], bars.index[-1], freq="5min", tz="UTC")
+    oi = pd.DataFrame({"snap_ts": snap,
+                       "oi": 1_000_000 * np.cumprod(1 + g.normal(0.00008, 0.00003, len(snap)))})
+    out = regime._oi_context_quad(bars, oi)
+    assert out is not None
+    assert out["separate_from_regime"] is True
+    assert out["lookback_hours"] == 6 and out["change_window_hours"] == 2
+    assert out["plot"]["points"]
 
 
 def test_perf_unknown_symbol_counts_unmatched(monkeypatch):
@@ -135,6 +175,11 @@ def test_build_positioning_tracks_oi_crowd_and_taker_flow():
     assert out["long_delta_pp"]["7d"] > 0
     assert out["ratio_asof"].startswith("2026-")
     assert out["taker_buy_pct_1h"] == 60.0 and out["taker_sell_pct_1h"] == 40.0
+    assert out["oi_risk"]["level"] == "risk"
+    assert out["oi_risk"]["vulnerable_side"] == "long"
+    assert out["oi_risk"]["quantity_only"] is True
+    assert out["oi_risk"]["active_count"] == 1
+    assert out["oi_risk"]["aux_active_count"] >= 2
 
 
 def test_build_positioning_honestly_degrades_when_all_sources_missing():
@@ -142,3 +187,24 @@ def test_build_positioning_honestly_degrades_when_all_sources_missing():
     assert out["available"] is False
     assert out["oi_available"] is False
     assert out["tf"] == [] or out["tf"] == {}
+    assert out["oi_risk"]["level"] == "unknown"
+
+
+def test_oi_quantity_stage_uses_only_absolute_amount_percentile():
+    # 강한 증가·계정 쏠림·테이커 쏠림도 낮은 절대량 단계를 승급시키지 않는다.
+    safe = regime.classify_oi_risk(
+        48, {"1h": 3.0, "4h": 7.0, "24h": 15.0}, 72, 28, 68, 32)
+    assert safe["level"] == "safe" and safe["active_count"] == 0
+    assert safe["aux_active_count"] == 3
+
+    watch = regime.classify_oi_risk(
+        88, {"1h": 0.1, "4h": 0.4, "24h": 1.2}, 52, 48, 53, 47)
+    assert watch["level"] == "watch" and watch["active_count"] == 0
+
+    # 반대로 흐름이 조용해도 절대량이 90백분위 이상이면 과열 단계다.
+    danger = regime.classify_oi_risk(
+        92, {"1h": 0.1, "4h": 0.4, "24h": 1.2}, 52, 48, 53, 47)
+    assert danger["level"] == "risk" and danger["active_count"] == 1
+    assert danger["quantity_percentile"] == 92
+    assert danger["thresholds"] == {"watch": 70, "risk": 90}
+    assert danger["quantity_only"] is True

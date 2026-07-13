@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
-"""regime.py — 시장 레짐·OI 사분면·포지셔닝 + '레짐별 내 성과'.
+"""regime.py — REGIME v2.1 시장 레짐·별도 OI 포지셔닝 + '레짐별 내 성과'.
 
-같은 레포 research/regime의 5상태 분류기에서 방향·변동성 축과 검증된 표시 규칙을 포팅했다.
-라이브 판정에는 Binance 공개 OI를 연료축으로 더하되, OI 증가 사분면만 라벨에 투표하고
-OI 감소는 확신만 낮춘다. 가격·OI·계정 비중·테이커 체결은 모두 공개 REST 실측이며,
-서로 다른 지표를 방향 예측처럼 합성하지 않는다. 파라미터는 리서치 동결값(재튜닝 금지).
+운영 레짐은 research/regime의 canonical 15m 가격 2축(direction + volatility)만 소비한다.
+OI·funding은 레짐 라벨·확신에 절대 관여하지 않고 별도 포지셔닝 카드에서만 표시한다.
+5m·15m·1h·4h 화면은 같은 확정 15m Core 스냅샷을 사용하며, 1h·4h 정보는 확정봉의
+설명용 가격 context일 뿐 방향 예측·진입·레버리지 신호가 아니다. v1 classify2는 기존
+연구·회귀 테스트 호환을 위해 남기되 운영 live/perf 경로에서는 사용하지 않는다.
 
 레짐별 성과는 **진입 시각(opened_at) 기준** 매칭(없으면 청산 시각 폴백) — 바이낸스 무기한에
 없는 심볼의 거래는 '미매칭'으로 정직하게 따로 센다. 모든 실패는 available:false류로 강등되고
@@ -18,6 +19,10 @@ import time
 import numpy as np
 import pandas as pd
 import requests
+
+from research.regime.classifier import classify_v2 as research_classify_v2
+from research.regime.features import (V2_CORE_MINUTES_BY_CHART, compute_v2,
+                                      v2_params_for_chart)
 
 log = logging.getLogger("regime")
 
@@ -34,11 +39,11 @@ ADX_LO, ADX_SCALE = 20.0, 15.0
 W_DIR, W_VOL, W_FUEL, NEAR_TIE = 0.5, 0.3, 0.2, 0.02
 RAMP_LO, RAMP_HI = (0.15, 0.25), (0.75, 0.85)
 DEAD_Q = 0.25
-QUAD_TEXT = {1: "가격·OI 동반 상승 — 신규 롱 우세 가능성. 테이커 매수 흐름을 함께 확인하세요",
-             2: "가격 하락·OI 증가 — 신규 숏 우세 가능성. 테이커 매도 흐름을 함께 확인하세요",
-             3: "가격 상승·OI 감소 — 숏 커버 가능성. 신규 매수의 지속력은 별도 확인이 필요합니다",
-             4: "가격·OI 동반 하락 — 롱 디레버리징 가능성. 신규 숏 추격은 주의하세요",
-             0: "가격·OI 변화가 모두 유의 구간 밖입니다"}
+QUAD_TEXT = {1: "가격·OI 동반 상승: 신규 포지션 유입 가능",
+             2: "가격 하락·OI 증가: 신규 숏 유입 가능",
+             3: "가격 상승·OI 감소: 숏 포지션 축소 가능",
+             4: "가격·OI 동반 하락: 롱 포지션 축소 가능",
+             0: "가격·OI 변화 기준 미달"}
 
 _TTL = 300
 _live_cache: dict = {}  # {symbol: {"at": ts, "data": payload}}
@@ -53,6 +58,8 @@ POSITIONING_SYMBOLS = tuple(dict.fromkeys(
         "POSITIONING_SYMBOLS", "BTCUSDT,ETHUSDT,SOLUSDT,XRPUSDT,DOGEUSDT"
     ).split(",") if s.strip()
 ))
+
+V2_FP = v2_params_for_chart(15)
 
 
 # ── 데이터 ───────────────────────────────────────────────────────────────────
@@ -233,6 +240,87 @@ def _brief_oi(symbol: str) -> dict | None:
             "chg24": round((cur / old - 1) * 100, 2) if old else None}
 
 
+def classify_oi_risk(pct_rank: float | None, tf: dict | None,
+                     long_pct: float | None = None, short_pct: float | None = None,
+                     taker_buy_pct: float | None = None,
+                     taker_sell_pct: float | None = None) -> dict:
+    """현재 OI *양*의 최근 30일 백분위만으로 안전·경계·과열을 분류한다.
+
+    증가 속도·계정 쏠림·테이커 체결은 설명용 보조 맥락으로만 반환하며 단계
+    판정에는 관여하지 않는다. OI 과열은 스퀴즈 확률이나 방향 예측이 아니다.
+    """
+    tf = tf or {}
+    if pct_rank is None:
+        return {
+            "level": "unknown", "label": "평가 보류", "active_count": 0,
+            "factor_count": 1, "aux_active_count": 0, "aux_factor_count": 3,
+            "vulnerable_side": None, "factors": [],
+            "quantity_percentile": None, "quantity_only": True,
+            "thresholds": {"watch": 70, "risk": 90},
+            "basis": "현재 OI 규모의 최근 30일 백분위",
+            "disclaimer": "OI 분포 데이터가 부족해 규모 단계를 평가하지 않습니다.",
+        }
+
+    oi_level_on = pct_rank >= 90
+    build_candidates = (("1H", tf.get("1h"), 1.0),
+                        ("4H", tf.get("4h"), 2.0),
+                        ("24H", tf.get("24h"), 5.0))
+    build_hits = [(label, value) for label, value, threshold in build_candidates
+                  if value is not None and value >= threshold]
+    oi_build_on = bool(build_hits)
+    build_label, build_value = (build_hits[0] if build_hits else
+                                next(((label, value) for label, value, _ in reversed(build_candidates)
+                                      if value is not None), ("24H", None)))
+
+    crowd_side = ("long" if long_pct is not None and long_pct >= 60 else
+                  "short" if short_pct is not None and short_pct >= 60 else None)
+    crowd_value = long_pct if crowd_side == "long" else short_pct if crowd_side == "short" else (
+        max(v for v in (long_pct, short_pct) if v is not None)
+        if any(v is not None for v in (long_pct, short_pct)) else None)
+    crowd_on = crowd_side is not None
+
+    taker_side = ("buy" if taker_buy_pct is not None and taker_buy_pct >= 60 else
+                  "sell" if taker_sell_pct is not None and taker_sell_pct >= 60 else None)
+    taker_value = taker_buy_pct if taker_side == "buy" else taker_sell_pct if taker_side == "sell" else (
+        max(v for v in (taker_buy_pct, taker_sell_pct) if v is not None)
+        if any(v is not None for v in (taker_buy_pct, taker_sell_pct)) else None)
+    taker_on = taker_side is not None
+
+    factors = [
+        {"key": "oi_level", "label": "OI 규모",
+         "value": f"30일 {round(pct_rank)}백분위", "active": oi_level_on},
+        {"key": "oi_build", "label": "OI 증가 속도",
+         "value": (f"{build_label} {build_value:+.2f}%" if build_value is not None else "데이터 없음"),
+         "active": oi_build_on},
+        {"key": "account_crowd", "label": "계정 비중 쏠림",
+         "value": (f"{'롱' if crowd_side == 'long' else '숏' if crowd_side == 'short' else '최대'} "
+                   f"{crowd_value:.1f}%" if crowd_value is not None else "데이터 없음"),
+         "active": crowd_on},
+        {"key": "taker_flow", "label": "테이커 체결 쏠림",
+         "value": (f"{'매수' if taker_side == 'buy' else '매도' if taker_side == 'sell' else '최대'} "
+                   f"{taker_value:.1f}%" if taker_value is not None else "데이터 없음"),
+         "active": taker_on},
+    ]
+    aux_active_count = sum(bool(f["active"]) for f in factors if f["key"] != "oi_level")
+    # 단계는 오직 현재 OI 양의 30일 백분위로 정한다. 아래 보조 신호는 승급시키지 않는다.
+    if pct_rank >= 90:
+        level, label = "risk", "과열 구간"
+    elif pct_rank >= 70:
+        level, label = "watch", "경계 구간"
+    else:
+        level, label = "safe", "안전 구간"
+    return {
+        "level": level, "label": label, "active_count": int(oi_level_on),
+        "factor_count": 1, "aux_active_count": aux_active_count,
+        "aux_factor_count": len(factors) - 1, "vulnerable_side": crowd_side,
+        "factors": factors, "quantity_percentile": round(float(pct_rank), 2),
+        "quantity_only": True, "thresholds": {"watch": 70, "risk": 90},
+        "basis": "현재 OI 규모의 최근 30일 백분위만 단계 판정에 사용",
+        "disclaimer": ("OI 규모의 상대적 과열도이며 방향 예측이나 청산 확률이 아닙니다. "
+                       "증가 속도·계정 비중·테이커 체결은 판정 미반영 보조 맥락입니다."),
+    }
+
+
 def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = None,
                       taker_rows: list[dict] | None = None, by_symbol: list[dict] | None = None,
                       symbol: str = "BTCUSDT", ratio_week_rows: list[dict] | None = None) -> dict:
@@ -300,6 +388,10 @@ def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = N
             out.update(available=True, taker_buy_pct_1h=round(buy / total * 100, 1),
                        taker_sell_pct_1h=round(sell / total * 100, 1),
                        taker_ratio_1h=round(buy / sell, 3) if sell else None)
+    out["oi_risk"] = classify_oi_risk(
+        out.get("pct_rank"), out.get("tf"), out.get("long_pct"), out.get("short_pct"),
+        out.get("taker_buy_pct_1h"), out.get("taker_sell_pct_1h"),
+    )
     return out
 
 
@@ -367,6 +459,39 @@ def _fuel_series(bars: pd.DataFrame, oi: pd.DataFrame, tf_min: int, qw: int, mp:
                       on & (d < 0) & (p > 0), on & (d < 0) & (p < 0)], [1, 2, 3, 4], 0)
     return {"doi": doi, "dpr": dpr, "dz_doi": dz_doi, "dz_dpr": dz_dpr,
             "quad": quad, "fuel_defined": ~np.isnan(d) & ~np.isnan(zd)}
+
+
+def _oi_context_quad(bars: pd.DataFrame, oi: pd.DataFrame | None) -> dict | None:
+    """최근 가격·OI 사분면을 설명용 시장 맥락으로만 반환한다.
+
+    이 값은 REGIME v2.1의 라벨·확신·상태 전환 계산에 입력되지 않는다. 기존
+    사분면 시각화를 복원하되 price-only Core 계약과 명확히 분리하기 위한 경계다.
+    """
+    if oi is None or oi.empty:
+        return None
+    try:
+        qwin = int(V2_FP.q_window)
+        fs = _fuel_series(bars, oi, 15, qwin, int(qwin * 0.95))
+        valid = fs["fuel_defined"]
+        if not np.asarray(valid).any():
+            return None
+        code = int(fs["quad"][-1])
+        points = []
+        for x, y, qc in zip(fs["dpr"].iloc[-24:], fs["doi"].iloc[-24:], fs["quad"][-24:]):
+            if pd.notna(x) and pd.notna(y):
+                points.append({"x": round(float(x) * 100, 3),
+                               "y": round(float(y) * 100, 3), "q": int(qc)})
+        if not points:
+            return None
+        dzx, dzy = fs["dz_dpr"].iloc[-1], fs["dz_doi"].iloc[-1]
+        return {"code": code, "text": QUAD_TEXT.get(code, QUAD_TEXT[0]),
+                "plot": {"points": points,
+                         "dz_x": round(float(dzx) * 100, 3) if pd.notna(dzx) else None,
+                         "dz_y": round(float(dzy) * 100, 3) if pd.notna(dzy) else None},
+                "lookback_hours": 6, "change_window_hours": 2,
+                "separate_from_regime": True}
+    except (KeyError, TypeError, ValueError, IndexError):
+        return None
 
 
 def _drift_state(close: pd.Series, bars_per_day: int) -> tuple[bool, float]:
@@ -485,99 +610,76 @@ def classify2(bars: pd.DataFrame, tf_min: int, oi: pd.DataFrame | None = None):
 
 
 # ── 라이브 스냅샷 ────────────────────────────────────────────────────────────
+def _classify_v2_bars(bars: pd.DataFrame) -> tuple[pd.Series, pd.Series]:
+    """Canonical v2.1 production path. OI/funding cannot enter this call graph."""
+    feat = compute_v2(bars, V2_FP)
+    result = research_classify_v2(feat)
+    return result["regime"], result["confidence"]
+
+
+def _confirmed_price_context(symbol: str, interval: str) -> dict | None:
+    """Last confirmed native candle + EMA relation; description only, never a v2 label."""
+    bars = _fetch_klines(symbol, interval, days=30)
+    if bars is None or len(bars) < 55:
+        return None
+    close = bars["close"]
+    ema20 = close.ewm(span=20, adjust=False, min_periods=20).mean().iloc[-1]
+    ema50 = close.ewm(span=50, adjust=False, min_periods=50).mean().iloc[-1]
+    if pd.isna(ema20) or pd.isna(ema50):
+        return None
+    relation = "above" if ema20 > ema50 else "below" if ema20 < ema50 else "flat"
+    change = (close.iloc[-1] / close.iloc[-2] - 1) * 100 if close.iloc[-2] else None
+    return {"tf": interval, "kind": "confirmed_context", "relation": relation,
+            "ema20": round(float(ema20), 4), "ema50": round(float(ema50), 4),
+            "bar_change": None if change is None else round(float(change), 2),
+            "ts": bars.index[-1].strftime("%m-%d %H:%M")}
+
+
 def live(symbol: str = "BTCUSDT") -> dict:
+    """REGIME v2.1 live payload: one canonical 15m Core plus 1h/4h context."""
     now = time.time()
-    hit = _live_cache.get(symbol)  # 심볼별 키잉 — 단일 캐시면 타 심볼 호출 시 이전 페이로드 반환
+    hit = _live_cache.get(symbol)
     if hit is not None and now - hit["at"] < _TTL:
         return hit["data"]
-    tfs, supers = [], []
-    warn = None
-    quad_info = None
-    ribbons = {}
-    idxmap = {r: i for i, r in enumerate(REGIMES)}
-    oi = _cached_oi(symbol)
-    # 앞 3개 = 칩+리본, 12h/1d = 리본 전용 (레짐 흐름 TF 선택기)
-    for interval, days, chip in [("15m", 60, True), ("1h", 80, True), ("4h", 130, True),
-                                 ("12h", 260, False), ("1d", 400, False)]:
-        bars = _fetch_klines(symbol, interval, days=days)
-        if bars is None or len(bars) < 220:
-            continue
-        reg, conf, quad = classify2(bars, _grid(interval), oi=oi)
-        okm = reg.notna()
-        if not okm.any():
-            continue
-        # 미니 리본 192셀 (색=상태, 진하기=확신)
-        rr, cc = reg[okm].iloc[-192:], conf[okm].iloc[-192:]
-        ribbons[interval] = {"cells": [[idxmap.get(a, -1),
-                                        (None if pd.isna(b) else round(float(b), 2))]
-                                       for a, b in zip(rr, cc)],
-                             "hours": round(len(rr) * _grid(interval) / 60)}
-        if interval == "15m" and quad is not None:
-            q = int(quad[okm].iloc[-1])
-            quad_info = {"code": q, "text": QUAD_TEXT.get(q, "—"), "oi": True}
-            # 실제 사분면 플롯: x=Δ가격%, y=ΔOI% (최근 6시간 궤적 + 데드존 밴드)
-            fs = _fuel_series(bars, oi, 15, 2880, 2736)
-            pts = []
-            for x, y, qc in zip(fs["dpr"].iloc[-24:], fs["doi"].iloc[-24:], fs["quad"][-24:]):
-                if pd.notna(x) and pd.notna(y):
-                    pts.append({"x": round(float(x) * 100, 3),
-                                "y": round(float(y) * 100, 3), "q": int(qc)})
-            dzx, dzy = fs["dz_dpr"].iloc[-1], fs["dz_doi"].iloc[-1]
-            quad_info["plot"] = {
-                "points": pts,
-                "dz_x": round(float(dzx) * 100, 3) if pd.notna(dzx) else None,
-                "dz_y": round(float(dzy) * 100, 3) if pd.notna(dzy) else None}
-        if not chip:
-            continue  # 12h/1d는 리본 전용
-        r, cf = reg[okm].iloc[-1], float(conf[okm].iloc[-1])
-        hist = conf[okm].to_numpy(float)
-        # 분위 창 = 최근 30일 — 문구('최근 30일 자기 분위')와 일치시킴. 페치 전체를 쓰면
-        # TF마다 창이 31~98일로 달라져 '상위 x%'의 기준 모집단이 표기와 어긋남
-        hist30 = hist[-30 * (1440 // _grid(interval)):]
-        pct = float((hist30 < cf).mean()) if len(hist30) > 100 else None
-        grade = None if pct is None else ("높음" if pct >= 0.7 else "보통" if pct >= 0.3 else "낮음")
-        # 표류 태그 — 캘리브 검증 TF(15m·1h)만, 비추세 라벨에서만 표시
-        d_on, d_val = (False, float("nan"))
-        if interval in ("15m", "1h"):
-            d_on, d_val = _drift_state(bars["close"], 1440 // _grid(interval))
-            d_on = d_on and r in ("RANGE", "SQUEEZE")
-        supers.append(SUPER.get(r, "NT"))
-        tfs.append({"tf": interval, "regime": r, "name": NAME[r], "emoji": EMOJI[r],
-                    "conf": round(cf, 2), "grade": grade,
-                    "top_pct": None if pct is None else max(1, round((1 - pct) * 100)),
-                    "drift_on": bool(d_on),
-                    "drift_pct": None if pd.isna(d_val) else round(d_val * 100, 1),
-                    "ts": reg[okm].index[-1].strftime("%m-%d %H:%M")})
-        if interval == "15m" and d_on and not pd.isna(d_val):
-            warn = (f"지난 24시간 동안 가격이 {d_val * 100:+.1f}% 표류했습니다 — 박스 레벨을 믿기 어려운 "
-                    "구간이니 역매매는 보류하세요 (과거 사실 표시일 뿐, 그 방향으로 계속 간다는 뜻은 아닙니다)")
-        if interval == "15m" and len(hist) > 500 and cf < float(np.quantile(hist[-2880:], 0.2)):
-            clps = "확신이 최근 30일 중 하위 20% 수준까지 떨어졌습니다 — 시장 성격이 바뀔 가능성이 있으니 사이즈를 줄이는 편이 안전합니다"
-            warn = f"{warn} · {clps}" if warn else clps
-    if not tfs:
-        return {"available": False, "error": "레짐 데이터 조회 실패 (Binance 공개 API)"}
-    if len(supers) == 3:
-        if len(set(supers)) == 1 and supers[0] != "NT":
-            d = "상승" if supers[0] == "UP" else "하락"
-            verdict = f"세 타임프레임이 모두 {d} 방향입니다 — 합의가 강한 상태입니다"
-        elif len(set(supers)) == 1:
-            verdict = "세 타임프레임 모두 뚜렷한 추세가 없습니다 — 방향 베팅의 근거가 없는 구간입니다"
-        elif supers[1] == supers[2] and supers[1] != "NT":
-            d = "상승" if supers[1] == "UP" else "하락"
-            verdict = f"상위 타임프레임(1h·4h)이 {d}으로 일치합니다 — 방향은 우세하니 15m은 진입 타이밍용으로 쓰세요"
-        elif supers[0] == supers[1] and supers[0] != "NT":
-            verdict = "단기(15m·1h)는 일치하지만 4h가 다릅니다 — 부분 합의이니 사이즈를 보수적으로 가져가세요"
-        else:
-            verdict = "혼조입니다 — 타임프레임 간 성격이 엇갈리니 보수적으로 접근하세요"
-    else:
-        verdict = "일부 타임프레임의 데이터가 부족합니다"
-    if quad_info is None:
-        quad_info = {"code": None, "text": "OI 미제공 심볼 — 가격 2축으로 판정", "oi": False}
-    data = {"available": True, "symbol": symbol, "tfs": tfs, "verdict": verdict, "warn": warn,
-            "quad": quad_info, "ribbons": ribbons, "ribbon": ribbons.get("15m"),
-            "basis": ("라이브 3축(방향·변동성·OI 사분면) 판정" if quad_info["oi"] else
-                      "가격 기반 2축(방향·변동성) 판정")
-                     + " — OI가 늘어나는 경우만 판정에 반영하고, 줄어드는 경우는 확신만 낮춥니다"}
+
+    bars = _fetch_klines(symbol, "15m", days=60)
+    if bars is None or len(bars) < V2_FP.q_window + 100:
+        return {"available": False, "error": "REGIME v2.1용 15분 확정봉이 부족합니다"}
+    reg, conf = _classify_v2_bars(bars)
+    okm = reg.notna() & conf.notna()
+    if not okm.any():
+        return {"available": False, "error": "REGIME v2.1 burn-in 이후 유효 라벨이 없습니다"}
+
+    r = str(reg[okm].iloc[-1])
+    cf = float(conf[okm].iloc[-1])
+    hist = conf[okm].to_numpy(float)
+    hist30 = hist[-V2_FP.q_window:]
+    pct = float((hist30 < cf).mean()) if len(hist30) > 100 else None
+    grade = None if pct is None else ("높음" if pct >= 0.7 else "보통" if pct >= 0.3 else "낮음")
+    rr, cc = reg[okm].iloc[-192:], conf[okm].iloc[-192:]
+    idxmap = {name: i for i, name in enumerate(REGIMES)}
+    ribbon = {"cells": [[idxmap.get(str(a), -1), round(float(b), 2)]
+                        for a, b in zip(rr, cc)],
+              "hours": round(len(rr) * 15 / 60)}
+    core = {"tf": "15m", "regime": r, "name": NAME[r], "emoji": EMOJI[r],
+            "conf": round(cf, 2), "grade": grade,
+            "top_pct": None if pct is None else max(1, round((1 - pct) * 100)),
+            "ts": reg[okm].index[-1].strftime("%m-%d %H:%M"), "core": True}
+    contexts = [c for c in (_confirmed_price_context(symbol, "1h"),
+                            _confirmed_price_context(symbol, "4h")) if c is not None]
+    verdict = (f"15분 기준 레짐은 {NAME[r]}입니다. 1시간·4시간 값은 직전 확정봉의 "
+               "가격 맥락이며 진입 신호가 아닙니다.")
+    basis = ("REGIME v2.1 · 15분 가격 방향·변동성 2축 · OI·펀딩 미사용 · "
+             "상태 전환 1봉 확인")
+    oi_context_quad = _oi_context_quad(bars, _cached_oi(symbol))
+    data = {"available": True, "symbol": symbol, "version": "2.1",
+            "tfs": [core], "contexts": contexts, "verdict": verdict, "warn": None,
+            "ribbons": {"15m": ribbon}, "ribbon": ribbon, "quad": None,
+            "oi_context_quad": oi_context_quad,
+            "basis": basis, "stability_delay_bars_vs_v17": 2,
+            "supported_chart_minutes": list(V2_CORE_MINUTES_BY_CHART),
+            "core_minutes_by_chart": V2_CORE_MINUTES_BY_CHART,
+            "oi_separate": True}
     _live_cache[symbol] = {"at": now, "data": data}
     return data
 
@@ -590,7 +692,7 @@ def _norm_sym(s) -> str | None:
 
 
 def _labels_for(symbol: str, since: pd.Timestamp):
-    """symbol의 15m 레짐 라벨(since-45d부터). 1시간 캐시. 미상장 심볼은 None 캐시."""
+    """symbol의 canonical v2.1 15m 라벨(since-45d부터). 1시간 캐시."""
     with _lock:
         ent = _labels_cache.get(symbol)
         if ent and time.time() - ent["at"] < 3600 and (ent["s"] is None or ent["since"] <= since):
@@ -601,8 +703,8 @@ def _labels_for(symbol: str, since: pd.Timestamp):
     bars = _fetch_klines(symbol, "15m", start_ms=int(start.timestamp() * 1000))
     lab = None
     if bars is not None and len(bars) > 3500:
-        # 성과 라벨은 가격 2축 — REST 과거 OI가 30일 한도라 불가(연구상 무손실 근사, p=1.0)
-        reg, _, _ = classify2(bars, 15)
+        # 운영과 성과가 같은 v2.1 경로를 사용한다. OI/funding은 이 호출 그래프에 없다.
+        reg, _ = _classify_v2_bars(bars)
         lab = reg
     with _lock:
         _labels_cache[symbol] = {"at": time.time(), "since": start, "s": lab}
@@ -663,7 +765,8 @@ def perf(trades: list) -> dict:
                      "win_rate": round(a["wins"] / a["n"], 2),
                      "avg_r": round(sum(a["rs"]) / len(a["rs"]), 2) if a["rs"] else None,
                      "n_r": len(a["rs"])})
-    note = "진입 시각 레짐 기준 · 바이낸스 무기한 미상장 심볼은 미매칭 · R은 SL 기입 거래만"
+    note = ("REGIME v2.1 · 15분 기준 · 진입 시각 레짐 매칭 · Binance 무기한 미지원 "
+            "심볼 제외 · R은 SL 입력 거래만")
     if used_exit_ts:
-        note += f" · 진입시각 없어 청산시각 사용 {used_exit_ts}건"
+        note += f" · 진입 시각 누락으로 청산 시각 대체 {used_exit_ts}건"
     return {"rows": rows, "unmatched": unmatched, "note": note}

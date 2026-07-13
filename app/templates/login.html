@@ -22,34 +22,36 @@
     .auth-main{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(360px,460px);gap:clamp(48px,8vw,132px);align-items:center;padding:64px 0}
     .auth-copy{max-width:760px}
     .auth-kicker{margin:0 0 18px;color:var(--frost);font:500 11px/1 var(--f-mono);letter-spacing:.14em;text-transform:uppercase}
-    .auth-copy h1{margin:0;max-width:720px;color:var(--glacier);font-size:clamp(38px,4.6vw,72px);font-weight:620;line-height:1.04;letter-spacing:-.045em}
-    .auth-lead{max-width:600px;margin:24px 0 0;color:var(--muted);font-size:16px;line-height:1.75}
+    .auth-copy h1{margin:0;max-width:690px;color:var(--glacier);font-size:clamp(38px,4vw,64px);font-weight:610;line-height:1.09;letter-spacing:-.04em}
+    .auth-lead{max-width:600px;margin:22px 0 0;color:var(--muted);font-size:15px;line-height:1.72}
     .auth-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin-top:48px;border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
     .flow-step{position:relative;padding:20px 20px 20px 0;min-height:112px}
     .flow-step+.flow-step{padding-left:20px;border-left:1px solid var(--line)}
     .flow-num{display:block;margin-bottom:13px;color:var(--dim);font:500 10px/1 var(--f-mono)}
     .flow-step b{display:block;color:var(--moonlight);font-size:14px;font-weight:570}
     .flow-step span:last-child{display:block;margin-top:5px;color:var(--muted);font-size:12px;line-height:1.55}
-    .auth-card{align-self:center;background:var(--card);border:1px solid var(--line-2);border-radius:14px;padding:36px}
+    .auth-card{align-self:center;background:var(--card);border:1px solid var(--line-2);border-radius:var(--r-card);padding:36px;box-shadow:var(--inset)}
     .auth-card-head{padding-bottom:26px;border-bottom:1px solid var(--line)}
     .auth-card .eyebrow{margin-bottom:10px}
     .auth-card h2{margin:0;color:var(--glacier);font-size:24px;font-weight:620;letter-spacing:-.025em}
     .auth-card p{margin:10px 0 0;color:var(--muted);font-size:13px;line-height:1.65}
     .auth-actions{padding-top:26px}
-    .auth-btn{width:100%;height:48px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #dfe1e5;border-radius:var(--r-btn);background:#f7f8f8;color:#161718;font:600 14px/1 var(--f-body);cursor:pointer;transition:background .12s,border-color .12s,transform .12s}
-    .auth-btn:hover{background:#fff;border-color:#fff}.auth-btn:active{transform:translateY(1px)}
-    .auth-btn .gmark{width:22px;height:22px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #d6d8dc;border-radius:50%;font:600 12px/1 Arial,sans-serif;color:#4285f4;background:#fff}
+    .auth-btn{width:100%;height:48px;display:flex;align-items:center;justify-content:center;gap:10px;border:1px solid #747775;border-radius:var(--r-btn);background:#fff;color:#1f1f1f;font:500 14px/20px 'Google Sans',Roboto,Arial,sans-serif;cursor:pointer;transition:background .12s,border-color .12s,transform .12s}
+    .auth-btn:hover{background:#f8faff;border-color:#8e918f}.auth-btn:active{transform:translateY(1px)}
+    .auth-btn:focus-visible{outline:2px solid var(--glacier);outline-offset:3px}
+    .auth-btn .gmark{width:18px;height:auto;display:block;flex:0 0 auto}
+    .auth-scope{margin:10px 0 0;text-align:center;color:var(--dim);font-size:11px;line-height:1.5}
     .auth-dev{margin-top:10px;width:100%;justify-content:center;min-height:44px}
     .auth-error{margin:0 0 12px;padding:10px 12px;border:1px solid rgba(235,87,87,.35);border-radius:var(--r-btn);background:var(--neg-soft);color:#ff8a8a;font-size:12px;line-height:1.5}
     .auth-missing{margin:0;padding:10px 12px;border:1px solid rgba(210,153,34,.35);border-radius:var(--r-btn);background:var(--warn-soft);color:#e5b95c;font-size:12px;line-height:1.5}
     .auth-trust{display:grid;gap:12px;margin:24px 0 0;padding:20px 0 0;border-top:1px solid var(--line)}
-    .trust-row{display:grid;grid-template-columns:18px 1fr;gap:10px;align-items:start;color:var(--muted);font-size:12px;line-height:1.55}
-    .trust-row svg{width:16px;height:16px;margin-top:1px;color:var(--frost)}
+    .trust-row{display:grid;grid-template-columns:34px 1fr;gap:10px;align-items:start;color:var(--muted);font-size:12px;line-height:1.55}
+    .trust-code{display:inline-flex;align-items:center;justify-content:center;min-height:22px;margin-top:1px;border:1px solid var(--line-2);border-radius:var(--r-badge);background:var(--card-2);color:var(--frost);font:500 9px/1 var(--f-mono);letter-spacing:.04em}
     .trust-row b{color:var(--moonlight);font-weight:560}
     .auth-foot{display:flex;align-items:center;justify-content:space-between;gap:24px;padding-top:20px;border-top:1px solid var(--line);color:var(--dim);font:400 11px/1.5 var(--f-mono)}
     .auth-foot span:last-child{text-align:right}
     @media(max-width:980px){.auth-main{grid-template-columns:1fr;gap:44px;padding:54px 0}.auth-copy{max-width:none}.auth-card{width:min(520px,100%)}.auth-copy h1{font-size:clamp(36px,8vw,58px)}}
-    @media(max-width:620px){.auth-shell{padding:20px 16px}.auth-status{display:none}.auth-main{padding:40px 0;gap:36px}.auth-copy h1{font-size:38px}.auth-lead{font-size:14px}.auth-flow{grid-template-columns:1fr}.flow-step{min-height:0;padding:16px 0}.flow-step+.flow-step{padding-left:0;border-left:0;border-top:1px solid var(--line)}.auth-card{padding:26px 22px}.auth-foot{align-items:flex-start;flex-direction:column;gap:8px}.auth-foot span:last-child{text-align:left}}
+    @media(max-width:620px){.auth-shell{padding:20px 16px}.auth-status{display:none}.auth-main{padding:28px 0 40px;gap:40px}.auth-card{order:-1;padding:26px 22px}.auth-copy h1{font-size:38px}.auth-lead{font-size:14px}.auth-flow{grid-template-columns:1fr}.flow-step{min-height:0;padding:16px 0}.flow-step+.flow-step{padding-left:0;border-left:0;border-top:1px solid var(--line)}.auth-foot{align-items:flex-start;flex-direction:column;gap:8px}.auth-foot span:last-child{text-align:left}}
     @media(prefers-reduced-motion:reduce){.auth-btn{transition:none}}
   </style>
 </head>
@@ -57,41 +59,41 @@
   <div class="auth-shell">
     <header class="auth-top">
       <a class="auth-brand" href="/login" aria-label="TradingJournal 로그인"><span class="logo-tile" aria-hidden="true">TJ</span><span>TradingJournal</span></a>
-      <span class="auth-status">Read-only journal</span>
+      <span class="auth-status">읽기 전용 데이터 연동</span>
     </header>
 
     <main class="auth-main">
       <section class="auth-copy" aria-labelledby="auth-title">
-        <p class="auth-kicker">Decision system for active traders</p>
-        <h1 id="auth-title">거래 원장은 자동으로.<br>판단 기록은 내 것으로.</h1>
-        <p class="auth-lead">체결 내역, 진입 전 계획, 시장 상태를 한 화면에 연결합니다. 성과 숫자만 쌓는 일지가 아니라 다음 거래의 판단을 더 정확하게 만드는 작업대입니다.</p>
+        <p class="auth-kicker">TRADING JOURNAL</p>
+        <h1 id="auth-title">체결은 자동으로 기록하고,<br>판단은 거래마다 남기세요.</h1>
+        <p class="auth-lead">거래 원장, 진입 계획, 시장 상태를 한 화면에서 관리합니다. 결과뿐 아니라 진입 근거와 실행 과정을 함께 기록해 다음 거래의 기준을 선명하게 만듭니다.</p>
         <div class="auth-flow" aria-label="TradingJournal 핵심 흐름">
-          <div class="flow-step"><span class="flow-num">01</span><b>거래 원장 동기화</b><span>지원 거래소의 체결 내역과 실현손익을 불러옵니다.</span></div>
-          <div class="flow-step"><span class="flow-num">02</span><b>진입 전 계획</b><span>의도, 손절·익절, 허용 리스크를 포지션과 함께 기록합니다.</span></div>
-          <div class="flow-step"><span class="flow-num">03</span><b>행동 피드백</b><span>규율, 레짐, 청산 습관을 실제 거래 결과와 비교합니다.</span></div>
+          <div class="flow-step"><span class="flow-num">SYNC</span><b>거래 원장 동기화</b><span>지원 거래소의 체결 내역과 실현 손익을 불러옵니다.</span></div>
+          <div class="flow-step"><span class="flow-num">PLAN</span><b>진입 전 계획</b><span>의도, 손절·익절, 허용 리스크를 포지션과 함께 기록합니다.</span></div>
+          <div class="flow-step"><span class="flow-num">REVIEW</span><b>거래 복기</b><span>규율, 시장 레짐, 청산 습관을 실제 결과와 비교합니다.</span></div>
         </div>
       </section>
 
       <section class="auth-card" aria-labelledby="login-title">
         <div class="auth-card-head">
-          <div class="eyebrow">Secure access</div>
-          <h2 id="login-title">일지에 로그인</h2>
-          <p>Google 계정으로 안전하게 로그인합니다. 처음 로그인하면 개인 일지가 생성됩니다.</p>
+          <div class="eyebrow">SECURE ACCESS</div>
+          <h2 id="login-title">TradingJournal 시작하기</h2>
+          <p>Google 계정으로 로그인하면 개인 거래 일지가 생성됩니다.</p>
         </div>
         <div class="auth-actions">
           {% if error %}<div class="auth-error" role="alert">로그인하지 못했습니다. 잠시 후 다시 시도해 주세요.</div>{% endif %}
-          {% if google %}<a class="auth-btn" href="/auth/google"><span class="gmark" aria-hidden="true">G</span><span>Google로 계속</span></a>{% endif %}
+          {% if google %}<a class="auth-btn" href="/auth/google"><img class="gmark" src="https://developers.google.com/static/identity/images/g-logo.png" alt=""><span>Google로 계속하기</span></a><p class="auth-scope">계정 생성에는 Google 이메일과 이름만 사용합니다.</p>{% endif %}
           {% if dev %}<a class="btn auth-dev" href="/dev-login">개발 로그인</a>{% endif %}
           {% if not google and not dev %}<div class="auth-missing">로그인 수단이 설정되지 않았습니다. 관리자에게 문의해 주세요.</div>{% endif %}
         </div>
         <div class="auth-trust" aria-label="데이터 보호 안내">
-          <div class="trust-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-2.8 8.1-7 10-4.2-1.9-7-5.4-7-10V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg><span><b>주문 실행 없음</b><br>연결한 계정으로 주문을 내지 않습니다.</span></div>
-          <div class="trust-row"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 018 0v3"/></svg><span><b>자격 증명 암호화 저장</b><br>지원 거래소는 읽기 전용 권한을 우선 검증합니다.</span></div>
+          <div class="trust-row"><span class="trust-code" aria-hidden="true">R/O</span><span><b>주문 권한 미사용</b><br>연결한 거래소 계정으로 주문을 실행하지 않습니다.</span></div>
+          <div class="trust-row"><span class="trust-code" aria-hidden="true">KEY</span><span><b>연결 정보 암호화</b><br>지원 거래소는 읽기 전용 권한을 우선 확인합니다.</span></div>
         </div>
       </section>
     </main>
 
-    <footer class="auth-foot"><span>TradingJournal · Personal trading intelligence</span><span>데이터의 출처와 기준 시각을 숨기지 않습니다.</span></footer>
+    <footer class="auth-foot"><span>TradingJournal · Personal trading intelligence</span><span>시장 데이터의 출처와 기준 시각을 명확히 표시합니다.</span></footer>
   </div>
 </body>
 </html>

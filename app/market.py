@@ -58,7 +58,7 @@ def _trailing_change(closes, bars):
 _TFS = ("1h", "4h", "1d")
 
 
-def _coin(ex, symbol, mtf=False):
+def _coin(ex, symbol, mtf=False, with_rs=False):
     oh = ex.fetch_ohlcv(symbol, "1d", limit=300)  # EMA200 워밍업 위해 일봉 300개
     closes = [c[4] for c in oh if c and c[4]]
     if len(closes) < 10:
@@ -76,6 +76,9 @@ def _coin(ex, symbol, mtf=False):
            "ema200": round(e200, 2) if e200 is not None else None,
            # 최근 30일 종가 스파크(newest-first: F&G·알트시즌과 동일 규약) — 이미 받은 캔들 재사용(추가 호출 0)
            "spark": [round(c, 8) for c in closes[-30:]][::-1] if len(closes) >= 10 else None}
+    if with_rs:
+        # 상대강도 계산 전용 시계열. _alt_board에서 소비 후 제거하므로 API 응답에는 노출하지 않는다.
+        out["_rs_series"] = [[int(c[0]), float(c[4])] for c in oh if c and c[4]][-91:]
     if mtf:  # 1h·4h·1d 각각 EMA50/200 추세 (1d는 이미 받은 캔들 재사용)
         tf = {}
         hourly = None
@@ -101,6 +104,51 @@ def _coin(ex, symbol, mtf=False):
             "7d": _trailing_change(hourly, 24 * 7) if hourly else out.get("chg7"),
         }
     return out
+
+
+def _capture_profile(alt_series, btc_series, window=60):
+    """BTC 상승일/하락일의 알트 포착률과 비대칭 강도를 계산한다.
+
+    상방 포착률 120 = BTC가 오른 날의 누적 상승폭 대비 알트가 1.2배 움직였다는 뜻이다.
+    하방 포착률 80 = BTC가 내린 날의 누적 하락폭 대비 알트 하락폭이 0.8배였다는 뜻이다.
+    강도 = 상방 포착률 - 하방 포착률. 높을수록 상승 참여와 하락 방어의 조합이 낫다.
+    """
+    try:
+        alt = {int(t): float(v) for t, v in (alt_series or []) if v}
+        btc = {int(t): float(v) for t, v in (btc_series or []) if v}
+    except (TypeError, ValueError):
+        return None
+    stamps = sorted(set(alt) & set(btc))
+    if len(stamps) < window + 1:
+        return None
+    stamps = stamps[-(window + 1):]
+    up_alt, up_btc, down_alt, down_btc = 0.0, 0.0, 0.0, 0.0
+    up_n = down_n = 0
+    for prev, cur in zip(stamps, stamps[1:]):
+        if not alt[prev] or not btc[prev]:
+            continue
+        ar = alt[cur] / alt[prev] - 1
+        br = btc[cur] / btc[prev] - 1
+        if br > 0:
+            up_alt += ar
+            up_btc += br
+            up_n += 1
+        elif br < 0:
+            down_alt += ar
+            down_btc += br
+            down_n += 1
+    if up_n < 3 or down_n < 3 or not up_btc or not down_btc:
+        return None
+    up_capture = up_alt / up_btc * 100
+    down_capture = down_alt / down_btc * 100
+    return {
+        "up_capture_60d": round(up_capture, 1),
+        "down_capture_60d": round(down_capture, 1),
+        "rs_score": round(up_capture - down_capture, 1),
+        "sample_up": up_n,
+        "sample_down": down_n,
+        "window_days": min(window, len(stamps) - 1),
+    }
 
 
 def _ratio_trend(a, b):
@@ -175,46 +223,48 @@ def _tv_market():
 # 심볼은 _alt_board가 개별적으로 건너뜀 → 전체 보드를 죽이지 않는다(빠진 심볼은 조용히 제외).
 # ETH는 첫 항목 유지(대장 스냅샷 eth로 별도 사용). 순서 무관 — 최종 vs_btc_7d로 재정렬.
 ALTS = [
-    # L1 · 대형 기반체인
-    "ETH", "SOL", "BNB", "ADA", "AVAX", "SUI",
-    # 결제·송금
-    "XRP",
-    # 밈
-    "DOGE",
-    # 오라클 · DeFi 블루칩
-    "LINK", "UNI", "AAVE",
-    # L2 · 확장성
-    "ARB", "OP",
-    # AI · DePIN
-    "FET", "RENDER", "WLD", "TAO",
-    # RWA(실물자산)
-    "ONDO",
-    # 스테이블 · 이자수익(DeFi)
-    "ENA",
-    # 신형 perp-DEX
-    "HYPE",
+    # 대형 시총 우선 표본(스테이블·랩드 자산 제외). 화면은 시총순이 아니라 상대강도순이다.
+    "ETH", "BNB", "XRP", "SOL", "TRX", "DOGE", "ADA", "BCH", "LINK", "AVAX",
+    "TON", "SUI", "XLM", "HBAR", "DOT", "LTC", "UNI", "NEAR", "ICP", "APT",
+    "AAVE", "ATOM", "FIL", "KAS",
+    # 섹터 대표 보강 — 상대강도 화면에서는 섹터 라벨을 붙이지 않고 동일 기준으로 정렬한다.
+    "ARB", "OP", "MNT",                    # L2
+    "FET", "RENDER", "WLD", "TAO",        # AI · DePIN
+    "ONDO",                                  # RWA
+    "ENA", "PENDLE", "LDO",                # DeFi · 수익률
+    "PYTH",                                  # 오라클
+    "IMX",                                   # 게임
+    "PEPE",                                  # 밈
+    "HYPE", "DYDX",                         # perp-DEX
 ]
 
 
 def _alt_board(ex, btc):
-    """ALTS 각각의 BTC 대비 7일 상대수익률 보드 + ETH 스냅샷.
+    """ALTS 각각의 BTC 대비 60일 상·하방 포착률 보드 + 7일 초과수익률 + ETH 스냅샷.
     심볼별 조회를 개별 try로 감싼다 — 거래소에 없거나(신규·미상장) 타임아웃 나는 알트
     하나가 전체 보드를 죽이지 않게. 빠진 심볼은 조용히 제외(정직: 없는 데이터는 안 만든다)."""
     btc_chg7 = btc.get("chg7") if btc else None
+    btc_series = (btc or {}).get("_rs_series") or []
     eth, board = None, []
     for sym in ALTS:
         try:
-            c = _coin(ex, f"{sym}/USDT")
+            c = _coin(ex, f"{sym}/USDT", with_rs=True)
         except Exception:  # noqa: BLE001 — BadSymbol·타임아웃 등, 개별 스킵
             logger.debug("market 알트 %s 조회 실패 — 보드에서 제외", sym)
             continue
+        profile = _capture_profile((c or {}).pop("_rs_series", None), btc_series)
         if sym == "ETH":
             eth = c
         if c and c.get("chg7") is not None and btc_chg7 is not None:
-            board.append({"sym": sym, "chg24": c.get("chg24"), "chg7": c.get("chg7"),
-                          "chg90": c.get("chg90"),
-                          "vs_btc_7d": round(c["chg7"] - btc_chg7, 2)})
-    board.sort(key=lambda b: b["vs_btc_7d"], reverse=True)
+            row = {"sym": sym, "chg24": c.get("chg24"), "chg7": c.get("chg7"),
+                   "chg90": c.get("chg90"),
+                   "vs_btc_7d": round(c["chg7"] - btc_chg7, 2)}
+            if profile:
+                row.update(profile)
+            board.append(row)
+    board.sort(key=lambda b: (b.get("rs_score") is not None,
+                              b.get("rs_score") if b.get("rs_score") is not None else b["vs_btc_7d"]),
+               reverse=True)
     return eth, board
 
 
@@ -223,14 +273,20 @@ def _regime(board, btc):
     n = len(board)
     if not n:
         return None
-    op = sum(1 for b in board if b["vs_btc_7d"] > 0)  # BTC보다 7일 강한 알트 수
-    if op <= n * 0.35:
+    scored = [b for b in board if b.get("rs_score") is not None]
+    basis_rows = scored or board
+    op = sum(1 for b in basis_rows if (b.get("rs_score") if scored else b["vs_btc_7d"]) > 0)
+    n_basis = len(basis_rows)
+    if op <= n_basis * 0.35:
         regime = "btc"       # 대부분 알트가 BTC보다 약함 → BTC 우위
-    elif op >= n * 0.65:
+    elif op >= n_basis * 0.65:
         regime = "alt"       # 대부분 알트가 BTC보다 강함 → 알트 우위
     else:
         regime = "neutral"
-    return {"regime": regime, "board": board, "n": n, "outperform": op,
+    return {"regime": regime, "board": board, "n": n, "universe_n": len(ALTS),
+            "universe_basis": "대형 시총 우선 + 섹터 대표 보강",
+            "outperform": op, "breadth_n": n_basis,
+            "strength_basis": "60일 상방 포착률 - 하방 포착률" if scored else "7일 BTC 초과수익률",
             "btc_chg7": btc.get("chg7"), "btc_trend": btc.get("trend")}
 
 
@@ -250,10 +306,11 @@ def _market_data():
     for name in ("bybit", "binance"):
         try:
             ex = getattr(ccxt, name)({"enableRateLimit": True})
-            btc = _coin(ex, "BTC/USDT", mtf=True)  # BTC만 1h/4h/1d 멀티TF
+            btc = _coin(ex, "BTC/USDT", mtf=True, with_rs=True)  # BTC만 1h/4h/1d 멀티TF
             if not btc:
                 continue
             eth, board = _alt_board(ex, btc)
+            btc.pop("_rs_series", None)
             btcd_tf, usdtd_tf = _dom_proxy(ex)
             return {"btc": btc, "eth": eth, "rs": _regime(board, btc), "src": name,
                     "btcd_tf": btcd_tf, "usdtd_tf": usdtd_tf, "altseason": _altseason(board, btc)}
@@ -301,7 +358,8 @@ def _sectors():
         coins = [str(x).replace("-", " ") for x in ids if x][:3]
         return {"name": c.get("name") or "?", "chg24": round(c["market_cap_change_24h"], 2),
                 "vol": c.get("volume_24h"), "coins": coins}  # vol=24h 거래대금(실측)
-    return {"top": [_row(c) for c in rows[:5]], "bottom": [_row(c) for c in rows[-3:]]}
+    return {"top": [_row(c) for c in rows[:8]], "bottom": [_row(c) for c in rows[-5:]],
+            "universe_n": len(rows), "basis": "CoinGecko 시총 $1B 이상 카테고리"}
 
 
 def get_context(force=False):
