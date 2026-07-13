@@ -42,8 +42,10 @@ def test_dashboard_uses_exchange_panel_chrome_inside_current_columns():
     assert 'class="panel-resize"' in HTML
     assert 'class="panel-dim"' in HTML
     assert "--r-btn:4px; --r-input:4px; --r-badge:2px; --r-card:3px" in CSS
-    assert "border-radius:2px;background:var(--panel)" in CSS
+    assert "border:1px solid transparent;border-radius:2px;background:var(--card)" in CSS
     assert ".panel-chrome{position:relative" in CSS
+    assert "background:var(--card);border-bottom:1px solid transparent" in CSS
+    assert ".dash-panel:hover>.panel-chrome,.dash-panel:focus-within>.panel-chrome" in CSS
     assert ".layout-edit .panel-resize{display:block" in CSS
     assert ".panel-ghost{" in CSS
     assert "ghost.style.transform=`translate3d(" in HTML
@@ -52,7 +54,7 @@ def test_dashboard_uses_exchange_panel_chrome_inside_current_columns():
     assert 'data-default-height="${g.height}"' in HTML
     assert 'data-min-height="${g.minHeight}"' in HTML
     assert "Number(s.height)||defaultH" in HTML
-    assert "min-height:var(--panel-min-h,140px)" in CSS
+    assert "min-height:var(--panel-min-h,96px)" in CSS
 
 
 def test_market_ordering_and_current_data_panels_remain_available():
@@ -66,6 +68,12 @@ def test_market_ordering_and_current_data_panels_remain_available():
     assert "function oiQuantityBlock(" in HTML
     assert "function liqCard(" in HTML
     assert "marketPanel('econ'" in HTML
+    assert "marketPanel('rs'," in HTML
+    assert "marketPanel('flow'," in HTML
+    assert "marketPanel('rsflow'," not in HTML
+    assert "DASH_LAYOUT_REV=3" in HTML
+    assert "k==='rsflow'?['rs','flow']" in HTML
+    assert "const canonicalMarket=['econ','strip','regime','liq','rs','flow','liqmap']" in HTML
     assert "ensureEconomy()" in HTML
     assert "oi_context_quad" in HTML
     assert "OI 수급 맥락" in HTML
@@ -101,10 +109,31 @@ def test_journal_view_controls_change_only_dock_cards():
 
 
 def test_dashboard_panel_spacing_is_fixed_across_journal_views():
-    assert "--panel-pad-y:16px" in CSS
-    assert "--panel-pad-x:18px" in CSS
-    assert "--dash-gap:16px" in CSS
+    assert "--panel-pad-y:12px" in CSS
+    assert "--panel-pad-x:14px" in CSS
+    assert "--dash-gap:12px" in CSS
     assert "el.dataset.density" not in HTML
+
+
+def test_dashboard_uses_single_column_brief_cards_and_quiet_panel_chrome():
+    assert ".dash-me .cards{grid-template-columns:1fr;grid-auto-rows:auto}" in CSS
+    assert ".dash-me .mgrid{grid-template-columns:1fr" in CSS
+    assert ".dash-panel:hover,.dash-panel:focus-within{border-color:var(--line-2)}" in CSS
+    assert ".panel-grip svg{width:14px;height:14px;display:block;opacity:0" in CSS
+    assert ".dash3:not(.layout-edit) .panel-grip svg{opacity:0}" in CSS
+
+
+def test_market_defaults_are_compact_and_relative_strength_is_split_from_flow():
+    assert "regime:{height:500,minHeight:180}" in HTML
+    assert "liq:{height:560,minHeight:200}" in HTML
+    assert "rs:{height:620,minHeight:220}" in HTML
+    assert "flow:{height:500,minHeight:180}" in HTML
+    assert "marketPanel('regime'" in HTML and "{span:8,min:4}" in HTML
+    assert "marketPanel('liq'" in HTML and "{span:4,min:3}" in HTML
+    assert "marketPanel('rs'" in HTML and "{span:6,min:3}" in HTML
+    assert "marketPanel('flow'" in HTML and "{span:6,min:3}" in HTML
+    assert '#view-dashboard .rgc .rgrow{display:grid;' in CSS
+    assert ".dash-mkt{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start" in CSS
 
 
 def test_dashboard_uses_full_viewport_width_and_equal_height_journal_rows():
@@ -117,7 +146,7 @@ def test_dashboard_uses_full_viewport_width_and_equal_height_journal_rows():
 
 def test_market_panels_share_one_vertical_scroll_per_column():
     assert ".dash-mkt>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h" in CSS
-    assert "var(--panel-natural-h,0px));max-height:none;grid-template-rows:32px auto" in CSS
+    assert "var(--panel-natural-h,0px));max-height:none;grid-template-rows:30px auto" in CSS
     assert ".dash-mkt>.dash-panel>.panel-content{min-height:max-content;overflow:visible" in CSS
     assert "--panel-user-h" in HTML
     assert "function bindMarketNaturalHeights()" in HTML
