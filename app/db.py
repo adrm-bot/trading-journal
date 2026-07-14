@@ -3,7 +3,7 @@ import json
 import os
 import sqlite3
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from . import crypto
 
@@ -34,7 +34,7 @@ def init():
         CREATE TABLE IF NOT EXISTS users(
           id INTEGER PRIMARY KEY, email TEXT UNIQUE, name TEXT, created INTEGER,
           plan TEXT DEFAULT 'free', stripe_customer_id TEXT,
-          account_equity REAL, be_pct REAL);
+          account_equity REAL, be_pct REAL, journal_since TEXT);
         CREATE TABLE IF NOT EXISTS connections(
           user_id INTEGER, kind TEXT, data_enc TEXT, updated INTEGER,
           PRIMARY KEY(user_id, kind));
@@ -78,7 +78,8 @@ def init():
         # users 마이그레이션: 결제 스캐폴드 컬럼(멱등)
         ucols = {r[1] for r in c.execute("PRAGMA table_info(users)")}
         for name, typ in (("plan", "TEXT DEFAULT 'free'"), ("stripe_customer_id", "TEXT"),
-                          ("account_equity", "REAL"), ("be_pct", "REAL")):
+                          ("account_equity", "REAL"), ("be_pct", "REAL"),
+                          ("journal_since", "TEXT")):
             if name not in ucols:
                 c.execute(f"ALTER TABLE users ADD COLUMN {name} {typ}")
         # 백필: 기존 강제청산 행에 청산기준 부여(멱등)
@@ -109,23 +110,40 @@ def get_user_plan(uid):
 
 
 def get_user_settings(uid):
-    """트레이딩 설정 — 계좌 자산(USDT)·본절 밴드(%). 미설정이면 None/기본."""
+    """트레이딩 설정 — 계좌 자산·본절 밴드·일지 표시 시작일."""
     with conn() as c:
-        r = c.execute("SELECT account_equity, be_pct FROM users WHERE id=?", (uid,)).fetchone()
+        r = c.execute(
+            "SELECT account_equity, be_pct, journal_since FROM users WHERE id=?", (uid,)
+        ).fetchone()
     eq = r["account_equity"] if r else None
     be = r["be_pct"] if r and r["be_pct"] is not None else None
-    return {"account_equity": eq, "be_pct": be}
+    since = r["journal_since"] if r and r["journal_since"] else None
+    return {"account_equity": eq, "be_pct": be, "journal_since": since}
 
 
-def set_user_settings(uid, account_equity=None, be_pct=None):
+def set_user_settings(uid, account_equity=None, be_pct=None, journal_since=None):
     with conn() as c:
-        c.execute("UPDATE users SET account_equity=?, be_pct=? WHERE id=?", (account_equity, be_pct, uid))
+        c.execute(
+            "UPDATE users SET account_equity=?, be_pct=?, journal_since=? WHERE id=?",
+            (account_equity, be_pct, journal_since, uid),
+        )
+
+
+def reset_journal(uid, journal_since=None):
+    """사용자 일지만 초기화한다. 계정·연결·워치리스트·트레이딩 설정은 보존."""
+    with conn() as c:
+        trades = c.execute("DELETE FROM trades WHERE user_id=?", (uid,)).rowcount
+        intents = c.execute("DELETE FROM position_intents WHERE user_id=?", (uid,)).rowcount
+        audits = c.execute("DELETE FROM sync_audits WHERE user_id=?", (uid,)).rowcount
+        c.execute("UPDATE users SET journal_since=? WHERE id=?", (journal_since, uid))
+    return {"trades": trades, "position_intents": intents, "sync_audits": audits}
 
 
 def delete_user(uid):
     """계정·데이터 완전 삭제 (PIPA/GDPR 삭제권). 거래·연동·유저 전부 제거 — 되돌릴 수 없음."""
     with conn() as c:
         c.execute("DELETE FROM trades WHERE user_id=?", (uid,))
+        c.execute("DELETE FROM position_intents WHERE user_id=?", (uid,))
         c.execute("DELETE FROM connections WHERE user_id=?", (uid,))
         c.execute("DELETE FROM liqmap_watchlists WHERE user_id=?", (uid,))
         c.execute("DELETE FROM sync_audits WHERE user_id=?", (uid,))
@@ -404,10 +422,30 @@ def delete_auto_trades(uid, kind, since=None, unannotated_only=False) -> int:
         return c.execute(q, args).rowcount
 
 
-def get_trades(uid):
+def _journal_since_boundary(since):
+    """KST 날짜(YYYY-MM-DD)를 거래 원장의 UTC-naive 시작 시각으로 바꾼다."""
+    if not since or len(str(since)) != 10:
+        return since
+    try:
+        kst_midnight = datetime.fromisoformat(str(since)).replace(
+            tzinfo=timezone(timedelta(hours=9))
+        )
+    except ValueError:
+        return since
+    return kst_midnight.astimezone(timezone.utc).replace(tzinfo=None).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+
+
+def get_trades(uid, since=None):
+    q = "SELECT * FROM trades WHERE user_id=?"
+    args = [uid]
+    if since:
+        q += " AND COALESCE(NULLIF(closed_at,''),NULLIF(opened_at,''),'') >= ?"
+        args.append(_journal_since_boundary(since))
+    q += " ORDER BY closed_at DESC"
     with conn() as c:
-        return [dict(r) for r in c.execute(
-            "SELECT * FROM trades WHERE user_id=? ORDER BY closed_at DESC", (uid,))]
+        return [dict(r) for r in c.execute(q, args)]
 
 
 def get_trade(uid, trade_id):

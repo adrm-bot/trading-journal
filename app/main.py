@@ -11,6 +11,7 @@ import logging
 import os
 import secrets
 import time
+from datetime import date
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -103,6 +104,19 @@ def _csrf(request):
         raise HTTPException(403, "요청을 처리할 수 없습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요")
 
 
+def _journal_since(value):
+    """일지 표시 시작일을 YYYY-MM-DD로 정규화한다. 빈 값은 전체 기간."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = date.fromisoformat(str(value).strip())
+    except (TypeError, ValueError):
+        raise HTTPException(400, "일지 시작일을 올바른 날짜로 입력해 주세요") from None
+    if parsed > date.today():
+        raise HTTPException(400, "일지 시작일은 오늘 이후로 설정할 수 없습니다")
+    return parsed.isoformat()
+
+
 def _login(request, email, name):
     request.session.clear()  # 세션 고정 방지
     request.session["uid"] = db.upsert_user(email, name)
@@ -184,7 +198,8 @@ def api_me(request: Request):
     s = db.get_user_settings(uid)
     return {"email": request.session.get("email", ""), "plan": db.get_user_plan(uid),
             "billing_enabled": BILLING_ENABLED, "support_email": SUPPORT_EMAIL,
-            "account_equity": s["account_equity"], "be_pct": s["be_pct"]}
+            "account_equity": s["account_equity"], "be_pct": s["be_pct"],
+            "journal_since": s["journal_since"]}
 
 
 @app.post("/api/settings")
@@ -200,12 +215,32 @@ async def api_settings(request: Request):
             return None
     eq = _num(b.get("account_equity"))
     be = _num(b.get("be_pct"))
+    current = db.get_user_settings(uid)
+    journal_since = (
+        _journal_since(b.get("journal_since"))
+        if "journal_since" in b
+        else current["journal_since"]
+    )
     if eq is not None and eq <= 0:
         eq = None
     if be is not None and not (0 <= be <= 5):  # 본절 밴드 0~5% 합리적 범위
         be = None
-    db.set_user_settings(uid, eq, be)
+    db.set_user_settings(uid, eq, be, journal_since)
     return {"ok": True}
+
+
+@app.post("/api/journal/reset")
+async def api_journal_reset(request: Request):
+    """현재 사용자의 일지만 초기화한다. 계정·거래소 연결·워치리스트는 보존."""
+    uid = _require(request)
+    _csrf(request)
+    b = await request.json()
+    if b.get("confirm") != "매매일지 초기화":
+        raise HTTPException(400, "확인 문구가 일치하지 않습니다")
+    journal_since = _journal_since(b.get("journal_since") or date.today().isoformat())
+    removed = db.reset_journal(uid, journal_since)
+    logger.warning("journal reset uid=%s removed=%s since=%s", uid, removed, journal_since)
+    return {"ok": True, "removed": removed, "journal_since": journal_since}
 
 
 @app.get("/api/data")
@@ -214,7 +249,7 @@ def api_data(request: Request):
     s = db.get_user_settings(uid)
     be = (s["be_pct"] / 100.0) if s["be_pct"] is not None else analytics.BE_PCT  # 저장은 %, 계산은 분수
     eq = s["account_equity"]
-    summary, trades = engine.analyze_user(uid, be)
+    summary, trades = engine.analyze_user(uid, be, since=s["journal_since"])
     return JSONResponse({"summary": summary,
                          "trades": [analytics.enrich(t, eq, be) for t in trades],
                          "sync_audits": db.get_sync_audits(uid)})
@@ -233,7 +268,7 @@ def api_regime(request: Request):
     uid = _require(request)
     s = db.get_user_settings(uid)
     be = (s["be_pct"] / 100.0) if s["be_pct"] is not None else analytics.BE_PCT
-    _, trades = engine.analyze_user(uid, be)
+    _, trades = engine.analyze_user(uid, be, since=s["journal_since"])
     enriched = [analytics.enrich(t, s["account_equity"], be) for t in trades]
     return JSONResponse({"live": regime.live(), "perf": regime.perf(enriched)})
 
@@ -565,7 +600,8 @@ _EXPORT_COLS = ["closed_at", "opened_at", "exchange", "symbol", "direction", "en
 @app.get("/api/export")
 def api_export(request: Request):
     uid = _require(request)
-    _, trades = engine.analyze_user(uid)
+    s = db.get_user_settings(uid)
+    _, trades = engine.analyze_user(uid, since=s["journal_since"])
     buf = io.StringIO()
     w = csv.writer(buf)
     w.writerow(_EXPORT_COLS)

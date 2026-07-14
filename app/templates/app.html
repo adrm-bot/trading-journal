@@ -126,6 +126,14 @@
   <div class="modal-actions"><button class="btn ghost" id="delAcctCancel">취소</button><button class="btn danger" id="delAcctDo" disabled>영구 삭제</button></div>
 </div></div>
 
+<div class="modal-bg" id="resetJournalBg"><div class="modal" role="dialog" aria-modal="true" aria-labelledby="resetJournalTitle">
+  <button type="button" class="mclose" id="resetJournalClose" aria-label="닫기">×</button>
+  <h3 id="resetJournalTitle">매매일지를 초기화할까요?</h3>
+  <p class="muted" style="font-size:13px;line-height:1.65;margin:0 0 14px">거래 기록·사전 계획·과거 원장 정합성 기록이 영구 삭제됩니다. 계정·거래소 연결·트레이딩 설정은 유지됩니다.<br>초기화 후 일지 표시 시작일은 <b id="resetJournalDate"></b>입니다. 계속하려면 <b>매매일지 초기화</b>를 입력하세요.</p>
+  <div class="field"><label class="sr-only" for="resetJournalConfirm">확인 입력</label><input id="resetJournalConfirm" placeholder="매매일지 초기화" autocomplete="off"></div>
+  <div class="modal-actions"><button class="btn ghost" id="resetJournalCancel">취소</button><button class="btn danger" id="resetJournalDo" disabled>일지 초기화</button></div>
+</div></div>
+
 <div class="cmdk-bg" id="cmdkBg"><div class="cmdk" role="dialog" aria-modal="true" aria-label="명령 팔레트">
   <input id="cmdkInput" type="text" role="combobox" aria-expanded="true" aria-controls="cmdkList" aria-autocomplete="list" autocomplete="off" placeholder="탭 이동 · 거래 불러오기 · 심볼·메모로 거래 찾기…">
   <div class="cmdk-list" id="cmdkList" role="listbox"></div>
@@ -1819,6 +1827,7 @@ function renderSettings(el){
         <div class="field"><label for="setEquity">계좌 자산 (USDT)</label><input id="setEquity" type="number" step="any" inputmode="decimal" placeholder="예: 10000" value="${ME.account_equity??''}"></div>
         <div class="field"><label for="setBe">본절 기준 (%)</label><input id="setBe" type="number" step="0.01" inputmode="decimal" placeholder="0.1" value="${ME.be_pct??''}"></div>
       </div>
+      <div class="field"><label for="setJournalSince">일지 표시 시작일</label><input id="setJournalSince" type="date" max="${iso(new Date())}" value="${esc(ME.journal_since||'')}"><div class="hint">대시보드·거래·인사이트·CSV에 이 날짜 이후 거래만 반영합니다. 비워두면 전체 기간을 표시하며, 날짜를 바꿔도 과거 데이터는 삭제되지 않습니다.</div></div>
       <div class="method-row settings-method"><span>리스크와 본절 판정 기준</span>${helpTip('계좌 자산을 입력하면 진입가·손절가·수량으로 계산한 거래별 리스크를 계좌 대비 비율로 표시합니다. |손익|÷명목가가 본절 기준보다 작으면 무승부로 분류합니다.','트레이딩 설정 산정 기준')}</div>
       <button class="btn primary sm" id="saveSettings">설정 저장</button></div>
     <div class="section-title">계정</div><div class="card"><div class="conn">
@@ -1827,6 +1836,7 @@ function renderSettings(el){
       <div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap">
         <a class="btn sm" href="/api/export">데이터 내보내기 (CSV)</a>
         <button class="btn sm" id="resyncBtn">거래 재적재 (중복 정리)</button>
+        <button class="btn sm danger" id="resetJournalBtn">매매일지 초기화</button>
         <button class="btn sm danger" id="delAcctBtn">계정·데이터 삭제</button>
       </div>
       <div class="method-row settings-method"><span>거래 재적재 안내</span>${helpTip('자동 수집 거래를 거래소 원장 기준으로 다시 구성해 겹침과 중복을 정리합니다. 사전 계획과 설정은 유지되지만 거래별 계획·복기·채점은 초기화될 수 있습니다.','거래 재적재 안내')}</div></div>
@@ -1852,6 +1862,7 @@ function renderSettings(el){
     catch(err){toast("연결을 해제하지 못했습니다. 잠시 후 다시 시도해 주세요");b.disabled=false;}});
   $$(".ackchk").forEach(c=>c.onchange=()=>{const b=c.closest("form").querySelector("button[type=submit]");if(b)b.disabled=!c.checked;});
   const da=$("#delAcctBtn");if(da)da.onclick=openDelAcct;
+  const rj=$("#resetJournalBtn");if(rj)rj.onclick=openResetJournal;
   const rs=$("#resyncBtn");if(rs)rs.onclick=async()=>{
     if(!confirm("자동으로 불러온 거래를 거래소 기준으로 다시 정확히 맞춥니다.\n겹침·중복이 제거되고 통계가 복원됩니다.\n(사전계획·설정은 유지, 거래별 계획·복기 주석은 초기화될 수 있음)\n\n계속할까요?"))return;
     rs.disabled=true;const orig=rs.textContent;rs.textContent="재적재 중… (거래소 조회, 수십 초 걸릴 수 있음)";
@@ -1865,7 +1876,7 @@ function renderSettings(el){
     try{await postJSON("/api/billing/checkout",{});}
     catch(e){toast(e&&e.message&&e.message.indexOf("http ")!==0?e.message:"결제는 준비 중입니다");}};
   const ss=$("#saveSettings");if(ss)ss.onclick=async()=>{ss.disabled=true;
-    try{await postJSON("/api/settings",{account_equity:$("#setEquity").value,be_pct:$("#setBe").value});await loadAll();route();toast("트레이딩 설정을 저장했습니다");}
+    try{await postJSON("/api/settings",{account_equity:$("#setEquity").value,be_pct:$("#setBe").value,journal_since:$("#setJournalSince").value});await loadAll();route();toast("트레이딩·일지 표시 설정을 저장했습니다");}
     catch(e){toast("저장하지 못했습니다. 잠시 후 다시 시도해 주세요");ss.disabled=false;}};
 }
 
@@ -2136,6 +2147,14 @@ function nudgeUnplanned(){
 }
 function openBulk(){setChips("cb_emo",[]);$("#bulkMeta").textContent=`계획 미기입 ${DATA.summary.unplanned||0}건에 적용`;$("#shell").inert=true;$("#bulkBg").classList.add("show");$("#b_plan").focus();}
 function closeBulk(){$("#bulkBg").classList.remove("show");$("#shell").inert=false;}
+let RESET_JOURNAL_SINCE=null;
+function openResetJournal(){RESET_JOURNAL_SINCE=$("#setJournalSince")?.value||iso(new Date());$("#resetJournalDate").textContent=RESET_JOURNAL_SINCE;$("#resetJournalConfirm").value="";$("#resetJournalDo").disabled=true;$("#shell").inert=true;$("#resetJournalBg").classList.add("show");$("#resetJournalConfirm").focus();}
+function closeResetJournal(){$("#resetJournalBg").classList.remove("show");$("#shell").inert=false;}
+async function doResetJournal(){const btn=$("#resetJournalDo");btn.disabled=true;
+  try{const res=await(await postJSON("/api/journal/reset",{confirm:"매매일지 초기화",journal_since:RESET_JOURNAL_SINCE})).json();
+    if(!res.ok)throw new Error(res.error||"초기화 실패");closeResetJournal();await loadAll();location.hash="#dashboard";route();
+    const n=(res.removed&&res.removed.trades)||0;toast(`매매일지 ${n}건을 삭제하고 ${res.journal_since}부터 새로 시작합니다`);}
+  catch(e){toast("매매일지를 초기화하지 못했습니다. 잠시 후 다시 시도해 주세요");btn.disabled=false;}}
 function openDelAcct(){$("#delConfirm").value="";$("#delAcctDo").disabled=true;$("#shell").inert=true;$("#delAcctBg").classList.add("show");$("#delConfirm").focus();}
 function closeDelAcct(){$("#delAcctBg").classList.remove("show");$("#shell").inert=false;}
 async function doDelAcct(){const btn=$("#delAcctDo");btn.disabled=true;
@@ -2212,11 +2231,14 @@ $("#f_risk").oninput=()=>{syncRisk('f_sl','f_risk',editCtx(),'risk');updateRR();
 $("#f_tp").oninput=updateRR;$("#f_tp2").oninput=updateRR;$("#f_tp3").oninput=updateRR;
 $("#modalBg").onclick=e=>{if(e.target===$("#modalBg"))closeModal();};
 $("#bulkBg").onclick=e=>{if(e.target===$("#bulkBg"))closeBulk();};
+$("#resetJournalClose").onclick=closeResetJournal;$("#resetJournalCancel").onclick=closeResetJournal;$("#resetJournalDo").onclick=doResetJournal;
+$("#resetJournalConfirm").oninput=e=>{$("#resetJournalDo").disabled=e.target.value.trim()!=="매매일지 초기화";};
+$("#resetJournalBg").onclick=e=>{if(e.target===$("#resetJournalBg"))closeResetJournal();};
 $("#delAcctClose").onclick=closeDelAcct;$("#delAcctCancel").onclick=closeDelAcct;$("#delAcctDo").onclick=doDelAcct;
 $("#delConfirm").oninput=e=>{$("#delAcctDo").disabled=e.target.value.trim()!=="삭제";};
 $("#delAcctBg").onclick=e=>{if(e.target===$("#delAcctBg"))closeDelAcct();};
 /* 열린 모달의 .modal 엘리먼트 (없으면 null) */
-function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#pintBg").classList.contains("show")?$("#pintBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):($("#cmdkBg").classList.contains("show")?$("#cmdkBg .cmdk"):null))));}
+function openModalEl(){return $("#modalBg").classList.contains("show")?$("#modalBg .modal"):($("#pintBg").classList.contains("show")?$("#pintBg .modal"):($("#bulkBg").classList.contains("show")?$("#bulkBg .modal"):($("#resetJournalBg").classList.contains("show")?$("#resetJournalBg .modal"):($("#delAcctBg").classList.contains("show")?$("#delAcctBg .modal"):($("#cmdkBg").classList.contains("show")?$("#cmdkBg .cmdk"):null)))));}
 /* 포커스 트랩 — Tab이 모달 밖(브라우저 크롬)으로 새지 않게 첫↔끝 순환 */
 function trapTab(e){const m=openModalEl();if(!m)return;
   const f=[...m.querySelectorAll('button,[href],input,select,textarea,summary,[tabindex]:not([tabindex="-1"])')].filter(el=>!el.disabled&&el.offsetParent!==null);
@@ -2233,7 +2255,7 @@ document.addEventListener("keydown",e=>{
   if(e.key==="Tab"){trapTab(e);return;}
   if(e.key!=="Escape")return;
   if($("#cmdkBg").classList.contains("show"))closeCmdk();
-  else if($("#modalBg").classList.contains("show"))closeModal();else if($("#pintBg").classList.contains("show"))closePint();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
+  else if($("#modalBg").classList.contains("show"))closeModal();else if($("#pintBg").classList.contains("show"))closePint();else if($("#bulkBg").classList.contains("show"))closeBulk();else if($("#resetJournalBg").classList.contains("show"))closeResetJournal();else if($("#delAcctBg").classList.contains("show"))closeDelAcct();});
 /* 커스텀 다크 툴팁 — [data-tip] 위임(브라우저 기본 title 대체) */
 (function(){const tip=$("#tip");if(!tip)return;let cur=null;
   const move=e=>{if(!tip.classList.contains('show'))return;const r=tip.getBoundingClientRect();

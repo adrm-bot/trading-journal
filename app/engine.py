@@ -1161,8 +1161,9 @@ def _parse(s):
         return None
 
 
-def analyze_user(uid, be_pct=None):
-    trades = db.get_trades(uid)
+def analyze_user(uid, be_pct=None, since=None):
+    """행동·성과 집계. since(YYYY-MM-DD)가 있으면 해당 날짜 이후 청산 거래만 사용."""
+    trades = db.get_trades(uid, since=since)
     rows = [{"실현손익(USDT)": t["pnl"], "상태": t["status"], "심볼": t["symbol"],
              "방향": t["direction"], "청산시각": _parse(t["closed_at"]), "trade_id": t["trade_id"],
              "entry": t["entry"], "qty": t["qty"]} for t in trades]
