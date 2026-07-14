@@ -204,6 +204,26 @@ def _binance_window_start(snapshot_end_ms, lookback):
     return (exact // 86_400_000) * 86_400_000
 
 
+def _binance_income_range(ex, start, end):
+    """Return every income row in an inclusive Binance time window.
+
+    Binance exposes page-based pagination for this endpoint. Advancing by the
+    timestamp of the last row can skip records when more than 1,000 entries
+    share that timestamp, so keep the time window stable and advance ``page``.
+    """
+    rows, page = [], 1
+    while True:
+        batch = ex.fapiPrivateGetIncome({
+            "startTime": int(start), "endTime": int(end),
+            "page": page, "limit": 1000,
+        }) or []
+        rows.extend(batch)
+        if len(batch) < 1000:
+            break
+        page += 1
+    return rows
+
+
 def _binance_symbols_and_funding(ex, lookback, now=None):
     now = int(now if now is not None else ex.milliseconds())
     start = _binance_window_start(now, lookback)
@@ -213,33 +233,25 @@ def _binance_symbols_and_funding(ex, lookback, now=None):
     cur = start
     while cur < now:
         e = min(cur + week, now)
-        ws = cur
-        while True:  # 윈도 내 페이지네이션(1000 초과 시 최근 거래 누락 방지)
-            batch = ex.fapiPrivateGetIncome({"startTime": ws, "endTime": e, "limit": 1000})
-            if not batch:
-                break
-            for inc in batch:
-                # 주간 윈도 경계와 페이지 경계가 겹쳐도 같은 원장 행을 두 번 더하지 않는다.
-                ikey = str(inc.get("tranId") or "") or (
-                    str(inc.get("incomeType") or ""), str(inc.get("symbol") or ""),
-                    int(inc.get("time") or 0), str(inc.get("income") or ""),
-                    str(inc.get("info") or ""),
-                )
-                if ikey in seen_income:
-                    continue
-                seen_income.add(ikey)
-                typ = inc.get("incomeType")
-                sym = inc.get("symbol") or ""
-                # 심볼 발견: 거래가 있었으면 REALIZED_PNL이든 COMMISSION이든 잡는다(누락 방지)
-                if sym and typ in ("REALIZED_PNL", "COMMISSION", "FUNDING_FEE"):
-                    symbols.add(sym)
-                if typ == "FUNDING_FEE" and sym:  # 시각 보존 → 포지션별 귀속용
-                    fevents.setdefault(sym, []).append((int(inc.get("time") or 0), _f(inc, "income")))
-                if typ == "REALIZED_PNL" and sym:
-                    realized_ledger[sym] = realized_ledger.get(sym, 0.0) + _f(inc, "income")
-            if len(batch) < 1000:
-                break
-            ws = int(batch[-1].get("time") or ws) + 1
+        for inc in _binance_income_range(ex, cur, e):
+            typ = str(inc.get("incomeType") or "")
+            sym = inc.get("symbol") or ""
+            tran_id = inc.get("tranId")
+            # Binance only guarantees tranId uniqueness within an incomeType.
+            # A commission and realized-PnL row may therefore share a tranId.
+            ikey = ((typ, str(tran_id)) if tran_id not in (None, "") else (
+                typ, str(sym), int(inc.get("time") or 0),
+                str(inc.get("income") or ""), str(inc.get("info") or ""),
+            ))
+            if ikey in seen_income:
+                continue
+            seen_income.add(ikey)
+            if sym and typ in ("REALIZED_PNL", "COMMISSION", "FUNDING_FEE"):
+                symbols.add(sym)
+            if typ == "FUNDING_FEE" and sym:
+                fevents.setdefault(sym, []).append((int(inc.get("time") or 0), _f(inc, "income")))
+            if typ == "REALIZED_PNL" and sym:
+                realized_ledger[sym] = realized_ledger.get(sym, 0.0) + _f(inc, "income")
         cur = e + 1
     return symbols, fevents, realized_ledger
 

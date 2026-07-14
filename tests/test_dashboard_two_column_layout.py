@@ -18,7 +18,7 @@ def test_dashboard_keeps_two_column_workspace_and_journal_dock():
     assert ".dash-resizer{position:relative;align-self:stretch" in CSS
     assert ".dash3.layout-edit .dash-resizer{cursor:col-resize}" in CSS
     assert "@media(min-width:961px)" in CSS
-    assert "@media(max-width:960px)" in CSS
+    assert "@media(max-width:1280px)" in CSS
 
 
 def test_dashboard_uses_exchange_panel_chrome_inside_current_columns():
@@ -137,7 +137,45 @@ def test_market_defaults_are_compact_and_relative_strength_is_split_from_flow():
     assert "marketPanel('rs'" in HTML and "{span:6,min:3}" in HTML
     assert "marketPanel('flow'" in HTML and "{span:6,min:3}" in HTML
     assert '#view-dashboard .rgc .rgrow{display:grid;' in CSS
-    assert ".dash-mkt{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start" in CSS
+    assert ".dash-mkt{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start" in CSS
+
+
+def test_market_grid_packs_short_panels_beside_tall_panels():
+    assert "grid-auto-flow:row dense;grid-auto-rows:8px" in CSS
+    assert ".dash-mkt>.dash-panel{grid-row-end:span var(--panel-row-span,12)}" in CSS
+    assert ".panel-placeholder{grid-column:span var(--panel-span,12);grid-row-end:span var(--panel-row-span,12)" in CSS
+    assert "function syncPanelGridRow(panel)" in HTML
+    assert "Math.ceil((h+gap)/(row+gap))" in HTML
+    assert "syncPanelGridRow(panel);updatePanelDim(panel,zone)" in HTML
+    assert "ph.style.setProperty('--panel-row-span'" in HTML
+    assert ".dash-mkt>.dash-panel{grid-column:1!important;grid-row:auto!important}" in CSS
+
+
+def test_dashboard_resize_and_drop_use_deliberate_snap_points():
+    assert "const DASH_SPAN_STOPS=[3,4,6,8,9,12]" in HTML
+    assert "const DASH_STACK_BP=1280" in HTML
+    assert "function snapPanelSpan(" in HTML
+    assert "function snapPanelHeight(" in HTML
+    assert "Math.round(Number(value||min)/20)*20" in HTML
+    assert "function dashDropRef(" in HTML
+    assert "function panelEffectiveMinHeight(" in HTML
+    assert "콘텐츠 최소" in HTML
+    assert "zone.classList.add('grid-active')" in HTML
+    assert "zone.classList.remove('grid-active')" in HTML
+    assert "폭 ${span}/12 · 높이 ${h}px" in HTML
+    assert ".dash-mkt.grid-active{" in CSS
+    assert "width:var(--ghost-w,180px)" in CSS
+
+
+def test_regime_quadrant_uses_korean_type_and_places_summary_outside_plot():
+    assert "const S=244,C=S/2,PAD=28" in HTML
+    assert 'class="rgquad-label"' in HTML
+    assert 'font-family="monospace"' not in HTML
+    assert 'class="rgq-figure"' in HTML
+    assert 'class="rgquad-readout"' in HTML
+    assert "x축 가격 변화 · y축 OI 변화 · 2시간" in HTML
+    assert "rgquad-cap" not in HTML
+    assert "#view-dashboard .rgc .rgrow{display:grid;grid-template-columns:minmax(0,1fr);gap:12px" in CSS
 
 
 def test_dashboard_uses_full_viewport_width_and_equal_height_journal_rows():
@@ -195,6 +233,7 @@ def test_relative_strength_ranks_btc_as_an_explicit_baseline_and_starts_collapse
 
 
 def test_korean_information_hierarchy_uses_body_type_not_monospace():
+    assert "--f-mono:'JetBrains Mono','Pretendard','Pretendard Variable',\"Malgun Gothic\"" in CSS
     assert ".eyebrow{font-family:var(--f-mono)" in CSS
     assert ".section-title{font-family:var(--f-body);font-size:var(--fs-sm);font-weight:620" in CSS
     assert ".panel-chrome-title{position:relative" in CSS

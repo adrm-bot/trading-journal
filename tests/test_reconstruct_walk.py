@@ -237,6 +237,44 @@ def test_binance_realized_ledger_reconciliation_includes_open_partial_closes():
     assert audit == {"symbol": "BTCUSDT", "ledger": 10.25, "fills": 10.25, "delta": 0.0}
 
 
+def test_binance_income_pages_without_dropping_same_tran_id_across_types():
+    day = 86_400_000
+
+    class FakeExchange:
+        def __init__(self):
+            self.pages = []
+
+        def milliseconds(self):
+            return 7 * day
+
+        def fapiPrivateGetIncome(self, params):
+            page = int(params["page"])
+            self.pages.append(page)
+            if page == 1:
+                rows = [
+                    {"incomeType": "COMMISSION", "tranId": 7,
+                     "symbol": "ONDOUSDT", "income": "-0.1", "time": 1},
+                    {"incomeType": "REALIZED_PNL", "tranId": 7,
+                     "symbol": "ONDOUSDT", "income": "-82.29", "time": 1},
+                ]
+                rows.extend(
+                    {"incomeType": "TRANSFER", "tranId": 100 + i,
+                     "symbol": "", "income": "0", "time": 1}
+                    for i in range(998)
+                )
+                return rows
+            if page == 2:
+                return [{"incomeType": "REALIZED_PNL", "tranId": 9999,
+                         "symbol": "ONDOUSDT", "income": "-1", "time": 1}]
+            raise AssertionError(f"unexpected page {page}")
+
+    ex = FakeExchange()
+    symbols, _, ledger = engine._binance_symbols_and_funding(ex, lookback=7, now=7 * day)
+    assert ex.pages == [1, 2]
+    assert "ONDOUSDT" in symbols
+    assert ledger["ONDOUSDT"] == pytest.approx(-83.29)
+
+
 def test_binance_realized_ledger_mismatch_stops_import():
     fills = [{"time": 2_000, "realizedPnl": "30"}]
     with pytest.raises(RuntimeError, match="기존 일지는 유지"):
