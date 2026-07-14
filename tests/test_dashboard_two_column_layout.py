@@ -100,12 +100,26 @@ def test_journal_view_controls_change_only_dock_cards():
     assert "applyDashDensity" not in HTML
     assert '#view-dashboard[data-density=' not in CSS
     assert '#jdock[data-view="summary"] .jcard:not(.pend) .jbody' in CSS
+    assert '#jdock[data-view="summary"] .jstrategy' in CSS
+    assert '#jdock[data-view="summary"] .jlevels-block' in CSS
     assert '#jdock[data-view="balanced"] .jreview' in CSS
+    assert '#jdock[data-view="balanced"] .jmemo-block' in CSS
+    assert '#jdock[data-view="balanced"] .jplan{display:-webkit-box' in CSS
     assert '#jdock[data-view="detail"] .jcard{min-height:184px' in CSS
     assert '#jdock[data-view="detail"] .jbody{margin-top:2px}' in CSS
-    assert '#jdock[data-view="summary"] .jlevels{display:none}' not in CSS
     assert 'class="jtags jkeytags"' in HTML
+    assert 'class="jsection jlevels-block' in HTML
+    assert "['SL',r.sl,'lvsl'],['TP1',r.tp,'lvtp'],['TP2',r.tp2,'lvtp'],['TP3',r.tp3,'lvtp']" in HTML
+    assert "journalTextBlock('jplan-block','진입 근거',r.plan,'jplan')" in HTML
+    assert "journalTextBlock('jmemo-block','메모',r.memo,'jmemo')" in HTML
     assert '${planLevels(r)}' in HTML
+
+
+def test_mobile_journal_views_keep_separate_heights_and_saved_state():
+    assert "function mobileJournalDefaultHeight(v)" in HTML
+    assert "function journalDockHeight(v)" in HTML
+    assert "all.mobileDockHeights" in HTML
+    assert "if(innerWidth<=560)setDockHeight(journalDockHeight(v),false)" in HTML
 
 
 def test_dashboard_panel_spacing_is_fixed_across_journal_views():
@@ -201,6 +215,10 @@ def test_market_panels_share_one_vertical_scroll_per_column():
     assert ".dash-mkt>.dash-panel,.dash-me>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h" in CSS
     assert "var(--panel-natural-h,0px));max-height:none;grid-template-rows:30px auto" in CSS
     assert ".dash-mkt>.dash-panel>.panel-content,.dash-me>.dash-panel>.panel-content{overflow:visible" in CSS
+    assert "grid-template-columns:minmax(0,1fr) 5px minmax(330px,var(--brief-w));gap:0" in CSS
+    assert "padding-right:var(--dash-gap,var(--s4));container:marketcol/inline-size" in CSS
+    assert "padding-left:var(--dash-gap,var(--s4));container:briefcol/inline-size" in CSS
+    assert '.dash-resizer::before{content:"";position:absolute;left:0' in CSS
     assert "--panel-user-h" in HTML
     assert "function bindDashboardNaturalHeights()" in HTML
     assert "#view-dashboard .dash-zone > .dash-panel" in HTML

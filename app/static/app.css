@@ -121,15 +121,15 @@ tr.grow:focus-visible td{background:var(--card-2)}
 #view-dashboard .cards{margin-top:var(--s6)}  /* 스켈레톤 등 라벨 없는 경우의 섹션 여백 */
 #view-dashboard .section-title + .cards{margin-top:0}  /* '핵심 지표' 라벨이 앞서면 라벨 마진(24/0/12)이 간격 담당 — 이중 여백 방지 */
 /* 대시보드 작업영역: 중앙 시장 + Binance형 우측 개인 브리프 + 하단 매매일지 */
-.dash3{--brief-w:clamp(400px,27vw,520px);display:grid;grid-template-columns:minmax(0,1fr) 5px minmax(330px,var(--brief-w));gap:0 var(--dash-gap,var(--s4));align-items:start}
+.dash3{--brief-w:clamp(400px,27vw,520px);display:grid;grid-template-columns:minmax(0,1fr) 5px minmax(330px,var(--brief-w));gap:0;align-items:start}
 .dash-me,.dash-mkt{min-width:0}
-.dash-me{display:grid;align-content:start;gap:var(--dash-gap,var(--s4));padding-left:0;container:briefcol/inline-size}
+.dash-me{display:grid;align-content:start;gap:var(--dash-gap,var(--s4));padding-left:var(--dash-gap,var(--s4));container:briefcol/inline-size}
 .dash-me>.section-title:first-child{margin-top:0}
-.dash-mkt{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start;grid-auto-flow:row dense;grid-auto-rows:8px;gap:var(--dash-gap,var(--s4));padding-right:0;container:marketcol/inline-size}
+.dash-mkt{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start;grid-auto-flow:row dense;grid-auto-rows:8px;gap:var(--dash-gap,var(--s4));padding-right:var(--dash-gap,var(--s4));container:marketcol/inline-size}
 .dash-mkt.grid-active{background-image:linear-gradient(to right,rgba(var(--info-rgb),.08) 1px,transparent 1px);background-size:calc((100% + var(--dash-gap,var(--s4)))/12) 100%}
 .dash-mkt>.section-title:first-child{margin-top:0}
 .dash-resizer{position:relative;align-self:stretch;min-height:100%;background:transparent;touch-action:none}
-.dash-resizer::before{content:"";position:absolute;left:2px;top:0;bottom:0;width:1px;background:var(--line);transition:background .12s,box-shadow .12s}
+.dash-resizer::before{content:"";position:absolute;left:0;top:0;bottom:0;width:1px;background:var(--line);transition:background .12s,box-shadow .12s}
 .dash3.layout-edit .dash-resizer{cursor:col-resize}
 .dash3.layout-edit .dash-resizer:hover::before,.dash3.layout-edit .dash-resizer:focus-visible::before{background:var(--frost);box-shadow:0 0 0 2px rgba(var(--info-rgb),.16)}
 
@@ -489,9 +489,17 @@ td .num,td.num{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
 .jlevels .lv{font-family:var(--f-mono);font-size:var(--fs-xs);font-weight:510;padding:2px 8px;border-radius:var(--r-badge);background:var(--card-2);color:var(--pebble)}
 .jlevels .lvsl{background:var(--neg-soft);color:var(--ember)}
 .jlevels .lvtp{background:var(--pos-soft);color:var(--mint)}
+.jlevels .lvempty{border:1px dashed var(--line-2);background:transparent;color:var(--dim)}
+.jlevels .lvempty span{color:var(--fog)}
 .jlegs{cursor:help} .jlegs .lvleg.pos{background:var(--pos-soft);color:var(--mint)} .jlegs .lvleg.neg{background:var(--neg-soft);color:var(--ember)}
-.jplan{margin-top:8px;font-size:var(--fs-sm);color:var(--text);line-height:1.5;overflow-wrap:anywhere}
-.jmemo{margin-top:4px;font-size:var(--fs-sm);color:var(--muted);overflow-wrap:anywhere}
+.jsection{min-width:0;margin-top:9px}
+.jstrategy,.jlevels-block,.jtext-block{display:grid;grid-template-columns:68px minmax(0,1fr);gap:8px;align-items:start}
+.jsection-label{padding-top:2px;color:var(--fog);font:500 var(--fs-micro)/1.35 var(--f-body);letter-spacing:.01em;white-space:nowrap}
+.jstrategy .jtags,.jlevels-block .jlevels{margin-top:0}
+.jempty-value{color:var(--dim);font-size:var(--fs-xs);line-height:1.45}
+.jplan{margin:0;font-size:var(--fs-sm);color:var(--text);line-height:1.5;overflow-wrap:anywhere}
+.jmemo{margin:0;font-size:var(--fs-sm);color:var(--muted);line-height:1.5;overflow-wrap:anywhere}
+.jplan.jempty-value,.jmemo.jempty-value{color:var(--dim);font-size:var(--fs-xs)}
 .jmis{margin-top:6px}
 .rtag.mistake{background:var(--neg-soft);color:var(--ember);border-color:rgba(var(--neg-rgb),.4)}
 .jreview{margin-top:6px;font-size:var(--fs-sm);color:var(--moonlight);line-height:1.5;border-left:2px solid var(--warn);padding-left:9px;overflow-wrap:anywhere}
@@ -1073,26 +1081,41 @@ tr.viol td{background:linear-gradient(180deg,rgba(var(--neg-rgb),.04),transparen
 #view-dashboard .dash-me .mcard{min-height:76px;padding:10px 11px}
 #view-dashboard .dash-me .mcard .mval{font-size:19px;line-height:1.12}
 
-/* 요약·균형·상세는 대시보드가 아니라 하단 매매일지 카드만 바꾼다. */
+/* 매매일지 보기 단계: 요약=체결 핵심, 균형=계획과 근거, 상세=복기 전체 */
 #jdock[data-view="summary"] .jdock-body .jfeed{grid-template-columns:repeat(auto-fill,minmax(min(100%,280px),1fr));gap:8px}
-#jdock[data-view="summary"] .jcard{min-height:118px;padding:11px 13px}
+#jdock[data-view="summary"] .jcard{min-height:108px;padding:10px 12px}
 #jdock[data-view="summary"] .jcard:not(.pend) .jbody,
+#jdock[data-view="summary"] .jstrategy,
+#jdock[data-view="summary"] .jlevels-block,
+#jdock[data-view="summary"] .jtext-block,
+#jdock[data-view="summary"] .jgrades,
+#jdock[data-view="summary"] .jmis,
+#jdock[data-view="summary"] .jreview,
+#jdock[data-view="summary"] .jchart,
 #jdock[data-view="summary"] .jlegs{display:none}
 #jdock[data-view="summary"] .jhead{gap:8px}
 #jdock[data-view="summary"] .jhl{font-size:var(--fs-sm);gap:5px}
 #jdock[data-view="summary"] .jhr{white-space:nowrap}
 #jdock[data-view="summary"] .jmeta{margin-top:6px;font-size:var(--fs-micro)}
 #jdock[data-view="summary"] .jstats{font-size:var(--fs-micro);gap:2px 9px}
-#jdock[data-view="summary"] .jlevels{gap:4px;margin-top:6px}
-#jdock[data-view="summary"] .jlevels .lv{font-size:var(--fs-micro);padding:1px 6px}
-#jdock[data-view="summary"] .jkeytags{margin-top:6px}
+#jdock[data-view="summary"] .jstat-qty,
+#jdock[data-view="summary"] .jstat-risk,
+#jdock[data-view="summary"] .jstat-split{display:none}
+#jdock[data-view="summary"] .jcard.pend .jbody{margin-top:6px}
 
 #jdock[data-view="balanced"] .jdock-body .jfeed{grid-template-columns:repeat(auto-fill,minmax(min(100%,420px),1fr));gap:12px}
-#jdock[data-view="balanced"] .jcard{min-height:146px;padding:12px 14px}
+#jdock[data-view="balanced"] .jcard{min-height:168px;padding:12px 14px}
 #jdock[data-view="balanced"] .jgrades,
+#jdock[data-view="balanced"] .jmemo-block,
 #jdock[data-view="balanced"] .jmis,
 #jdock[data-view="balanced"] .jreview,
-#jdock[data-view="balanced"] .jchart{display:none}
+#jdock[data-view="balanced"] .jchart,
+#jdock[data-view="balanced"] .jlegs,
+#jdock[data-view="balanced"] .jstrategy.is-empty,
+#jdock[data-view="balanced"] .jlevels-block.is-empty,
+#jdock[data-view="balanced"] .jplan-block.is-empty{display:none}
+#jdock[data-view="balanced"] .jplan{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}
+#jdock[data-view="balanced"] .jlevels .lvempty{display:none}
 
 #jdock[data-view="detail"] .jdock-body .jfeed{grid-template-columns:repeat(auto-fill,minmax(min(100%,560px),1fr));gap:16px}
 #jdock[data-view="detail"] .jcard{min-height:184px;padding:16px 18px}
@@ -1236,6 +1259,13 @@ tr.viol td{background:linear-gradient(180deg,rgba(var(--neg-rgb),.04),transparen
   .pagehead .cmdk-trigger,#actions .page-action{flex:1 1 96px;min-width:0}
   #view-dashboard{--panel-pad-x:14px;--panel-pad-y:14px;--dash-gap:14px}
   #jdock[data-view] .jdock-body .jfeed{grid-template-columns:1fr}
+  #jdock[data-view="summary"] .jcard{min-height:104px}
+  #jdock[data-view="balanced"] .jcard{min-height:164px}
+  #jdock[data-view="detail"] .jcard{min-height:260px;padding:14px}
+  #jdock .jstrategy,#jdock .jlevels-block,#jdock .jtext-block{grid-template-columns:62px minmax(0,1fr);gap:7px}
+  #jdock .jlevels{gap:5px}
+  #jdock .jlevels .lv{padding:3px 7px}
+  #jdock[data-view="detail"] .jsection{margin-top:10px}
   #view-dashboard .today-row{grid-template-columns:minmax(0,1fr) auto auto}
   #view-dashboard .today-spacer{display:none}
   #view-dashboard .today-row .tt{grid-column:1/-1;text-align:left;white-space:normal}

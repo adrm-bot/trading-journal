@@ -345,15 +345,17 @@ function tagChips(r){
   if(r.emotion)out.push(`<span class="rtag emo">${esc(r.emotion)}</span>`);
   return out.join("");
 }
-/* 계획 레벨 — 카드에 SL·TP1·TP2·TP3 바로 표시(있는 것만) */
+function strategyBlock(r){
+  const tags=tagChips(r);
+  return `<div class="jsection jstrategy${tags?'':' is-empty'}"><span class="jsection-label">전략·셋업</span>${tags?`<div class="jtags jkeytags">${tags}</div>`:`<span class="jempty-value">미기입</span>`}</div>`;
+}
+/* 계획 레벨 — 상세에서는 SL·TP1·TP2·TP3 슬롯을 모두, 균형에서는 입력값만 표시 */
 function planLevels(r){
   const has=v=>v!=null&&v!=='';
-  const lv=[];
-  if(has(r.sl))lv.push(`<span class="lv lvsl">SL ${fmtP(r.sl)}</span>`);
-  if(has(r.tp))lv.push(`<span class="lv lvtp">TP1 ${fmtP(r.tp)}</span>`);
-  if(has(r.tp2))lv.push(`<span class="lv lvtp">TP2 ${fmtP(r.tp2)}</span>`);
-  if(has(r.tp3))lv.push(`<span class="lv lvtp">TP3 ${fmtP(r.tp3)}</span>`);
-  return lv.length?`<div class="jlevels">${lv.join("")}</div>`:"";
+  const levels=[['SL',r.sl,'lvsl'],['TP1',r.tp,'lvtp'],['TP2',r.tp2,'lvtp'],['TP3',r.tp3,'lvtp']];
+  const any=levels.some(([,v])=>has(v));
+  const chips=levels.map(([label,v,cls])=>`<span class="lv ${cls}${has(v)?'':' lvempty'}"><span>${label}</span> ${has(v)?fmtP(v):'—'}</span>`).join('');
+  return `<div class="jsection jlevels-block${any?'':' is-empty'}"><span class="jsection-label">계획 가격</span><div class="jlevels">${chips}</div></div>`;
 }
 /* 청산 가격 구간 파싱 — 원시 체결은 서버에서 읽기 쉬운 VWAP 구간으로 압축 */
 function legRows(r){
@@ -379,6 +381,10 @@ function gradeBadges(r){const b=[];
   if(r.exec_grade)b.push(`<span class="gb ${gq(r.exec_grade)}" data-tip="실행 등급 · 계획대로 쳤나(손익 무관)">실행 ${esc(r.exec_grade)}</span>`);
   if(r.conviction!=null&&r.conviction!=='')b.push(`<span class="gb g-conv" data-tip="진입 확신도 1~5">확신 ${esc(String(r.conviction))}/5</span>`);
   return b.length?`<div class="jgrades">${b.join("")}</div>`:"";}
+function journalTextBlock(blockClass,label,value,valueClass){
+  const filled=value!=null&&String(value).trim()!=='';
+  return `<div class="jsection jtext-block ${blockClass}${filled?'':' is-empty'}"><span class="jsection-label">${label}</span><div class="${valueClass}${filled?'':' jempty-value'}">${filled?esc(String(value)):'미기입'}</div></div>`;
+}
 function tradeCard(r){
   const dir=r.direction?`<span class="badge trade-side ${r.direction==='Long'?'long':'short'}">${dirKo(r.direction)}</span>`:"";
   const xr=exitBadge(r)?" "+exitBadge(r):"";
@@ -390,25 +396,26 @@ function tradeCard(r){
   const svb=r.stop_violated?` <span class="badge sv" data-tip="계획 손절가보다 불리한 가격에서 청산됐습니다. 초과손실은 가격 차이와 수량으로 계산하며 수수료는 제외합니다.">${ICONS.warn}손절 미준수${r.over_loss?` -$${Math.round(r.over_loss).toLocaleString()}`:''}</span>`:'';
   const eff=(!pending&&r.r!=null&&r.r>0&&r.exit_eff!=null)?` <span class="xeff ${r.exit_eff>=1?'pos':''}" data-tip="청산 효율 ${Math.round(r.exit_eff*100)}%. 실현 R을 TP1 기준 계획 R:R로 나눈 값입니다.">${Math.round(r.exit_eff*100)}%</span>`:'';
   const qrb=((DATA.summary&&DATA.summary.quick_reentry_ids)||[]).includes(r.trade_id)?` <span class="badge qr" data-tip="직전 손실 청산 후 30분 이내에 종료된 거래입니다. 분할 청산 포함 여부는 거래 상세에서 확인할 수 있습니다.">30분 재진입</span>`:'';
-  let body,keyTags="";
-  if(pending){body=`<span class="btn sm jfill">${ICONS.pencil} 진입 판단 입력</span>`;}
-  else{const t=tagChips(r);
-    keyTags=t?`<div class="jtags jkeytags">${t}</div>`:"";
+  const keyTags=strategyBlock(r);
+  const planBlock=journalTextBlock('jplan-block','진입 근거',r.plan,'jplan');
+  const memoBlock=journalTextBlock('jmemo-block','메모',r.memo,'jmemo');
+  let body;
+  if(pending){body=`<span class="btn sm jfill">${ICONS.pencil} 진입 판단 입력</span>${planBlock}${memoBlock}`;}
+  else{
     const mis=(r.mistake_tag||"").split(",").map(s=>s.trim()).filter(Boolean).map(m=>`<span class="rtag mistake">${esc(m)}</span>`).join("");
     const cu=(r.chart_url||"").trim(), chart=/^https?:\/\//i.test(cu)?`<div class="jchart"><a href="${esc(cu)}" target="_blank" rel="noopener noreferrer">차트 보기 ↗</a></div>`:"";
     const gb=gradeBadges(r);
     body=gb
-      +(r.plan?`<div class="jplan">${esc(r.plan)}</div>`:"")
-      +(r.memo?`<div class="jmemo">“${esc(r.memo)}”</div>`:"")
+      +planBlock
+      +memoBlock
       +(mis?`<div class="jtags jmis">${mis}</div>`:"")
       +(r.review?`<div class="jreview"><span class="jrl">복기</span> ${esc(r.review)}</div>`:"")
-      +chart
-      +((!t&&!gb&&!r.plan&&!r.memo&&!mis&&!r.review)?`<div class="jmemo">거래 상세에서 계획과 진입 근거를 입력할 수 있습니다.</div>`:"");}
+      +chart;}
   const rpct=r.pnl_pct!=null?r.pnl_pct:r.move_pct;
-  const mv=rpct==null?"":`<span class="jstat-group ${rpct>=0?'pos':'neg'}" data-tip="${r.pnl_pct!=null?'실현손익을 누적 진입 명목가로 나눈 손익률입니다.':'진입·청산 VWAP의 가격 변동률입니다.'}">수익률 ${(rpct>=0?'+':'')+rpct}%</span>`;
-  const risk=r.risk_usd?`<span class="jstat-group">리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}</span>`:"";
-  const split=(r.exit_count>1||r.raw_exit_count>1)?`<span class="jstat-group muted"${r.raw_exit_count?` data-tip="원시 청산 주문 ${r.raw_exit_count}개를 가격 기준 VWAP ${r.exit_count||1}구간으로 정리했습니다."`:''}>청산 ${r.exit_count||1}구간</span>`:"";
-  const stats=`<div class="jstats"><span class="jstat-group">진입 <b>${fmtP(r.entry)}</b> <span aria-hidden="true">→</span> 청산 <b>${fmtP(r.exit)}</b></span><span class="jstat-group">수량 ${fmtP(r.qty)}</span>${mv}${risk}${split}</div>`;
+  const mv=rpct==null?"":`<span class="jstat-group jstat-return ${rpct>=0?'pos':'neg'}" data-tip="${r.pnl_pct!=null?'실현손익을 누적 진입 명목가로 나눈 손익률입니다.':'진입·청산 VWAP의 가격 변동률입니다.'}">수익률 ${(rpct>=0?'+':'')+rpct}%</span>`;
+  const risk=r.risk_usd?`<span class="jstat-group jstat-risk">리스크 <b>$${Math.round(r.risk_usd).toLocaleString()}</b>${r.risk_pct!=null?` (${r.risk_pct}%)`:""}</span>`:"";
+  const split=(r.exit_count>1||r.raw_exit_count>1)?`<span class="jstat-group jstat-split muted"${r.raw_exit_count?` data-tip="원시 청산 주문 ${r.raw_exit_count}개를 가격 기준 VWAP ${r.exit_count||1}구간으로 정리했습니다."`:''}>청산 ${r.exit_count||1}구간</span>`:"";
+  const stats=`<div class="jstats"><span class="jstat-group jstat-route">진입 <b>${fmtP(r.entry)}</b> <span aria-hidden="true">→</span> 청산 <b>${fmtP(r.exit)}</b></span><span class="jstat-group jstat-qty">수량 ${fmtP(r.qty)}</span>${mv}${risk}${split}</div>`;
   const meta=[esc((toKST(r.closed_at)||{}).str||''),esc(EXN(r.exchange)),r.leverage?r.leverage+'x':'',(r.liquidated&&!r.exit_reason)?ICONS.liq+'청산':''].filter(Boolean).join(' · ');
   return `<div class="jcard ${pending?'pend':''}" data-id="${esc(r.trade_id)}" tabindex="0" role="button" aria-label="${esc(r.symbol)} ${dirKo(r.direction)} · ${pending?'계획 미기입 · 채우기':'상세 보기·편집'}">
     <div class="jhead"><div class="jhl"><b class="trade-symbol">${esc(r.symbol)}</b>${dir}${xr}${svb}${qrb}${r.preplanned?' <span class="badge pp" data-tip="청산 전에 작성한 계획이 자동 연결된 거래입니다.">사전 기입</span>':''}${r.status==='복기완료'?' <span class="badge done">복기완료</span>':''}</div>
@@ -985,7 +992,9 @@ function dashLocked(){try{return localStorage.getItem(dashKey('locked'))==='1';}
 const JOURNAL_VIEWS=[['summary','요약'],['balanced','균형'],['detail','상세']];
 function journalView(){try{const v=localStorage.getItem(dashKey('journal-view'))||'balanced';return JOURNAL_VIEWS.some(x=>x[0]===v)?v:'balanced';}catch(e){return'balanced';}}
 function journalViewControls(){const cur=journalView();return `<div class="jdock-density" role="group" aria-label="매매일지 카드 보기">${JOURNAL_VIEWS.map(([v,label])=>`<button type="button" class="journal-view-btn" data-journal-view="${v}" aria-pressed="${v===cur}" title="매매일지 ${label} 보기">${label}</button>`).join('')}</div>`;}
-function applyJournalView(v,save){if(!JOURNAL_VIEWS.some(x=>x[0]===v))v='balanced';const dock=document.getElementById('jdock');if(dock)dock.dataset.view=v;document.querySelectorAll('#jdock [data-journal-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.journalView===v)));if(save){try{localStorage.setItem(dashKey('journal-view'),v);}catch(e){}}requestAnimationFrame(sizeDash);}
+function mobileJournalDefaultHeight(v){const ratio=v==='summary'?0.22:v==='detail'?0.56:0.38;return Math.max(140,Math.min(Math.round(innerHeight*.66),Math.round(innerHeight*ratio)));}
+function journalDockHeight(v){const all=getDashLayout();if(innerWidth<=560){const saved=Number(all.mobileDockHeights&&all.mobileDockHeights[v]);return Number.isFinite(saved)&&saved>=120?saved:mobileJournalDefaultHeight(v);}return Number(all.dockHeight)||220;}
+function applyJournalView(v,save){if(!JOURNAL_VIEWS.some(x=>x[0]===v))v='balanced';const dock=document.getElementById('jdock');if(dock)dock.dataset.view=v;document.querySelectorAll('#jdock [data-journal-view]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.journalView===v)));if(save){try{localStorage.setItem(dashKey('journal-view'),v);}catch(e){}if(innerWidth<=560)setDockHeight(journalDockHeight(v),false);}requestAnimationFrame(sizeDash);}
 const DASH_PANEL_LABELS={econ:'주요 일정',strip:'시장 컨텍스트',regime:'시장 레짐',liq:'미결제약정·포지셔닝',rs:'BTC 대비 상대강도',flow:'자금 흐름',liqmap:'예측형 청산맵',today:'오늘 할 일',positions:'보유 포지션',metrics:'핵심 지표',discipline:'규율·습관 비용',behavior:'행동 인사이트',start:'시작하기'};
 const DASH_PANEL_GEOMETRY={
   econ:{height:84,minHeight:72},strip:{height:128,minHeight:104},regime:{height:320,minHeight:280},liq:{height:320,minHeight:220},
@@ -1078,9 +1087,9 @@ function sizeDash(){const dash=document.querySelector('#view-dashboard .dash3');
   dash.classList.add('scrolls');
   dash.style.height=Math.max(260,Math.round(dockTop-dashTop-12))+'px';}
 function toggleDockCollapsed(){const t=document.getElementById('jdockToggle'),host=document.getElementById('view-dashboard');if(!host)return;const c=host.classList.toggle('dock-collapsed');if(t)t.setAttribute('aria-expanded',String(!c));try{localStorage.setItem('jdockCollapsed',c?'1':'');}catch(e){}requestAnimationFrame(sizeDash);}
-function setDockHeight(h,save){const host=document.getElementById('view-dashboard');if(!host)return;h=Math.max(120,Math.min(Math.round(innerHeight*.7),Math.round(h)));host.style.setProperty('--dock-h',h+'px');if(save){const all=getDashLayout();all.dockHeight=h;setDashLayout(all);}requestAnimationFrame(sizeDash);}
-function bindJdock(){const d=document.getElementById('jdock'),t=document.getElementById('jdockToggle'),host=document.getElementById('view-dashboard'),g=document.getElementById('jdockGrip');if(!d||!t||!host)return;const ss=document.getElementById('jdockSort');if(ss)ss.value=DOCK_SORT;document.querySelectorAll('#jdock [data-journal-view]').forEach(b=>b.onclick=()=>applyJournalView(b.dataset.journalView,true));applyJournalView(journalView(),false);const all=getDashLayout();setDockHeight(all.dockHeight||220,false);try{if(localStorage.getItem('jdockCollapsed')==='1'){host.classList.add('dock-collapsed');t.setAttribute('aria-expanded','false');}}catch(e){}t.onclick=toggleDockCollapsed;
-  if(g)g.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();const collapsed=host.classList.contains('dock-collapsed'),body=document.getElementById('jdockBody'),startH=collapsed?(all.dockHeight||220):(body?body.getBoundingClientRect().height:220),startY=e.clientY;let moved=false;const move=ev=>{const dy=startY-ev.clientY;if(Math.abs(dy)>3){moved=true;if(collapsed&&host.classList.contains('dock-collapsed'))toggleDockCollapsed();}if(moved)setDockHeight(startH+dy,false);};const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);if(moved){const b=document.getElementById('jdockBody');setDockHeight(b?b.getBoundingClientRect().height:startH,true);}else toggleDockCollapsed();};document.addEventListener('pointermove',move);document.addEventListener('pointerup',up,{once:true});};}
+function setDockHeight(h,save){const host=document.getElementById('view-dashboard');if(!host)return;h=Math.max(120,Math.min(Math.round(innerHeight*.7),Math.round(h)));host.style.setProperty('--dock-h',h+'px');if(save){const all=getDashLayout();if(innerWidth<=560){all.mobileDockHeights={...(all.mobileDockHeights||{}),[journalView()]:h};}else all.dockHeight=h;setDashLayout(all);}requestAnimationFrame(sizeDash);}
+function bindJdock(){const d=document.getElementById('jdock'),t=document.getElementById('jdockToggle'),host=document.getElementById('view-dashboard'),g=document.getElementById('jdockGrip');if(!d||!t||!host)return;const ss=document.getElementById('jdockSort');if(ss)ss.value=DOCK_SORT;document.querySelectorAll('#jdock [data-journal-view]').forEach(b=>b.onclick=()=>applyJournalView(b.dataset.journalView,true));const view=journalView();applyJournalView(view,false);setDockHeight(journalDockHeight(view),false);try{if(localStorage.getItem('jdockCollapsed')==='1'){host.classList.add('dock-collapsed');t.setAttribute('aria-expanded','false');}}catch(e){}t.onclick=toggleDockCollapsed;
+  if(g)g.onpointerdown=e=>{if(e.button!==0)return;e.preventDefault();const collapsed=host.classList.contains('dock-collapsed'),body=document.getElementById('jdockBody'),startH=collapsed?journalDockHeight(journalView()):(body?body.getBoundingClientRect().height:220),startY=e.clientY;let moved=false;const move=ev=>{const dy=startY-ev.clientY;if(Math.abs(dy)>3){moved=true;if(collapsed&&host.classList.contains('dock-collapsed'))toggleDockCollapsed();}if(moved)setDockHeight(startH+dy,false);};const up=()=>{document.removeEventListener('pointermove',move);document.removeEventListener('pointerup',up);if(moved){const b=document.getElementById('jdockBody');setDockHeight(b?b.getBoundingClientRect().height:startH,true);}else toggleDockCollapsed();};document.addEventListener('pointermove',move);document.addEventListener('pointerup',up,{once:true});};}
 /* R2b: 청산/미결제약정 탭 + OI 블록 */
 function liqTab(btn,which){const card=btn.closest('.liqcard');if(!card)return;LIQ_PANE=which;card.querySelectorAll('.liqtab').forEach(b=>b.classList.toggle('on',b===btn));card.querySelectorAll('.liqpane').forEach(p=>{p.hidden=(p.dataset.pane!==which);});}
 const OI_SOURCE_URL='https://developers.binance.com/en/docs/catalog/core-trading-derivatives-trading-usd-s-m-futures/api/rest-api/market-data#open-interest-statistics';
