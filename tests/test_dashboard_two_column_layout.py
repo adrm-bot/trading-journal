@@ -71,12 +71,12 @@ def test_market_ordering_and_current_data_panels_remain_available():
     assert "marketPanel('rs'," in HTML
     assert "marketPanel('flow'," in HTML
     assert "marketPanel('rsflow'," not in HTML
-    assert "DASH_LAYOUT_REV=4" in HTML
+    assert "DASH_LAYOUT_REV=6" in HTML
     assert "k==='rsflow'?['rs','flow']" in HTML
-    assert "const canonicalMarket=['econ','strip','regime','liq','rs','flow','liqmap']" in HTML
+    assert "const canonicalMarket=['econ','strip','regime','liq','flow','rs','liqmap']" in HTML
     assert "ensureEconomy()" in HTML
     assert "oi_context_quad" in HTML
-    assert "OI 수급 맥락" in HTML
+    assert "가격·OI 사분면" in HTML
     for label in ("신규 롱", "신규 숏", "숏 커버", "롱 청산"):
         assert label in HTML
     assert "ratio_asof" in HTML
@@ -110,7 +110,11 @@ def test_journal_view_controls_change_only_dock_cards():
 
 def test_dashboard_panel_spacing_is_fixed_across_journal_views():
     assert "--panel-pad-y:12px" in CSS
-    assert "--panel-pad-x:14px" in CSS
+    assert "--panel-pad-x:12px" in CSS
+    assert "--nested-pad-y:10px" in CSS
+    assert "--nested-pad-x:10px" in CSS
+    assert "--panel-shell-pad:10px" in CSS
+    assert '.dash-panel[data-panel="regime"] .panel-content{padding:10px}' in CSS
     assert "--dash-gap:12px" in CSS
     assert "el.dataset.density" not in HTML
 
@@ -125,18 +129,19 @@ def test_dashboard_uses_single_column_brief_panels_with_compact_internal_grids()
 
 
 def test_market_defaults_are_compact_and_relative_strength_is_split_from_flow():
-    assert "regime:{height:500,minHeight:180}" in HTML
-    assert "liq:{height:560,minHeight:200}" in HTML
-    assert "rs:{height:620,minHeight:220}" in HTML
-    assert "flow:{height:500,minHeight:180}" in HTML
-    assert "metrics:{height:300,minHeight:160}" in HTML
-    assert "discipline:{height:240,minHeight:160}" in HTML
-    assert "behavior:{height:220,minHeight:120}" in HTML
-    assert "marketPanel('regime'" in HTML and "{span:8,min:4}" in HTML
-    assert "marketPanel('liq'" in HTML and "{span:4,min:3}" in HTML
-    assert "marketPanel('rs'" in HTML and "{span:6,min:3}" in HTML
-    assert "marketPanel('flow'" in HTML and "{span:6,min:3}" in HTML
-    assert '#view-dashboard .rgc .rgrow{display:grid;' in CSS
+    assert "const DASH_LAYOUT_REV=6" in HTML
+    assert "const canonicalMarket=['econ','strip','regime','liq','flow','rs','liqmap']" in HTML
+    assert "regime:{height:320,minHeight:280}" in HTML
+    assert "liq:{height:320,minHeight:220}" in HTML
+    assert "rs:{height:260,minHeight:180}" in HTML
+    assert "flow:{height:260,minHeight:180}" in HTML
+    assert "metrics:{height:220,minHeight:160}" in HTML
+    assert "discipline:{height:200,minHeight:160}" in HTML
+    assert "behavior:{height:180,minHeight:120}" in HTML
+    assert "marketPanel('regime'" in HTML and "{span:4,min:3}" in HTML
+    assert "marketPanel('liq'" in HTML and "{span:8,min:4}" in HTML
+    assert "marketPanel('flow'" in HTML and "{span:4,min:3}" in HTML
+    assert "marketPanel('rs'" in HTML and "{span:8,min:4}" in HTML
     assert ".dash-mkt{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start" in CSS
 
 
@@ -167,15 +172,21 @@ def test_dashboard_resize_and_drop_use_deliberate_snap_points():
     assert "width:var(--ghost-w,180px)" in CSS
 
 
-def test_regime_quadrant_uses_korean_type_and_places_summary_outside_plot():
+def test_oi_quadrant_uses_korean_type_and_lives_in_positioning_not_regime():
     assert "const S=244,C=S/2,PAD=28" in HTML
     assert 'class="rgquad-label"' in HTML
     assert 'font-family="monospace"' not in HTML
+    assert "function oiContextQuadrant()" in HTML
+    assert "가격·OI 사분면" in HTML
+    assert "포지셔닝 맥락 · 레짐 미반영" in HTML
     assert 'class="rgq-figure"' in HTML
     assert 'class="rgquad-readout"' in HTML
-    assert "x축 가격 변화 · y축 OI 변화 · 2시간" in HTML
+    assert "가격 변화 × OI 변화 · 2시간" in HTML
+    assert 'class="oi-context-grid">${quad}<div class="oi-flow-stack">${crowd}${taker}' in HTML
+    assert '<div class="rgrow">${quad}' not in HTML
     assert "rgquad-cap" not in HTML
-    assert "#view-dashboard .rgc .rgrow{display:grid;grid-template-columns:minmax(0,1fr);gap:12px" in CSS
+    assert ".oi-context-quad{display:grid" in CSS
+    assert ".rgquad-label{font-family:var(--f-body)" in CSS
 
 
 def test_dashboard_uses_full_viewport_width_and_equal_height_journal_rows():
@@ -246,7 +257,25 @@ def test_methodology_copy_uses_accessible_help_controls():
     assert 'class="help-tip"' in HTML
     assert "document.addEventListener('focusin'" in HTML
     assert "레짐 산정 기준" in HTML
-    assert "OI 규모 단계 산정 기준" in HTML
+    assert "OI 규모 통계 기준" in HTML
+    assert "70·90백분위는 상위 30%·10%를 나눈 설명용 구간" in HTML
+    assert "경험적 분위 구간 · 예측 임계값 아님" in HTML
+    assert "Binance 원자료 ↗" in HTML
+
+
+def test_liquidation_history_and_predictive_map_are_labeled_as_different_products():
+    assert "실제 청산 체결" in HTML
+    assert "이미 발생한 강제청산 체결 · 예측형 청산맵 아님" in HTML
+    assert "가격대별 실제 청산 체결" in HTML
+    assert "예측형 청산맵" in HTML
+    assert "무료 공개 청산 체결 데이터와는 별도 기능" in HTML
+
+
+def test_review_queue_and_journal_cards_share_symbol_and_side_treatment():
+    assert HTML.count('class="badge trade-side ${') == 2
+    assert 'class="trade-symbol">${esc(r.symbol)}</b>${dir}' in HTML
+    assert 'class="sym trade-symbol">${esc(t.symbol)}</span>' in HTML
+    assert ".badge.trade-side{min-width:28px;height:22px" in CSS
 
 
 def test_dashboard_keeps_empty_state_panels_and_persistent_ledger_status():

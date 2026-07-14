@@ -187,6 +187,12 @@ def test_build_positioning_tracks_oi_crowd_and_taker_flow():
     assert out["oi_risk"]["quantity_only"] is True
     assert out["oi_risk"]["active_count"] == 1
     assert out["oi_risk"]["aux_active_count"] >= 2
+    assert out["oi_risk"]["label"] == "매우 높은 구간"
+    assert out["oi_risk"]["sample_n"] == len(idx)
+    assert out["oi_risk"]["sample_days"] > 7
+    assert out["oi_risk"]["sample_interval_minutes"] == 5
+    assert out["oi_risk"]["threshold_kind"] == "descriptive_quantile"
+    assert out["oi_risk"]["thresholds_validated"] is False
 
 
 def test_build_positioning_honestly_degrades_when_all_sources_missing():
@@ -215,3 +221,6 @@ def test_oi_quantity_stage_uses_only_absolute_amount_percentile():
     assert danger["quantity_percentile"] == 92
     assert danger["thresholds"] == {"watch": 70, "risk": 90}
     assert danger["quantity_only"] is True
+    assert danger["label"] == "매우 높은 구간"
+    assert danger["exceedance_pct"] == 8
+    assert danger["thresholds_validated"] is False

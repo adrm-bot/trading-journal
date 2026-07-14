@@ -156,7 +156,7 @@ def _fetch_oi(symbol: str, session=None) -> pd.DataFrame | None:
     m = pd.DataFrame(rows)
     m["snap_ts"] = pd.to_datetime(m["timestamp"].astype("int64"), unit="ms", utc=True)
     m["oi"] = m["sumOpenInterest"].astype("float64")
-    # USD 명목가치는 화면 표시·시장 간 비교용. 분류기는 기존 계약수(oi)를 그대로 쓴다.
+    # USD 명목가치를 백분위 분류와 화면 표시에 우선 사용하고, 없으면 계약수를 대체값으로 쓴다.
     m["oi_usd"] = pd.to_numeric(m.get("sumOpenInterestValue"), errors="coerce")
     return m.drop_duplicates("snap_ts").sort_values("snap_ts")[["snap_ts", "oi", "oi_usd"]]
 
@@ -243,13 +243,26 @@ def _brief_oi(symbol: str) -> dict | None:
 def classify_oi_risk(pct_rank: float | None, tf: dict | None,
                      long_pct: float | None = None, short_pct: float | None = None,
                      taker_buy_pct: float | None = None,
-                     taker_sell_pct: float | None = None) -> dict:
-    """현재 OI *양*의 최근 30일 백분위만으로 안전·경계·과열을 분류한다.
+                     taker_sell_pct: float | None = None,
+                     sample: dict | None = None) -> dict:
+    """현재 OI 명목가치의 경험적 백분위를 설명용 세 구간으로 나눈다.
 
     증가 속도·계정 쏠림·테이커 체결은 설명용 보조 맥락으로만 반환하며 단계
-    판정에는 관여하지 않는다. OI 과열은 스퀴즈 확률이나 방향 예측이 아니다.
+    판정에는 관여하지 않는다. 70·90백분위는 예측 모델로 검증한 임계값이 아니라
+    최근 분포의 상위 30%·10%를 구분하는 기술적(descriptive) 분위 기준이다.
     """
     tf = tf or {}
+    sample = sample or {}
+    sample_meta = {
+        "sample_n": sample.get("n"),
+        "sample_days": sample.get("days"),
+        "sample_interval_minutes": sample.get("interval_minutes"),
+        "sample_start": sample.get("start"),
+        "sample_end": sample.get("end"),
+        "measurement": sample.get("measurement", "usd_notional"),
+        "threshold_kind": "descriptive_quantile",
+        "thresholds_validated": False,
+    }
     if pct_rank is None:
         return {
             "level": "unknown", "label": "평가 보류", "active_count": 0,
@@ -257,8 +270,9 @@ def classify_oi_risk(pct_rank: float | None, tf: dict | None,
             "vulnerable_side": None, "factors": [],
             "quantity_percentile": None, "quantity_only": True,
             "thresholds": {"watch": 70, "risk": 90},
-            "basis": "현재 OI 규모의 최근 30일 백분위",
+            "basis": "현재 OI 명목가치의 최근 가용 표본 경험적 백분위",
             "disclaimer": "OI 분포 데이터가 부족해 규모 단계를 평가하지 않습니다.",
+            **sample_meta,
         }
 
     oi_level_on = pct_rank >= 90
@@ -304,20 +318,23 @@ def classify_oi_risk(pct_rank: float | None, tf: dict | None,
     aux_active_count = sum(bool(f["active"]) for f in factors if f["key"] != "oi_level")
     # 단계는 오직 현재 OI 양의 30일 백분위로 정한다. 아래 보조 신호는 승급시키지 않는다.
     if pct_rank >= 90:
-        level, label = "risk", "과열 구간"
+        level, label = "risk", "매우 높은 구간"
     elif pct_rank >= 70:
-        level, label = "watch", "경계 구간"
+        level, label = "watch", "높은 구간"
     else:
-        level, label = "safe", "안전 구간"
+        level, label = "safe", "보통 구간"
     return {
         "level": level, "label": label, "active_count": int(oi_level_on),
         "factor_count": 1, "aux_active_count": aux_active_count,
         "aux_factor_count": len(factors) - 1, "vulnerable_side": crowd_side,
         "factors": factors, "quantity_percentile": round(float(pct_rank), 2),
         "quantity_only": True, "thresholds": {"watch": 70, "risk": 90},
-        "basis": "현재 OI 규모의 최근 30일 백분위만 단계 판정에 사용",
-        "disclaimer": ("OI 규모의 상대적 과열도이며 방향 예측이나 청산 확률이 아닙니다. "
-                       "증가 속도·계정 비중·테이커 체결은 판정 미반영 보조 맥락입니다."),
+        "exceedance_pct": round(max(0.0, 100.0 - float(pct_rank)), 2),
+        "basis": "현재 BTCUSDT OI 명목가치의 최근 가용 표본 경험적 백분위",
+        "disclaimer": ("70·90백분위는 최근 분포의 상위 30%·10%를 나눈 설명용 기준입니다. "
+                       "스퀴즈·청산 확률이나 수익률로 검증한 임계값이 아니며, 증가 속도·계정 비중·"
+                       "테이커 체결은 단계 판정에 반영하지 않습니다."),
+        **sample_meta,
     }
 
 
@@ -336,9 +353,18 @@ def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = N
         if s.notna().any():
             cur = float(s.dropna().iloc[-1])
             hist = s.dropna()
+            sample_days = max(0.0, (hist.index[-1] - hist.index[0]).total_seconds() / 86400)
+            sample_interval = None
+            if len(hist) > 1:
+                diffs = hist.index.to_series().diff().dropna().dt.total_seconds() / 60
+                if not diffs.empty:
+                    sample_interval = round(float(diffs.median()), 2)
             out.update(available=True, oi_available=True,
                        pct_rank=round(float((hist <= cur).mean()) * 100),
-                       asof=hist.index[-1].isoformat(), oi_unit=("usd" if col == "oi_usd" else "contracts"))
+                       asof=hist.index[-1].isoformat(), oi_unit=("usd" if col == "oi_usd" else "contracts"),
+                       sample_n=int(len(hist)), sample_days=round(sample_days, 2),
+                       sample_interval_minutes=sample_interval,
+                       sample_start=hist.index[0].isoformat(), sample_end=hist.index[-1].isoformat())
             out["total_usd" if col == "oi_usd" else "total_contracts"] = round(cur, 2)
             out["tf"] = {
                 "1h": _series_change(hist, pd.Timedelta(hours=1)),
@@ -390,7 +416,12 @@ def build_positioning(oi: pd.DataFrame | None, ratio_rows: list[dict] | None = N
                        taker_ratio_1h=round(buy / sell, 3) if sell else None)
     out["oi_risk"] = classify_oi_risk(
         out.get("pct_rank"), out.get("tf"), out.get("long_pct"), out.get("short_pct"),
-        out.get("taker_buy_pct_1h"), out.get("taker_sell_pct_1h"),
+        out.get("taker_buy_pct_1h"), out.get("taker_sell_pct_1h"), {
+            "n": out.get("sample_n"), "days": out.get("sample_days"),
+            "interval_minutes": out.get("sample_interval_minutes"),
+            "start": out.get("sample_start"), "end": out.get("sample_end"),
+            "measurement": "usd_notional" if out.get("oi_unit") == "usd" else "contracts",
+        },
     )
     return out
 
