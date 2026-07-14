@@ -77,3 +77,4 @@ def test_settings_ui_and_reset_endpoint_are_wired():
     assert 'journal_since:$("#setJournalSince").value' in HTML
     assert '@app.post("/api/journal/reset")' in MAIN
     assert 'confirm") != "매매일지 초기화"' in MAIN
+    assert "datetime.now(KST).date()" in MAIN

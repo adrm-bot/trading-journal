@@ -11,7 +11,7 @@ import logging
 import os
 import secrets
 import time
-from datetime import date
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -34,6 +34,8 @@ from . import db, engine, crypto, market, analytics, liquidations, liqmap, regim
 EXCH_NAMES = {"bybit": "Bybit", "binance": "Binance", "gate": "Gate.io", "ninjatrader": "NinjaTrader",
               "kingfisher": "KingFisher", "coinglass": "CoinGlass", "notion": "Notion",
               "telegram": "Telegram", "sheets": "Google Sheets"}
+
+KST = timezone(timedelta(hours=9))
 
 # /api/pull 유저별 쿨다운(초) — 거래소 키 throttle/ban 방지 + 단일 워커 보호 (in-memory, 재시작 시 초기화)
 PULL_COOLDOWN = int(os.getenv("PULL_COOLDOWN_SEC", "30"))
@@ -112,7 +114,9 @@ def _journal_since(value):
         parsed = date.fromisoformat(str(value).strip())
     except (TypeError, ValueError):
         raise HTTPException(400, "일지 시작일을 올바른 날짜로 입력해 주세요") from None
-    if parsed > date.today():
+    # Render runs in UTC. Journal dates are user-facing KST dates, so UTC
+    # midnight must not make the current Korean date look like a future date.
+    if parsed > datetime.now(KST).date():
         raise HTTPException(400, "일지 시작일은 오늘 이후로 설정할 수 없습니다")
     return parsed.isoformat()
 
