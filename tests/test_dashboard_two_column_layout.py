@@ -13,7 +13,7 @@ def test_dashboard_keeps_two_column_workspace_and_journal_dock():
     assert 'class="jdock" id="jdock"' in HTML
     assert (
         ".dash3{--brief-w:clamp(400px,27vw,520px);display:grid;"
-        "grid-template-columns:minmax(0,1fr) 5px minmax(330px,var(--brief-w))"
+        "grid-template-columns:minmax(0,1fr) 5px minmax(360px,var(--brief-w))"
     ) in CSS
     assert ".dash-resizer{position:relative;align-self:stretch" in CSS
     assert ".dash3.layout-edit .dash-resizer{cursor:col-resize}" in CSS
@@ -34,7 +34,8 @@ def test_dashboard_uses_exchange_panel_chrome_inside_current_columns():
         assert token not in HTML
     assert ".dash-grid" not in CSS
     assert "function dashLocked()" in HTML
-    assert "localStorage.getItem(dashKey('locked'))==='1'" in HTML
+    assert "return v==null?true:v==='1'" in HTML
+    assert "locked?'레이아웃 편집':'편집 완료'" in HTML
     assert "function bindDashZone(zone)" in HTML
     assert 'class="panel-chrome"' in HTML
     assert 'class="panel-grip panel-drag"' in HTML
@@ -61,7 +62,8 @@ def test_market_ordering_and_current_data_panels_remain_available():
     assert "function applyDashLayout()" in HTML
     assert "function saveDashZone(zone)" in HTML
     assert "window.addEventListener('pointermove',move,true)" in HTML
-    assert "window.addEventListener('pointerup',done,true)" in HTML
+    assert "window.addEventListener('pointerup',finish,true)" in HTML
+    assert "window.addEventListener('keydown',key,true)" in HTML
     assert "function updatePanelDim(panel,zone)" in HTML
     assert "ensureEconomy()" in HTML
     assert "function oiBlock(" in HTML
@@ -71,9 +73,9 @@ def test_market_ordering_and_current_data_panels_remain_available():
     assert "marketPanel('rs'," in HTML
     assert "marketPanel('flow'," in HTML
     assert "marketPanel('rsflow'," not in HTML
-    assert "DASH_LAYOUT_REV=6" in HTML
+    assert "DASH_LAYOUT_REV=7" in HTML
     assert "k==='rsflow'?['rs','flow']" in HTML
-    assert "const canonicalMarket=['econ','strip','regime','liq','flow','rs','liqmap']" in HTML
+    assert "canonicalMarket=['econ','strip','regime','liq','rs','flow','liqmap']" in HTML
     assert "ensureEconomy()" in HTML
     assert "oi_context_quad" in HTML
     assert "가격·OI 사분면" in HTML
@@ -116,6 +118,8 @@ def test_journal_view_controls_change_only_dock_cards():
 
 
 def test_mobile_journal_views_keep_separate_heights_and_saved_state():
+    assert "function mobileJournalMinHeight(v)" in HTML
+    assert "v==='summary'?120:v==='detail'?260:168" in HTML
     assert "function mobileJournalDefaultHeight(v)" in HTML
     assert "function journalDockHeight(v)" in HTML
     assert "all.mobileDockHeights" in HTML
@@ -143,8 +147,8 @@ def test_dashboard_uses_single_column_brief_panels_with_compact_internal_grids()
 
 
 def test_market_defaults_are_compact_and_relative_strength_is_split_from_flow():
-    assert "const DASH_LAYOUT_REV=6" in HTML
-    assert "const canonicalMarket=['econ','strip','regime','liq','flow','rs','liqmap']" in HTML
+    assert "const DASH_LAYOUT_REV=7" in HTML
+    assert "canonicalMarket=['econ','strip','regime','liq','rs','flow','liqmap']" in HTML
     assert "regime:{height:320,minHeight:280}" in HTML
     assert "liq:{height:320,minHeight:220}" in HTML
     assert "rs:{height:260,minHeight:180}" in HTML
@@ -159,13 +163,16 @@ def test_market_defaults_are_compact_and_relative_strength_is_split_from_flow():
     assert ".dash-mkt{position:relative;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));align-content:start;align-items:start" in CSS
 
 
-def test_market_grid_packs_short_panels_beside_tall_panels():
-    assert "grid-auto-flow:row dense;grid-auto-rows:8px" in CSS
-    assert ".dash-mkt>.dash-panel{grid-row-end:span var(--panel-row-span,12)}" in CSS
+def test_market_grid_keeps_stable_order_and_equalizes_visual_rows():
+    assert "grid-auto-flow:row;grid-auto-rows:8px" in CSS
+    assert "grid-auto-flow:row dense" not in CSS
+    assert ".dash-mkt>.dash-panel{grid-row-end:span var(--panel-row-span,12);align-self:stretch}" in CSS
     assert ".panel-placeholder{grid-column:span var(--panel-span,12);grid-row-end:span var(--panel-row-span,12)" in CSS
     assert "function syncPanelGridRow(panel)" in HTML
+    assert "function syncDashboardRows()" in HTML
+    assert "const mx=Math.max(...row.map(panelOwnGridSpan))" in HTML
     assert "Math.ceil((h+gap)/(row+gap))" in HTML
-    assert "syncPanelGridRow(panel);updatePanelDim(panel,zone)" in HTML
+    assert "syncPanelGridRow(panel);syncDashboardRows();updatePanelDim(panel,zone)" in HTML
     assert "ph.style.setProperty('--panel-row-span'" in HTML
     assert ".dash-mkt>.dash-panel{grid-column:1!important;grid-row:auto!important}" in CSS
 
@@ -215,13 +222,13 @@ def test_market_panels_share_one_vertical_scroll_per_column():
     assert ".dash-mkt>.dash-panel,.dash-me>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h" in CSS
     assert "var(--panel-natural-h,0px));max-height:none;grid-template-rows:30px auto" in CSS
     assert ".dash-mkt>.dash-panel>.panel-content,.dash-me>.dash-panel>.panel-content{overflow:visible" in CSS
-    assert "grid-template-columns:minmax(0,1fr) 5px minmax(330px,var(--brief-w));gap:0" in CSS
+    assert "grid-template-columns:minmax(0,1fr) 5px minmax(360px,var(--brief-w));gap:0" in CSS
     assert "padding-right:var(--dash-gap,var(--s4));container:marketcol/inline-size" in CSS
     assert "padding-left:var(--dash-gap,var(--s4));container:briefcol/inline-size" in CSS
     assert '.dash-resizer::before{content:"";position:absolute;left:0' in CSS
     assert "--panel-user-h" in HTML
     assert "function bindDashboardNaturalHeights()" in HTML
-    assert "#view-dashboard .dash-zone > .dash-panel" in HTML
+    assert "#view-dashboard .dash-zone > .dash-panel,#view-dashboard .dash-urgent > .dash-panel" in HTML
     assert "new ResizeObserver(sync)" in HTML
     assert "zone.id==='mktCol'?parseInt(p.style.getPropertyValue('--panel-user-h')" in HTML
 
@@ -316,6 +323,33 @@ def test_open_positions_show_quantity_and_all_planned_targets():
     assert "exchange_exit_orders" in HTML
     assert "거래소 주문" in HTML
     assert "내 계획" in HTML
+    assert 'class="pos-list" role="table"' in HTML
+    assert 'class="pos-row${p.margin_mode===' in HTML
+    assert "@container dashboard-panel (max-width:460px)" in CSS
+    assert 'grid-template-areas:"main dir pnl" "price price price" "orders orders orders" "plan plan plan"' in CSS
+
+
+def test_layout_rev7_preserves_custom_geometry_and_prioritizes_execution_panels_when_stacked():
+    assert "panels:cfg.panels&&typeof cfg.panels==='object'?{...cfg.panels}:{}" in HTML
+    assert "same(next,oldCanonical)" in HTML
+    assert "canonical.forEach(k=>{if(!next.includes(k))next.push(k);})" in HTML
+    assert 'class="dash-urgent" id="briefUrgent" hidden' in HTML
+    assert "['today','positions'].forEach" in HTML
+    assert "function syncDashboardStack()" in HTML
+    assert "bindDashboardWorkspace();syncDashboardStack();bindJdock()" in HTML
+    assert ".dash-urgent:not([hidden]){display:grid" in CSS
+    assert "stacked?'자동 배치':locked?'레이아웃 편집':'편집 완료'" in HTML
+    assert ".dash3 .panel-grip,.dash3 .panel-resize,.dash3 .panel-dim{display:none!important}" in CSS
+    assert "#view-dashboard .dash3 .panel-grip," in CSS
+
+
+def test_drag_and_resize_cancel_without_persisting_changes():
+    assert "ev.key==='Escape'" in HTML
+    assert "settle(true)" in HTML
+    assert "done(true)" in HTML
+    assert "panel.style.setProperty('--panel-span',startSpan)" in HTML
+    assert "panel.style.setProperty('--panel-user-h',startUserH+'px')" in HTML
+    assert "if(!cancel)saveDashZone(zone)" in HTML
 
 
 def test_behavior_correction_queue_is_visible_on_dashboard_and_insights():
