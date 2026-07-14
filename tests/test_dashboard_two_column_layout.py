@@ -44,7 +44,7 @@ def test_dashboard_uses_exchange_panel_chrome_inside_current_columns():
     assert "--r-btn:4px; --r-input:4px; --r-badge:2px; --r-card:3px" in CSS
     assert "border:1px solid transparent;border-radius:2px;background:var(--card)" in CSS
     assert ".panel-chrome{position:relative" in CSS
-    assert "background:var(--card);border-bottom:1px solid transparent" in CSS
+    assert "background:var(--card);border-bottom:1px solid var(--line)" in CSS
     assert ".dash-panel:hover>.panel-chrome,.dash-panel:focus-within>.panel-chrome" in CSS
     assert ".layout-edit .panel-resize{display:block" in CSS
     assert ".panel-ghost{" in CSS
@@ -71,7 +71,7 @@ def test_market_ordering_and_current_data_panels_remain_available():
     assert "marketPanel('rs'," in HTML
     assert "marketPanel('flow'," in HTML
     assert "marketPanel('rsflow'," not in HTML
-    assert "DASH_LAYOUT_REV=3" in HTML
+    assert "DASH_LAYOUT_REV=4" in HTML
     assert "k==='rsflow'?['rs','flow']" in HTML
     assert "const canonicalMarket=['econ','strip','regime','liq','rs','flow','liqmap']" in HTML
     assert "ensureEconomy()" in HTML
@@ -115,9 +115,10 @@ def test_dashboard_panel_spacing_is_fixed_across_journal_views():
     assert "el.dataset.density" not in HTML
 
 
-def test_dashboard_uses_single_column_brief_cards_and_quiet_panel_chrome():
-    assert ".dash-me .cards{grid-template-columns:1fr;grid-auto-rows:auto}" in CSS
-    assert ".dash-me .mgrid{grid-template-columns:1fr" in CSS
+def test_dashboard_uses_single_column_brief_panels_with_compact_internal_grids():
+    assert ".dash-me .cards,.dash-me .mgrid{grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:auto}" in CSS
+    assert ".dash-me .mgrid{grid-template-columns:repeat(2,minmax(0,1fr))" in CSS
+    assert "#view-dashboard .dash-me .stat .val{margin-top:4px;font-size:19px" in CSS
     assert ".dash-panel:hover,.dash-panel:focus-within{border-color:var(--line-2)}" in CSS
     assert ".panel-grip svg{width:14px;height:14px;display:block;opacity:0" in CSS
     assert ".dash3:not(.layout-edit) .panel-grip svg{opacity:0}" in CSS
@@ -128,6 +129,9 @@ def test_market_defaults_are_compact_and_relative_strength_is_split_from_flow():
     assert "liq:{height:560,minHeight:200}" in HTML
     assert "rs:{height:620,minHeight:220}" in HTML
     assert "flow:{height:500,minHeight:180}" in HTML
+    assert "metrics:{height:300,minHeight:160}" in HTML
+    assert "discipline:{height:240,minHeight:160}" in HTML
+    assert "behavior:{height:220,minHeight:120}" in HTML
     assert "marketPanel('regime'" in HTML and "{span:8,min:4}" in HTML
     assert "marketPanel('liq'" in HTML and "{span:4,min:3}" in HTML
     assert "marketPanel('rs'" in HTML and "{span:6,min:3}" in HTML
@@ -145,11 +149,12 @@ def test_dashboard_uses_full_viewport_width_and_equal_height_journal_rows():
 
 
 def test_market_panels_share_one_vertical_scroll_per_column():
-    assert ".dash-mkt>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h" in CSS
+    assert ".dash-mkt>.dash-panel,.dash-me>.dash-panel{height:auto!important;min-height:max(var(--panel-user-h" in CSS
     assert "var(--panel-natural-h,0px));max-height:none;grid-template-rows:30px auto" in CSS
-    assert ".dash-mkt>.dash-panel>.panel-content{min-height:max-content;overflow:visible" in CSS
+    assert ".dash-mkt>.dash-panel>.panel-content,.dash-me>.dash-panel>.panel-content{overflow:visible" in CSS
     assert "--panel-user-h" in HTML
-    assert "function bindMarketNaturalHeights()" in HTML
+    assert "function bindDashboardNaturalHeights()" in HTML
+    assert "#view-dashboard .dash-zone > .dash-panel" in HTML
     assert "new ResizeObserver(sync)" in HTML
     assert "zone.id==='mktCol'?parseInt(p.style.getPropertyValue('--panel-user-h')" in HTML
 
@@ -165,13 +170,36 @@ def test_dashboard_responds_to_panel_width_without_clipping_copy():
     assert "container:marketcol/inline-size" in CSS
     assert "container:briefcol/inline-size" in CSS
     assert "@container marketcol (max-width:760px)" in CSS
-    assert "@container briefcol (max-width:390px)" in CSS
+    assert "@container briefcol (max-width:360px)" in CSS
     assert "container:dashboard-panel/inline-size" in CSS
+    assert "@container dashboard-panel (max-width:1100px)" in CSS
+    assert '.dash-panel[data-panel="strip"] .market{grid-template-columns:repeat(2,minmax(0,1fr))}' in CSS
     assert "@container dashboard-panel (max-width:520px)" in CSS
     assert ".crowd-deltas{grid-template-columns:repeat(2,minmax(0,1fr))}" in CSS
     assert ".taker{grid-template-columns:1fr auto" in CSS
     assert ".wstrip-item .wtxt{overflow:visible;text-overflow:clip;white-space:normal}" in CSS
     assert ".secn{min-width:0;overflow:visible;text-overflow:clip;white-space:normal" in CSS
+
+
+def test_market_context_natural_height_has_no_flex_feedback_loop():
+    assert '#marketStrip{height:auto;min-height:0;display:flex;flex-direction:column}' in CSS
+    assert '.dash-panel[data-panel="strip"] .market{flex:none;' in CSS
+
+
+def test_relative_strength_ranks_btc_as_an_explicit_baseline_and_starts_collapsed():
+    assert "const btcRef={b:{sym:'BTC',is_btc:true}" in HTML
+    assert "const rankedAll=[...ranked,btcRef]" in HTML
+    assert "상대강도 기준선" in HTML
+    assert '<details class="rsmore"><summary>' in HTML
+    assert '<details class="rsmore" open>' not in HTML
+
+
+def test_korean_information_hierarchy_uses_body_type_not_monospace():
+    assert ".eyebrow{font-family:var(--f-mono)" in CSS
+    assert ".section-title{font-family:var(--f-body);font-size:var(--fs-sm);font-weight:620" in CSS
+    assert ".panel-chrome-title{position:relative" in CSS
+    assert "font-size:var(--fs-sm);font-weight:620" in CSS
+    assert ".pos-title-note{font-family:var(--f-body)" in CSS
 
 
 def test_methodology_copy_uses_accessible_help_controls():

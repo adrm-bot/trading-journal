@@ -609,23 +609,26 @@ function rsPanel(m){
   let ranked=rs.board.map(b=>({b,d:rsDatum(b,tf)})).filter(x=>x.d).sort((a,b)=>b.d.score-a.d.score),fallback=false;
   if(!ranked.length){fallback=true;ranked=rs.board.filter(b=>b.vs_btc_7d!=null).map(b=>({b,d:{score:Number(b.vs_btc_7d),alt:Number(b.chg7),btc:Number(rs.btc_chg7),beta:null,fallback:true}})).sort((a,b)=>b.d.score-a.d.score);}
   if(!ranked.length)return `<div class="section-title">BTC 대비 상대강도</div><div class="panel-empty-state"><b>${tfLabel} 비교 표본이 부족합니다</b><span>다음 시장 데이터 갱신 후 다시 확인해 주세요.</span></div>`;
-  const top=ranked[0],bot=ranked[ranked.length-1],breadthN=ranked.length,outperform=ranked.filter(x=>x.d.score>0).length;
+  const breadthN=ranked.length,outperform=ranked.filter(x=>x.d.score>0).length;
   const regime=outperform<=breadthN*.35?'btc':outperform>=breadthN*.65?'alt':'neutral',reg=RS_REGIME[regime];
   const pos=Math.max(5,Math.min(95,Math.round(outperform/breadthN*100))),fmtv=v=>`${v>=0?'+':''}${Number(v).toFixed(2)}%`;
-  const scoreText=x=>x.d.fallback?`7일 단순 초과 ${fmtv(x.d.score)}`:`β조정 ${fmtv(x.d.score)}`;
-  const rawText=x=>`알트 ${fmtv(x.d.alt)} · BTC ${fmtv(x.d.btc)}${x.d.beta!=null?` · β ${Number(x.d.beta).toFixed(2)}`:''}`;
-  const longAlt=top.d.score>0,shortAlt=bot.d.score<0;
-  const longSym=longAlt?esc(top.b.sym):'BTC',longVal=longAlt?`${scoreText(top)} · ${rawText(top)}`:'선택 구간에서 모든 알트보다 강함';
-  const shortSym=shortAlt?esc(bot.b.sym):'BTC',shortVal=shortAlt?`${scoreText(bot)} · ${rawText(bot)}`:'선택 구간에서 모든 알트보다 약함';
-  const mx=Math.max(...ranked.map(x=>Math.abs(x.d.score)),.01);
-  const rows=ranked.map((x,i)=>{const b=x.b,s=x.d.score,strong=s>=0,w=(Math.abs(s)/mx*50).toFixed(1);
-    const tag=i===0?'<span class="rstag long">최강</span>':i===ranked.length-1?'<span class="rstag short">최약</span>':'';
+  const btcRet=ranked[0]&&Number.isFinite(ranked[0].d.btc)?ranked[0].d.btc:0;
+  const btcRef={b:{sym:'BTC',is_btc:true},d:{score:0,alt:btcRet,btc:btcRet,beta:1,fallback}};
+  const rankedAll=[...ranked,btcRef].sort((a,b)=>b.d.score-a.d.score),top=rankedAll[0],bot=rankedAll[rankedAll.length-1];
+  const scoreText=x=>x.b.is_btc?'기준 0.00%':x.d.fallback?`7일 단순 초과 ${fmtv(x.d.score)}`:`β조정 ${fmtv(x.d.score)}`;
+  const rawText=x=>x.b.is_btc?`BTC ${fmtv(x.d.btc)} · 상대강도 기준선`:`알트 ${fmtv(x.d.alt)} · BTC ${fmtv(x.d.btc)}${x.d.beta!=null?` · β ${Number(x.d.beta).toFixed(2)}`:''}`;
+  const longSym=esc(top.b.sym),longVal=top.b.is_btc?`${scoreText(top)} · ${rawText(top)} · 모든 알트보다 강함`:`${scoreText(top)} · ${rawText(top)}`;
+  const shortSym=esc(bot.b.sym),shortVal=bot.b.is_btc?`${scoreText(bot)} · ${rawText(bot)} · 모든 알트보다 약함`:`${scoreText(bot)} · ${rawText(bot)}`;
+  const mx=Math.max(...rankedAll.map(x=>Math.abs(x.d.score)),.01);
+  const rows=rankedAll.map((x,i)=>{const b=x.b,s=x.d.score,strong=s>=0,w=(Math.abs(s)/mx*50).toFixed(1),tone=b.is_btc?'muted':strong?'pos':'neg';
+    const tag=i===0?'<span class="rstag long">최강</span>':i===rankedAll.length-1?'<span class="rstag short">최약</span>':'';
     const ethtag=b.sym==='ETH'?'<span class="rstag eth">대장</span>':'';
-    const capture=b.up_capture_60d!=null?` · 60일 포착률 상 ${b.up_capture_60d}% / 하 ${b.down_capture_60d}%`:'';
-    const sample=` data-tip="${tfLabel} ${rawText(x)} · BTC 베타는 최근 ${b.rs_sample_hours||720}개 확정 1시간봉으로 추정${capture}"`;
-    return `<div class="rsrow${b.sym==='ETH'?' iseth':''}"${sample}><span class="rssym">${esc(b.sym)}${ethtag}${tag}</span>`
-      +`<span class="rsbarwrap"><span class="rsbar ${strong?'pos':'neg'}" style="width:${w}%"></span></span>`
-      +`<span class="rsmetrics"><b class="num ${strong?'pos':'neg'}">${scoreText(x)}</b><small>${rawText(x)}</small></span></div>`;
+    const btctag=b.is_btc?'<span class="rstag btc">기준선</span>':'';
+    const capture=!b.is_btc&&b.up_capture_60d!=null?` · 60일 포착률 상 ${b.up_capture_60d}% / 하 ${b.down_capture_60d}%`:'';
+    const sample=b.is_btc?` data-tip="${tfLabel} BTC 수익률 ${fmtv(btcRet)} · 모든 알트 상대강도의 0.00% 기준선"`:` data-tip="${tfLabel} ${rawText(x)} · BTC 베타는 최근 ${b.rs_sample_hours||720}개 확정 1시간봉으로 추정${capture}"`;
+    return `<div class="rsrow${b.sym==='ETH'?' iseth':''}${b.is_btc?' isbtc':''}"${sample}><span class="rssym">${esc(b.sym)}${btctag}${ethtag}${tag}</span>`
+      +`<span class="rsbarwrap"><span class="rsbar ${tone}" style="width:${w}%"></span></span>`
+      +`<span class="rsmetrics"><b class="num ${tone}">${scoreText(x)}</b><small>${rawText(x)}</small></span></div>`;
   }).join("");
   const ethsnap=eth?`<span class="rseth">ETH ${usd(eth.price)} · 24h ${chgTxt(eth.chg24)} · 7d ${chgTxt(eth.chg7)}${pxspark(eth.spark)}</span>`:'';
   const tabs=`<div class="rstfs" role="tablist" aria-label="상대강도 비교 구간">${RS_HORIZONS.map(([k,l])=>`<button type="button" class="rstf${k===tf?' on':''}" aria-selected="${k===tf}" onclick="rsSetHorizon('${k}')">${l}</button>`).join('')}</div>`;
@@ -642,7 +645,7 @@ function rsPanel(m){
         <div class="rsa short"><span class="rsa-k">${ICONS.downR} 상대 약세</span><span class="rsa-v">${shortSym}</span><span class="rsa-d">${shortVal}</span></div>
       </div>
       ${ethsnap?`<div class="rsethline">${ethsnap}</div>`:''}
-      <details class="rsmore" open><summary>알트 ${ranked.length}/${rs.universe_n||rs.n}개 · ${tfLabel} 강약 순위</summary><div class="rsbody">${rows}</div></details>
+      <details class="rsmore"><summary>알트 ${ranked.length}/${rs.universe_n||rs.n}개 + BTC 기준선 · ${tfLabel} 강약 순위</summary><div class="rsbody">${rows}</div></details>
       <div class="method-row"><span>${fallback?'1시간봉 부족 · 7일 단순 초과수익률 대체':'확정 1시간봉 · '+tfLabel+' 기준'} · BTC 초과 ${outperform}/${breadthN}</span>${helpTip(`${rs.universe_basis||'대형 시총·섹터 대표 표본'} · 기간별 상대강도 = 알트 수익률 - (최근 30일 1시간봉 BTC 베타 × BTC 수익률)입니다. 양수는 BTC 움직임을 감안한 상대 강세, 음수는 상대 약세입니다. 60일 상·하방 포착률은 툴팁의 구조 참고값이며 이 순위는 진입 신호가 아닙니다.`,'상대강도 산정 기준')}</div>
     </div>`;
 }
@@ -970,7 +973,7 @@ async function ensureEconomy(){const h=$("#econHost");if(!h)return;if(ECON_EVENT
 const DASH_GRIP_SVG='<svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="9" cy="6" r="1.4"/><circle cx="15" cy="6" r="1.4"/><circle cx="9" cy="12" r="1.4"/><circle cx="15" cy="12" r="1.4"/><circle cx="9" cy="18" r="1.4"/><circle cx="15" cy="18" r="1.4"/></svg>';
 const DASH_LOCK_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><rect x="5" y="10" width="14" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>';
 const DASH_EDIT_SVG='<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>';
-const DASH_LAYOUT_REV=3;
+const DASH_LAYOUT_REV=4;
 function dashKey(s){return `tj_dash_${(ME&&ME.email)||'anon'}_${s}`;}
 function migrateDashLayout(raw){const v=raw&&typeof raw==='object'?raw:{};if(Number(v._rev)===DASH_LAYOUT_REV)return v;
   const order=a=>{const out=[];(Array.isArray(a)?a:[]).forEach(k=>{const keys=k==='rsflow'?['rs','flow']:[k];keys.forEach(x=>{if(x&&!out.includes(x))out.push(x);});});return out;};
@@ -986,8 +989,8 @@ function applyJournalView(v,save){if(!JOURNAL_VIEWS.some(x=>x[0]===v))v='balance
 const DASH_PANEL_LABELS={econ:'주요 일정',strip:'시장 컨텍스트',regime:'시장 레짐',liq:'미결제약정·청산',rs:'BTC 대비 상대강도',flow:'자금 흐름',liqmap:'예측형 청산맵',today:'오늘 할 일',positions:'보유 포지션',metrics:'핵심 지표',discipline:'규율·습관 비용',behavior:'행동 인사이트',start:'시작하기'};
 const DASH_PANEL_GEOMETRY={
   econ:{height:96,minHeight:72},strip:{height:160,minHeight:104},regime:{height:500,minHeight:180},liq:{height:560,minHeight:200},
-  rs:{height:620,minHeight:220},flow:{height:500,minHeight:180},liqmap:{height:220,minHeight:140},today:{height:220,minHeight:112},positions:{height:200,minHeight:112},
-  metrics:{height:480,minHeight:160},discipline:{height:480,minHeight:160},behavior:{height:160,minHeight:96},start:{height:320,minHeight:180}
+  rs:{height:620,minHeight:220},flow:{height:500,minHeight:180},liqmap:{height:220,minHeight:140},today:{height:220,minHeight:112},positions:{height:160,minHeight:112},
+  metrics:{height:300,minHeight:160},discipline:{height:240,minHeight:160},behavior:{height:220,minHeight:120},start:{height:320,minHeight:180}
 };
 function panelFrame(key,html,cls,opt){opt=opt||{};const label=DASH_PANEL_LABELS[key]||key,g=DASH_PANEL_GEOMETRY[key]||{height:280,minHeight:96};const span=opt.span||12,minSpan=opt.minSpan||span;
   return `<section class="${cls} dash-panel panel-sized" data-panel="${key}" data-span="${span}" data-default-span="${span}" data-min-span="${minSpan}" data-default-height="${g.height}" data-min-height="${g.minHeight}" style="--panel-span:${span};--panel-min-h:${g.minHeight}px;--panel-user-h:${g.height}px;height:${g.height}px"><div class="panel-chrome"><span class="panel-chrome-title">${esc(label)}</span><button type="button" class="panel-grip panel-drag" aria-label="${esc(label)} 패널 이동" data-tip="제목 바를 끌어 이동 · 방향키로 순서 변경">${DASH_GRIP_SVG}</button></div><div class="panel-content">${html}</div><button type="button" class="panel-resize" aria-label="${esc(label)} 패널 크기 조절" data-tip="모서리를 끌어 너비와 높이 조절"><span class="sr-only">패널 크기 조절</span></button><span class="panel-dim" aria-hidden="true"></span></section>`;}
@@ -1011,7 +1014,7 @@ function renderDashboard(el){
       +sidePanel('discipline',disciplineCard(DATA.trades))+sidePanel('behavior',behavior)
     :sidePanel('positions',posLoading())+sidePanel('start',onboarding());
   el.innerHTML=`<div id="warnHost">${warnStrip()}</div>${workspaceBar()}<div class="dash3"><div class="dash-mkt dash-zone" id="mktCol">${market}</div><div class="dash-resizer" role="separator" aria-orientation="vertical" aria-label="개인 브리프 폭 조절" tabindex="-1"></div><div class="dash-me dash-zone" id="briefCol">${mine}</div></div>${DATA.trades.length?journalDock():''}`;
-  const ep=$("#emptyPull");if(ep)ep.onclick=pull;bindToday();bindCards();applyDashLayout();bindMarketNaturalHeights();bindDashboardWorkspace();bindJdock();ensureEconomy();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();requestAnimationFrame(sizeDash);if(!window.__dashRz){window.__dashRz=1;addEventListener('resize',()=>requestAnimationFrame(sizeDash));}
+  const ep=$("#emptyPull");if(ep)ep.onclick=pull;bindToday();bindCards();applyDashLayout();bindDashboardNaturalHeights();bindDashboardWorkspace();bindJdock();ensureEconomy();ensureMarket();ensureRegime();ensurePositions();ensureLiquidations();ensureLiqmap();requestAnimationFrame(sizeDash);if(!window.__dashRz){window.__dashRz=1;addEventListener('resize',()=>requestAnimationFrame(sizeDash));}
 }
 /* Binance형 작업영역 — 2컬럼 골격은 고정, 각 컬럼 안에서 포인터 드래그·모서리 리사이즈 */
 function zoneName(zone){return zone&&zone.id==='briefCol'?'brief':'market';}
@@ -1021,12 +1024,12 @@ function saveDashZone(zone){if(!zone)return;const all=getDashLayout(),name=zoneN
 function applyDashLayout(){const all=getDashLayout(),dash=document.querySelector('#view-dashboard .dash3');
   [['mktCol','market'],['briefCol','brief']].forEach(([id,name])=>{const zone=document.getElementById(id),cfg=all[name]||{};if(!zone)return;const movable=[...zone.querySelectorAll(':scope > .dash-panel')],byId=new Map(movable.map(p=>[p.dataset.panel,p])),seen=new Set(),seq=[];(cfg.order||[]).forEach(k=>{if(byId.has(k)&&!seen.has(k)){seen.add(k);seq.push(byId.get(k));}});movable.forEach(p=>{if(!seen.has(p.dataset.panel))seq.push(p);});seq.forEach(p=>zone.appendChild(p));zone.querySelectorAll(':scope > .dash-panel').forEach(p=>{const s=(cfg.panels&&cfg.panels[p.dataset.panel])||{},span=Math.max(Number(p.dataset.minSpan)||1,Math.min(12,Number(s.span)||Number(p.dataset.span)||12)),minH=Number(p.dataset.minHeight)||96,defaultH=Number(p.dataset.defaultHeight)||280,h=Math.max(minH,Math.min(1200,Number(s.height)||defaultH));p.style.setProperty('--panel-span',span);p.style.setProperty('--panel-user-h',h+'px');p.style.height=id==='mktCol'?'':h+'px';p.classList.add('panel-sized');});});
   if(dash&&all.briefWidth)dash.style.setProperty('--brief-w',Math.max(340,Math.min(760,Number(all.briefWidth)))+'px');syncWorkspaceState();}
-let MARKET_NATURAL_RO=null;
-function syncMarketNaturalHeight(panel){const content=panel&&panel.querySelector(':scope > .panel-content');if(!content)return;const cr=content.getBoundingClientRect(),cs=getComputedStyle(content),pb=parseFloat(cs.paddingBottom)||0,pt=parseFloat(cs.paddingTop)||0;let bodyH=pt+pb;
+let DASH_NATURAL_RO=null;
+function syncPanelNaturalHeight(panel){const content=panel&&panel.querySelector(':scope > .panel-content');if(!content)return;const cr=content.getBoundingClientRect(),cs=getComputedStyle(content),pb=parseFloat(cs.paddingBottom)||0,pt=parseFloat(cs.paddingTop)||0;let bodyH=pt+pb;
   [...content.children].forEach(child=>{const r=child.getBoundingClientRect(),top=Math.max(0,r.top-cr.top),h=Math.max(r.height,child.scrollHeight||0);bodyH=Math.max(bodyH,top+h+pb);});
   const chrome=panel.querySelector(':scope > .panel-chrome'),natural=Math.ceil((chrome?chrome.getBoundingClientRect().height:30)+bodyH+2),prev=parseInt(panel.style.getPropertyValue('--panel-natural-h')||'0',10);if(Math.abs(natural-prev)>1)panel.style.setProperty('--panel-natural-h',natural+'px');}
-function syncMarketNaturalHeights(){document.querySelectorAll('#mktCol > .dash-panel').forEach(syncMarketNaturalHeight);requestAnimationFrame(sizeDash);}
-function bindMarketNaturalHeights(){if(MARKET_NATURAL_RO){MARKET_NATURAL_RO.disconnect();MARKET_NATURAL_RO=null;}const panels=[...document.querySelectorAll('#mktCol > .dash-panel')];if(!panels.length)return;const sync=()=>requestAnimationFrame(syncMarketNaturalHeights);if('ResizeObserver'in window){MARKET_NATURAL_RO=new ResizeObserver(sync);panels.forEach(panel=>{const content=panel.querySelector(':scope > .panel-content');if(content){MARKET_NATURAL_RO.observe(content);[...content.children].forEach(child=>MARKET_NATURAL_RO.observe(child));}});}sync();}
+function syncDashboardNaturalHeights(){document.querySelectorAll('#view-dashboard .dash-zone > .dash-panel').forEach(syncPanelNaturalHeight);requestAnimationFrame(sizeDash);}
+function bindDashboardNaturalHeights(){if(DASH_NATURAL_RO){DASH_NATURAL_RO.disconnect();DASH_NATURAL_RO=null;}const panels=[...document.querySelectorAll('#view-dashboard .dash-zone > .dash-panel')];if(!panels.length)return;const sync=()=>requestAnimationFrame(syncDashboardNaturalHeights);if('ResizeObserver'in window){DASH_NATURAL_RO=new ResizeObserver(sync);panels.forEach(panel=>{const content=panel.querySelector(':scope > .panel-content');if(content){DASH_NATURAL_RO.observe(content);[...content.children].forEach(child=>DASH_NATURAL_RO.observe(child));}});}sync();}
 function syncWorkspaceState(){const dash=document.querySelector('#view-dashboard .dash3'),locked=dashLocked(),b=document.getElementById('layoutLock'),h=document.getElementById('layoutHelp'),r=document.querySelector('#view-dashboard .dash-resizer');if(dash)dash.classList.toggle('layout-edit',!locked);if(b){b.innerHTML=(locked?DASH_EDIT_SVG:DASH_LOCK_SVG)+`<span>${locked?'잠금 해제':'패널 잠금'}</span>`;b.setAttribute('aria-pressed',String(locked));b.title=locked?'패널 이동과 크기 조절 다시 켜기':'현재 배치를 잠가 실수로 바뀌지 않게 하기';}if(h)h.textContent=locked?'패널 잠김':'제목 바 이동 · 모서리 크기 조절';if(r)r.tabIndex=locked?-1:0;}
 function toggleDashLock(){try{localStorage.setItem(dashKey('locked'),dashLocked()?'0':'1');}catch(e){}syncWorkspaceState();}
 function resetDashLayout(){if(!confirm('저장된 패널 위치와 크기를 기본값으로 되돌릴까요?'))return;try{localStorage.removeItem(dashKey('layout'));localStorage.removeItem('mktOrder');}catch(e){}route();toast('대시보드 배치를 기본값으로 복원했습니다');}
