@@ -43,6 +43,39 @@ def test_position_embedded_stop_and_target_are_exposed_as_exchange_orders():
     assert [(o["kind"], o["price"]) for o in result] == [("sl", 91.5), ("tp", 121.25)]
 
 
+def test_matching_embedded_and_open_orders_are_one_visible_level():
+    position = _position()
+    position["info"].update({"stopLoss": "92", "takeProfit": "121.25"})
+    orders = [
+        {"id": "sl-explicit", "side": "sell", "type": "stop_market", "triggerPrice": 92,
+         "amount": 2, "reduceOnly": True, "info": {"positionSide": "LONG", "positionIdx": "1"}},
+        {"id": "tp-explicit", "side": "sell", "type": "take_profit_market", "triggerPrice": 121.25,
+         "amount": 1, "reduceOnly": True, "info": {"positionSide": "LONG", "positionIdx": "1"}},
+    ]
+
+    result = engine._normalise_exit_orders(_row(), position, orders)
+
+    assert [(o["kind"], o["price"], o["qty"], o["order_count"]) for o in result] == [
+        ("sl", 92.0, 2.0, 1),
+        ("tp", 121.25, 1.0, 1),
+    ]
+
+
+def test_same_price_take_profit_orders_share_one_tp_label():
+    orders = [
+        {"id": "tp-a", "side": "sell", "type": "limit", "price": 118,
+         "remaining": 0.5, "reduceOnly": True, "info": {"positionSide": "LONG", "positionIdx": "1"}},
+        {"id": "tp-b", "side": "sell", "type": "limit", "price": 118,
+         "remaining": 0.75, "reduceOnly": True, "info": {"positionSide": "LONG", "positionIdx": "1"}},
+    ]
+
+    result = engine._normalise_exit_orders(_row(), _position(), orders)
+
+    assert len(result) == 1
+    assert result[0] == {"kind": "tp", "price": 118.0, "qty": None, "type": "limit",
+                         "order_id": "tp-a", "order_count": 2}
+
+
 def test_bybit_open_order_fetch_includes_conditional_orders_and_deduplicates():
     class Exchange:
         has = {"fetchOpenOrders": True}
@@ -52,7 +85,8 @@ def test_bybit_open_order_fetch_includes_conditional_orders_and_deduplicates():
 
         def fetch_open_orders(self, symbol, since, limit, params):
             self.params.append(params)
-            return [{"id": "same", "side": "sell", "type": "stop_market", "triggerPrice": 90}]
+            order_type = "stop_market" if not params.get("orderFilter") else "stop"
+            return [{"id": "same", "side": "sell", "type": order_type, "triggerPrice": 90}]
 
     exchange = Exchange()
     orders, status = engine._fetch_position_orders(exchange, "bybit", "BTC/USDT:USDT")

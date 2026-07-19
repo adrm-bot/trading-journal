@@ -320,6 +320,7 @@ def test_open_positions_show_quantity_and_all_planned_targets():
     assert "TP2 ${fmtP(_tp2)}" in HTML
     assert "TP3 ${fmtP(_tp3)}" in HTML
     assert "function exchangeExitLevels(p)" in HTML
+    assert "동일 가격 주문 ${o.order_count}건" in HTML
     assert "exchange_exit_orders" in HTML
     assert "거래소 주문" in HTML
     assert "내 계획" in HTML

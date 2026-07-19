@@ -1017,9 +1017,10 @@ def _fetch_position_orders(ex, kind, symbol):
             continue
     deduped, seen = [], set()
     for order in orders:
-        key = (str(order.get("id") or ""), str(order.get("clientOrderId") or ""),
-               str(order.get("type") or ""), str(order.get("side") or ""),
-               _order_number(order, "triggerPrice", "stopPrice", "price"))
+        order_id = str(order.get("id") or order.get("clientOrderId") or "")
+        key = (("id", order_id) if order_id else
+               ("shape", str(order.get("type") or ""), str(order.get("side") or ""),
+                _order_number(order, "triggerPrice", "stopPrice", "price")))
         if key in seen:
             continue
         seen.add(key)
@@ -1074,7 +1075,37 @@ def _normalise_exit_orders(position_row, position, orders):
         if amount is None and any(_boolish(info.get(k)) for k in ("closePosition", "closeOnTrigger", "cp", "is_close")):
             amount = qty or None
         out.append({"kind": kind, "price": price, "qty": amount,
-                    "type": typ or "conditional", "order_id": str(order.get("id") or "") or None})
+                    "type": typ or "conditional", "order_id": str(order.get("id") or "") or None,
+                    "_embedded": _boolish(info.get("embedded"))})
+
+    # Bybit 등은 같은 TP/SL을 미체결 주문과 포지션 내장값에 동시에 싣는다.
+    # 사용자가 보는 레벨은 주문 행 수가 아니라 고유한 청산 가격이어야 한다.
+    grouped = []
+    for candidate in out:
+        match = next((level for level in grouped
+                      if level["kind"] == candidate["kind"]
+                      and ((level["price"] is None and candidate["price"] is None)
+                           or (level["price"] is not None and candidate["price"] is not None
+                               and abs(level["price"] - candidate["price"])
+                               <= max(1e-12, max(abs(level["price"]), abs(candidate["price"])) * 1e-10)))), None)
+        if match is None:
+            candidate["order_count"] = 1
+            grouped.append(candidate)
+            continue
+        if match["_embedded"] and not candidate["_embedded"]:
+            candidate["order_count"] = 1
+            grouped[grouped.index(match)] = candidate
+            continue
+        if not match["_embedded"] and candidate["_embedded"]:
+            continue
+        if not candidate["_embedded"]:
+            match["order_count"] += 1
+            # 같은 가격에 실제 주문이 여러 건이면 한 주문의 수량을 총수량처럼 표시하지 않는다.
+            match["qty"] = None
+
+    out = grouped
+    for level in out:
+        level.pop("_embedded", None)
     order_rank = {"sl": 0, "tp": 1, "trailing": 2, "other": 3}
     out.sort(key=lambda o: (order_rank.get(o["kind"], 9),
                             (o["price"] if direction == "Long" else -(o["price"] or 0))
